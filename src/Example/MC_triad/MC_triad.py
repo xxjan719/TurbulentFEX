@@ -2,7 +2,7 @@ import sys
 import os
 import numpy as np
 import random
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..",'..')))
 from utils.helper import Buu, compute_third_order_moments
 
 SEED = 42
@@ -21,7 +21,7 @@ def params_init(case_name = None)->dict:
       }
     if case_name=='equipart': # epipartition of energy
         # System matrices
-        params['L'] = np.array([[0, 1, -2], [-1, 0, 3], [2, 3, 0]])
+        params['L'] = np.array([[0, 1, -2], [-1, 0, -3], [2, 3, 0]])
         params['G'] = np.diag([0.2, 0.1, 0.1])
         params['B'] = np.array([1, -0.6, -0.4])
         # Noise settings
@@ -140,6 +140,7 @@ def MC_triad_direct(params, m0, var0, method = 'RK4'):
     mean_MC_all = np.zeros((3, Nt+1))
     cov_MC_all = np.zeros((3, 3, Nt+1))
     moment3_MC_all = np.zeros((3, 3, 3,Nt+1))
+    moment3_MC_norm_all = np.zeros((3, 3, 3,Nt+1))
     Energy_MC_all = np.zeros((4, Nt+1))  # here 0 is all energy. 1,2,3 are energy for each dimension
     Energy_dyn = np.zeros((4, Nt+1)) 
     Energy_update = np.zeros(4)  # here 0 is all energy. 1,2,3 are energy for each dimension
@@ -149,7 +150,7 @@ def MC_triad_direct(params, m0, var0, method = 'RK4'):
     u_all[:, :, 0] = u
     mean_u = np.mean(u, axis=0)
     cov_u = np.cov(u, rowvar=False)
-    moment3_MC_all[:, :, :, 0], _ = compute_third_order_moments(u)
+    moment3_MC_all[:, :, :, 0], moment3_MC_norm_all[:,:,:,0] = compute_third_order_moments(u)
     mean_MC_all[:, 0] = mean_u
     cov_MC_all[:, :, 0] = cov_u
     # == Energy at t = 0 ===
@@ -210,7 +211,7 @@ def MC_triad_direct(params, m0, var0, method = 'RK4'):
         if i % tstep == 0:
             mean_MC_all[:, i] = mean_u
             cov_MC_all[:, :, i] = cov_u
-            moment3_MC_all[:, :, :, i], _ = compute_third_order_moments(u)
+            moment3_MC_all[:, :, :, i], moment3_MC_norm_all[:,:,:,i] = compute_third_order_moments(u)
             
             Energy_MC_all[0, i] = 0.5 * np.sum(mean_u ** 2) + 0.5 * np.trace(cov_u)
             Energy_MC_all[1, i] = 0.5 * (mean_u[0] ** 2 + cov_u[0, 0])
@@ -223,7 +224,7 @@ def MC_triad_direct(params, m0, var0, method = 'RK4'):
             Energy_dyn[3,i] = Energy_update[3]
             print(f"MC iter = {i}: E_true = {0.5 * (np.sum(mean_u ** 2) + np.trace(cov_u)):.4f}, E_dyn = {Energy_update[0]:.4f}")
         
-    return u_all, mean_MC_all, cov_MC_all, moment3_MC_all, Energy_MC_all, Energy_dyn
+    return u_all, mean_MC_all, cov_MC_all, moment3_MC_all, moment3_MC_norm_all, Energy_MC_all, Energy_dyn
 
 
 
@@ -238,4 +239,5 @@ if __name__ == "__main__":
     m0 = np.array([-1,0.5,-0.5])
     var0 = np.array([0.52, 0.2, 0.12])
     params = params_init('equipart')
-    u_all, mean_MC_all, cov_MC_all, moment3_MC_all, Energy_MC_all, Energy_dyn = MC_triad_direct(params, m0, var0)
+    print(params['SS'])
+    # u_all, mean_MC_all, cov_MC_all, moment3_MC_all, Energy_MC_all, Energy_dyn = MC_triad_direct(params, m0, var0)
