@@ -37,21 +37,31 @@ torch.manual_seed(SEED)
 np.random.seed(SEED)
 random.seed(SEED)
 
-# m0, var0 = MC_triad_initial_value()
-# params = params_init(args.params_name)
-# u_all, mean_MC_all, cov_MC_all, moment3_MC_all, moment3_MC_norm_all,Energy_MC_all, Energy_dyn = MC_triad_direct(params, m0, var0)
-# ensure_dir_exists(args.data_save_path)
-# np.savez(
-#     args.data_save_path,
-#     dataset=u_all,
-#     mean_MC=mean_MC_all,
-#     cov_MC=cov_MC_all,
-#     moment3_MC=moment3_MC_all,
-#     moment3_MC_norm=moment3_MC_norm_all,
-#     Energy_MC=Energy_MC_all,
-#     Energy_dyn=Energy_dyn
-# )
-
+m0, var0 = MC_triad_initial_value()
+params = params_init(args.params_name)
+data_file = args.data_save_path
+if ensure_dir_exists(data_file):
+    data = np.load(data_file)
+    dataset =  data['dataset']
+    mean_MC = data['mean_MC']
+    cov_MC = data['cov_MC']
+    moment3_MC = data['moment3_MC']
+    moment3_MC_norm = data['moment3_MC_norm']
+    Energy_MC = data['Energy_MC']
+    Energy_dyn = data['Energy_dyn']
+else:
+    data, mean_MC, cov_MC, moment3_MC, moment3_MC_norm,Energy_MC, Energy_dyn = MC_triad_direct(params, m0, var0)
+    np.savez(
+    args.data_save_path,
+    dataset=data,
+    mean_MC=mean_MC,
+    cov_MC=cov_MC,
+    moment3_MC=moment3_MC,
+    moment3_MC_norm=moment3_MC_norm,
+    Energy_MC=Energy_MC,
+    Energy_dyn=Energy_dyn
+    )
+print(data.shape)
 
 controller = Controller(pmf_sizes=PMF_SIZES).to(DEVICE)
 controller_optim = torch.optim.Adam(controller.parameters(), CONTROLLER_LR)
