@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch.nn.functional as F
 from .constant import CONTROLLER_INPUT_SIZE, CONTROLLER_HIDDEN_SIZE
 class Controller(nn.Module):
     def __init__(self, pmf_sizes: tuple[int]):

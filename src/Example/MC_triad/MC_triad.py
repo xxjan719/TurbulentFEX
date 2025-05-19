@@ -227,7 +227,10 @@ def MC_triad_direct(params, m0, var0, method = 'RK4'):
     return u_all, mean_MC_all, cov_MC_all, moment3_MC_all, moment3_MC_norm_all, Energy_MC_all, Energy_dyn
 
 
-
+def MC_triad_initial_value():
+    m0 = np.array([-1,0.5,-0.5])
+    var0 = np.array([0.52, 0.2, 0.12])
+    return m0, var0
 
 
 
@@ -236,8 +239,7 @@ def MC_triad_direct(params, m0, var0, method = 'RK4'):
 
 
 if __name__ == "__main__":
-    m0 = np.array([-1,0.5,-0.5])
-    var0 = np.array([0.52, 0.2, 0.12])
+    m0, var0 = MC_triad_initial_value()
     params = params_init('equipart')
     print(params['SS'])
     # u_all, mean_MC_all, cov_MC_all, moment3_MC_all, Energy_MC_all, Energy_dyn = MC_triad_direct(params, m0, var0)

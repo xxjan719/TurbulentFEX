@@ -48,7 +48,7 @@ class FEX(nn.Module):
             raise ValueError(f"Binary operator index {op_idx} is undefined.")
     
     def linear(self, x: Tensor) -> Tensor:
-        linear_part = self.unary(self.op_seq[2],x)
+        linear_part = self.unary(2,x)
         # Apply the linear operator
         linear_output = (self.linear_a * linear_part+self.linear_b).sum(dim=-1,keepdim = True)
         return linear_output
