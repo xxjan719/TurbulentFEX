@@ -30,6 +30,8 @@ CONTROLLER_LR = 1e-1
 CONTROLLER_INPUT_SIZE = 20
 EXPLORATION_ITERS = 100
 
+FEX_LR = 8e-3
+TRAIN_EPOCHS = 100
 
 torch.manual_seed(SEED)
 np.random.seed(SEED)
@@ -62,7 +64,7 @@ mse = nn.MSELoss()
 
 
 
-for explore_idx in range(EXPLORATION_ITERS):
+for explore_idx in range(1):#EXPLORATION_ITERS):
     print(f' Exploration index: {explore_idx} '.center(60, '='))
     controller_optim.zero_grad()
     pmfs = controller(torch.zeros(CONTROLLER_INPUT_SIZE))
@@ -70,7 +72,12 @@ for explore_idx in range(EXPLORATION_ITERS):
     op_seqs = torch.zeros(NUM_TREES, NUM_NODES, dtype=int)
     for tree_idx in range(NUM_TREES):
         op_seqs[tree_idx, :] = sampler(pmfs, output=torch.zeros(NUM_NODES, dtype=int))
-        print(op_seqs[tree_idx,:])
+        model = FEX(op_seqs[tree_idx,:])
+        print(model.expression_visualize())
+        model_optim = torch.optim.Adam(model.parameters(),lr=FEX_LR)
+        for train_idx in range(TRAIN_EPOCHS):
+            model_optim.zero_grad()
+
     
     # scores = torch.zeros(NUM_TREES)
 
@@ -84,7 +91,7 @@ x = torch.randn(224, 3)
 # print(x)
 y = model(x)
 # print(y)
-print(model.expression_visualize(x))
+# print(model.expression_visualize(x))
 
 # save_path = os.path.join(args.figure_save_path, 'three_comparing.pdf')
 # os.makedirs(os.path.dirname(save_path), exist_ok=True)

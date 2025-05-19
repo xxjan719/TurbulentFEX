@@ -77,7 +77,7 @@ class FEX(nn.Module):
         nonlinear_output = self.nonlinear(x)
         return linear_output + nonlinear_output
     
-    def expression_visualize(self,x: Tensor) -> str:
+    def expression_visualize(self,) -> str:
         
         # Linear part
         linear_terms = []
@@ -105,18 +105,6 @@ class FEX(nn.Module):
         nonlinear_expr = f"({exprs[0]})*({exprs[1]})*({exprs[2]})"
         return f"({linear_expr}) + ({nonlinear_expr})"
 
-    def derivative(self, x: Tensor) -> Tensor:
-        """
-        Compute the derivative (Jacobian) of the model output with respect to input x.
-        Returns a tensor of shape (batch_size, input_dim) if output is scalar per sample.
-        """
-        x = x.clone().detach().requires_grad_(True)
-        y = self.forward(x)
-        grads = []
-        for i in range(y.shape[0]):
-            grad = torch.autograd.grad(y[i], x, retain_graph=True, create_graph=True, allow_unused=True)[0][i]
-            grads.append(grad)
-            
-        return torch.stack(grads, dim=0)
+
 
 
