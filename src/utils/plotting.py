@@ -2,6 +2,10 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
 
+def set_figure_position(x=100, y=100, width=800, height=600):
+    """Set the position and size of the current figure window."""
+    plt.get_current_fig_manager().window.setGeometry(x, y, width, height)
+
 def plot_stats(TT_MC, mean_MC, cov_MC, M3_MC, Ene_MC, Ene_dyn, save_path=None):
     # Set publication style
     mpl.rcParams.update({
@@ -30,6 +34,7 @@ def plot_stats(TT_MC, mean_MC, cov_MC, M3_MC, Ene_MC, Ene_dyn, save_path=None):
     }
 
     fig, axs = plt.subplots(3, 2, figsize=(13, 11))
+    set_figure_position(x=100, y=100, width=1300, height=1100)  # Set figure position
     axs = axs.flatten()
 
     std_MC = np.sqrt(np.clip(np.diagonal(cov_MC, axis1=0, axis2=1).T, a_min=0, a_max=None))
@@ -98,6 +103,7 @@ def plot_third_order_moments(TT_MC, M3_MC, save_path = None):
     M111 = M3_MC[0,0,0,:].reshape(T)
 
     plt.figure(figsize=(8, 5))
+    set_figure_position(x=100, y=100, width=800, height=500)  # Set figure position
     plt.scatter(TT_MC, M112,s=9, label=r'$\langle M_{112} \rangle$')
     plt.scatter(TT_MC, M113,s=9, label=r'$\langle M_{113} \rangle$')
     plt.scatter(TT_MC, M233, s=9,label=r'$\langle M_{233} \rangle$')
@@ -122,6 +128,7 @@ def plot_deviation_subplots(TT_MC, cov_MC, M3_MC_norm,save_path=None):
     trace_dev = (cov_total - cov_total[-1]) / cov_total[-1]
 
     fig, axs = plt.subplots(1, 3, figsize=(18, 5))
+    set_figure_position(x=100, y=100, width=1800, height=500)  # Set figure position
 
     # --- Subplot 1: Deviation in variance ---
     for i, color in zip(range(3), ['C0', 'C1', 'C2']):

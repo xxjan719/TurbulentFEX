@@ -14,7 +14,7 @@ class FEX(nn.Module):
         self.nonlinear_a = nn.ParameterList([nn.Parameter(torch.ones(3)) for _ in range(3)])
         self.nonlinear_b = nn.ParameterList([nn.Parameter(torch.zeros(3)) for _ in range(3)])
         
-    
+
     def unary(self, op_idx: int, x: Tensor):
         if op_idx == 0:
             return torch.zeros_like(x)
@@ -105,5 +105,17 @@ class FEX(nn.Module):
         nonlinear_expr = f"({exprs[0]})*({exprs[1]})*({exprs[2]})"
         return f"({linear_expr}) + ({nonlinear_expr})"
 
-    
+    def derivative(self, x: Tensor) -> Tensor:
+        """
+        Compute the derivative (Jacobian) of the model output with respect to input x.
+        Returns a tensor of shape (batch_size, input_dim) if output is scalar per sample.
+        """
+        x = x.clone().detach().requires_grad_(True)
+        y = self.forward(x)
+        grads = []
+        for i in range(y.shape[0]):
+            grad = torch.autograd.grad(y[i], x, retain_graph=True, create_graph=True, allow_unused=True)[0][i]
+            grads.append(grad)
+        return torch.stack(grads, dim=0)
+
 
