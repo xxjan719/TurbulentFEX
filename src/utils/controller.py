@@ -8,6 +8,7 @@ class Controller(nn.Module):
         self.splits = [0]
         for size in pmf_sizes:
             self.splits.append(self.splits[-1]+size)
+        # print(self.splits)
         self.net = nn.Sequential(
             nn.Linear(CONTROLLER_INPUT_SIZE, CONTROLLER_HIDDEN_SIZE),
             nn.ReLU(),

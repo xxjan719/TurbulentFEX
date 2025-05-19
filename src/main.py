@@ -5,10 +5,12 @@ from utils import FEX
 from utils.plotting import plot_stats, plot_third_order_moments,plot_deviation_subplots
 from utils.constant import *
 from utils.controller import Controller
+from utils.Sampler import Sampler
 from Example.MC_triad.MC_triad import params_init, MC_triad_direct, MC_triad_initial_value
 from config.arg_parser import get_parser
 from config.paths import ensure_dir_exists
 import torch
+import torch.nn as nn
 import numpy as np
 import os
 import random
@@ -21,12 +23,17 @@ args = parser.parse_args()
 DEVICE = args.DEVICE
 SEED = args.SEED
 PMF_SIZES = [len(unary_ops),len(binary_ops),len(unary_ops),len(binary_ops)]*3
+NUM_NODES = len(PMF_SIZES)
+NUM_TREES = 30
+
 CONTROLLER_LR = 1e-1
+CONTROLLER_INPUT_SIZE = 20
+EXPLORATION_ITERS = 100
+
 
 torch.manual_seed(SEED)
 np.random.seed(SEED)
 random.seed(SEED)
-
 
 # m0, var0 = MC_triad_initial_value()
 # params = params_init(args.params_name)
@@ -44,9 +51,29 @@ random.seed(SEED)
 # )
 
 
-
 controller = Controller(pmf_sizes=PMF_SIZES).to(DEVICE)
 controller_optim = torch.optim.Adam(controller.parameters(), CONTROLLER_LR)
+sampler = Sampler()
+mse = nn.MSELoss()
+
+
+
+
+
+
+
+for explore_idx in range(EXPLORATION_ITERS):
+    print(f' Exploration index: {explore_idx} '.center(60, '='))
+    controller_optim.zero_grad()
+    pmfs = controller(torch.zeros(CONTROLLER_INPUT_SIZE))
+    scores = torch.zeros(NUM_TREES)
+    op_seqs = torch.zeros(NUM_TREES, NUM_NODES, dtype=int)
+    for tree_idx in range(NUM_TREES):
+        op_seqs[tree_idx, :] = sampler(pmfs, output=torch.zeros(NUM_NODES, dtype=int))
+        print(op_seqs[tree_idx,:])
+    
+    # scores = torch.zeros(NUM_TREES)
+
 
 
 op_seqs = [2,0,3,2,

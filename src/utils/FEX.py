@@ -116,6 +116,7 @@ class FEX(nn.Module):
         for i in range(y.shape[0]):
             grad = torch.autograd.grad(y[i], x, retain_graph=True, create_graph=True, allow_unused=True)[0][i]
             grads.append(grad)
+            
         return torch.stack(grads, dim=0)
 
 
