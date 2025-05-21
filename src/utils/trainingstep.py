@@ -1,54 +1,69 @@
 # a decorator takes a function, extends it and returns.
 # a function can return a function
 from dataclasses import dataclass
+import torch
+from torch import Tensor
+from utils.FEX import FEX
 
 @dataclass
 class Body4TrainIntegrationParams:
-    df: float
-    intermediate_dt: float
-    @property
-    def num_intermediate_steps(self) -> float:
-        result = self.dt/self.intermediate_dt
-        if math.isclose(result,round(result), rel_tol = 1e-09):
-            return int(result)
-        else:
-            print(f"dt {self.dt} is not divisible by intermediate_dt {self.intermediate_dt} are not nice multiples.")
-            int_result = int(result)
-        return int_result
+    dt: float
 
 @dataclass
 class Body4TrainIntegrationArgs:
-    derivative_func: callable
+    integration_func: callable
     y0: Tensor
-
+    index: int
 
 class Body4TrainIntegrator:
     def __init__(self, integratorParams: Body4TrainIntegrationParams):
         self._integratorparams = integratorParams
     
     def integrate(self, integrationArgs: Body4TrainIntegrationArgs) -> Tensor:
-        # Unpack the arguments
-        derivative_func = integrationArgs.derivative_func
-        y0 = integrationArgs.y0
-        u1 = y0[:,:,0]
-        u1_
-        u2 = y0[:,:,1]
-        u3 = y0[:,:,2]
-        dt = self._integratorparams_intermediate_dt
-        num_intermediate_steps = self._integratorparams.num_intermediate_steps
+        trainingset = integrationArgs.y0
+        integration_func = integrationArgs.integration_func
+        index = integrationArgs.index
+        state = trainingset.clone()
+        next_state = trainingset[:,:,1:]
+        current_state = trainingset[:,:,:-1]
+        u1 = current_state[:,0,:]     
+        u2 = current_state[:,1,:]
+        u3 = current_state[:,2,:]
 
-        for j in range(num_intermediate_steps):
+        print(u1.shape)
+        u1_flat = u1.reshape(-1, 1)
+        u2_flat = u2.reshape(-1, 1)
+        u3_flat = u3.reshape(-1, 1)
+        u_flat = torch.cat([u1_flat, u2_flat, u3_flat], dim=1)
+        ui_next = next_state[:,index,:]
+        ui = current_state[:,index,:]
+        ui_next_flat = ui_next.reshape(-1, 1)
+        ui_flat = ui.reshape(-1, 1)
+        
+        print(u_flat.shape)
+        
+        label = (ui_next_flat - ui_flat)/self._integratorparams.dt
+        expression_pred = integration_func(u_flat)
+        print(expression_pred.shape)
 
-        # Initialize the state
-        state = y0.clone()
 
 
-
-        return state
+        return expression_pred, label
 
 
 
 
 
 if __name__ == "__main__":
+    op_seqs = [2,0,3,2,
+            4,2,5,2,
+            6,1,7,2]
+    model = FEX(op_seqs)
+    integratorParams = Body4TrainIntegrationParams(
+    dt=10**-3,)
+    x = torch.randn(10**4,3,10**4+1)
+    integration_args = Body4TrainIntegrationArgs(y0=x, integration_func=model)
+    integrator = Body4TrainIntegrator(integratorParams)
+    
+    integrator.integrate(integration_args)
     

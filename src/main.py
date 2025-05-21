@@ -24,7 +24,7 @@ DEVICE = args.DEVICE
 SEED = args.SEED
 PMF_SIZES = [len(unary_ops),len(binary_ops),len(unary_ops),len(binary_ops)]*3
 NUM_NODES = len(PMF_SIZES)
-NUM_TREES = 30
+NUM_TREES = 100
 
 CONTROLLER_LR = 1e-1
 CONTROLLER_INPUT_SIZE = 20
@@ -40,7 +40,8 @@ random.seed(SEED)
 m0, var0 = MC_triad_initial_value()
 params = params_init(args.params_name)
 data_file = args.data_save_path
-if ensure_dir_exists(data_file):
+
+if os.path.exists(data_file):
     data = np.load(data_file)
     dataset =  data['dataset']
     mean_MC = data['mean_MC']
@@ -61,32 +62,34 @@ else:
     Energy_MC=Energy_MC,
     Energy_dyn=Energy_dyn
     )
-print(data.shape)
+print(dataset.shape)
 
 controller = Controller(pmf_sizes=PMF_SIZES).to(DEVICE)
 controller_optim = torch.optim.Adam(controller.parameters(), CONTROLLER_LR)
 sampler = Sampler()
 mse = nn.MSELoss()
 
+# print(dataset.shape)
 
 
 
 
 
 
-for explore_idx in range(1):#EXPLORATION_ITERS):
-    print(f' Exploration index: {explore_idx} '.center(60, '='))
-    controller_optim.zero_grad()
-    pmfs = controller(torch.zeros(CONTROLLER_INPUT_SIZE))
-    scores = torch.zeros(NUM_TREES)
-    op_seqs = torch.zeros(NUM_TREES, NUM_NODES, dtype=int)
-    for tree_idx in range(NUM_TREES):
-        op_seqs[tree_idx, :] = sampler(pmfs, output=torch.zeros(NUM_NODES, dtype=int))
-        model = FEX(op_seqs[tree_idx,:])
-        print(model.expression_visualize())
-        model_optim = torch.optim.Adam(model.parameters(),lr=FEX_LR)
-        for train_idx in range(TRAIN_EPOCHS):
-            model_optim.zero_grad()
+# for explore_idx in range(1):#EXPLORATION_ITERS):
+#     print(f' Exploration index: {explore_idx} '.center(60, '='))
+#     controller_optim.zero_grad()
+#     pmfs = controller(torch.zeros(CONTROLLER_INPUT_SIZE))
+#     scores = torch.zeros(NUM_TREES)
+#     op_seqs = torch.zeros(NUM_TREES, NUM_NODES, dtype=int)
+#     for tree_idx in range(NUM_TREES):
+#         op_seqs[tree_idx, :] = sampler(pmfs, output=torch.zeros(NUM_NODES, dtype=int))
+#         model = FEX(op_seqs[tree_idx,:])
+#         print(model.expression_visualize())
+#         model_optim = torch.optim.Adam(model.parameters(),lr=FEX_LR)
+#         for train_idx in range(TRAIN_EPOCHS):
+#             model_optim.zero_grad()
+#             y = model(u)
 
     
     # scores = torch.zeros(NUM_TREES)
