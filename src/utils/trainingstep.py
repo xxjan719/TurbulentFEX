@@ -46,8 +46,6 @@ class Body4TrainIntegrator:
         expression_pred = integration_func(u_flat)
         print(expression_pred.shape)
 
-
-
         return expression_pred, label
 
 
