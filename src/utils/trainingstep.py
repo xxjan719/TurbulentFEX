@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 import torch
 from torch import Tensor
-from utils.FEX import FEX
+from .FEX import FEX
 
 @dataclass
 class Body4TrainIntegrationParams:
@@ -24,27 +24,26 @@ class Body4TrainIntegrator:
         integration_func = integrationArgs.integration_func
         index = integrationArgs.index
         state = trainingset.clone()
-        next_state = trainingset[:,:,1:]
-        current_state = trainingset[:,:,:-1]
+        next_state = state[:,:,1:]
+        current_state = state[:,:,:-1]
         u1 = current_state[:,0,:]     
         u2 = current_state[:,1,:]
         u3 = current_state[:,2,:]
 
-        print(u1.shape)
+        # print(u1.shape)
         u1_flat = u1.reshape(-1, 1)
         u2_flat = u2.reshape(-1, 1)
         u3_flat = u3.reshape(-1, 1)
         u_flat = torch.cat([u1_flat, u2_flat, u3_flat], dim=1)
-        ui_next = next_state[:,index,:]
-        ui = current_state[:,index,:]
+        ui_next = next_state[:,index-1,:]
+        ui = current_state[:,index-1,:]
         ui_next_flat = ui_next.reshape(-1, 1)
         ui_flat = ui.reshape(-1, 1)
         
-        print(u_flat.shape)
-        
+        # print(f'the shape of u flat is {u_flat.shape}')  
         label = (ui_next_flat - ui_flat)/self._integratorparams.dt
         expression_pred = integration_func(u_flat)
-        print(expression_pred.shape)
+        # print(f'expression_pred.shape: {expression_pred.shape}; label.shape: {label.shape}')
 
         return expression_pred, label
 
@@ -60,7 +59,7 @@ if __name__ == "__main__":
     integratorParams = Body4TrainIntegrationParams(
     dt=10**-3,)
     x = torch.randn(10**4,3,10**4+1)
-    integration_args = Body4TrainIntegrationArgs(y0=x, integration_func=model)
+    integration_args = Body4TrainIntegrationArgs(y0=x, integration_func=model, index=1)
     integrator = Body4TrainIntegrator(integratorParams)
     
     integrator.integrate(integration_args)

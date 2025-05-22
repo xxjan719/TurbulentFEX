@@ -8,3 +8,5 @@ binary_ops = ["({})+({})", "({})-({})", "({})*({})"]
 
 CONTROLLER_INPUT_SIZE = 20
 CONTROLLER_HIDDEN_SIZE = 30
+
+POOL_LIMIT = 20

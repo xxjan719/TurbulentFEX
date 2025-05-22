@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch import Tensor
-from utils.constant import unary_ops, binary_ops
+from .constant import unary_ops, binary_ops
 class FEX(nn.Module):
     def __init__(self, operator_sequence: Tensor) -> None:
         super().__init__()

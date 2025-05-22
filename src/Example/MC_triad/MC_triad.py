@@ -13,11 +13,11 @@ random.seed(SEED)
 def params_init(case_name = None)->dict:
     # initializing the settings
     params = {
-        'MC': int(1e4),  # number of Monte Carlo simulations
-        'Dt':1e-3, # Time step size
+        'MC': int(1e3),  # number of Monte Carlo simulations
+        'Dt':1e-2, # Time step size
         'tstep': 10, # output every tstep steps
         'T':10,  # total simulation time
-        'Nt': int(round(10 / 1e-3)),  # number of time steps
+        'Nt': int(round(10 / 1e-2)),  # number of time steps
       }
     if case_name=='equipart': # epipartition of energy
         # System matrices
