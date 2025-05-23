@@ -117,7 +117,7 @@ for dim in range(0+1,3+1):
             logging.FileHandler(log_file, encoding='utf-8'),  
             logging.StreamHandler(sys.stdout)])
 
-
+        # dimension 1 need 10 EXPLORATION_ITERS
         for explore_idx in range(EXPLORATION_ITERS):
             logprint(f' Exploration index: {explore_idx} '.center(60, '='))
             controller_optim.zero_grad()
