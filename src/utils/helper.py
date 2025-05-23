@@ -1,4 +1,6 @@
 import numpy as np
+import logging
+import math
 def Buu(B,u,v):
     '''Compute the Buu operator terms for the triad model.'''
     if len(u.shape) == 1:
@@ -45,3 +47,14 @@ def double_check_energy(mean_MC, cov_MC):
     Energy_MC_dimension3 = 0.5 * (mean_MC[2]**2 + cov_MC[2, 2])
     Energy_sum = Energy_MC_dimension1 + Energy_MC_dimension2 + Energy_MC_dimension3
     print("Are summation of each dimension equal to the total energy?", Energy_sum == Energy_MC)
+
+
+def logprint(*args, **kwargs):
+    message = " ".join(str(a) for a in args)
+    logging.info(message)
+
+def adjust_learning_rate(optimizer, epoch, start_lr, num_iter):
+    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
+    lr = start_lr * 0.5* (math.cos(math.pi*epoch /num_iter)+1)
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr

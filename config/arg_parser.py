@@ -2,9 +2,24 @@ import argparse
 
 def get_parser():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--Model', type=str, default='MC_triad')
     parser.add_argument('--DEVICE', type=str, default='cpu')
-    parser.add_argument('--data_save_path', type=str, default='Example/MC_triad/results/simulation_results.npz')
+    parser.add_argument('--data_save_path', type=str, default=None)
+    parser.add_argument('--log_save_path', type=str, default=None)
+    parser.add_argument('--figure_save_path', type=str, default=None)
     parser.add_argument('--SEED', type=int, default=42)
     parser.add_argument('--params_name', type=str, default='equipart')
-    parser.add_argument('--figure_save_path', type=str, default='Example/MC_triad/results')
+
+    parser.add_argument('--CONTROLLER_LR', type=float, default=1e-1)
+    parser.add_argument('--CONTROLLER_INPUT_SIZE', type=int, default=20)
+    parser.add_argument('--CONTROLLER_TOP_SAMPLES_FRACTION', type=float, default=0.25)
+    parser.add_argument('--CONTROLLER_QUANTILE_METHOD', type=str, default='linear')
+    parser.add_argument('--EXPLORATION_ITERS', type=int, default=10)
+    parser.add_argument('--NUM_TREES', type=int, default=100)
+
+    # FEX optimizer settings
+    parser.add_argument('--FEX_LR', type=float, default=8e-3)
+    parser.add_argument('--TRAIN_EPOCHS_FIRST', type=int, default=100)
+    parser.add_argument('--TRAIN_EPOCHS_SECOND', type=int, default=2000)
     return parser
+
