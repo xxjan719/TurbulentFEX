@@ -14,7 +14,7 @@ def get_parser():
     parser.add_argument('--CONTROLLER_INPUT_SIZE', type=int, default=20)
     parser.add_argument('--CONTROLLER_TOP_SAMPLES_FRACTION', type=float, default=0.25)
     parser.add_argument('--CONTROLLER_QUANTILE_METHOD', type=str, default='linear')
-    parser.add_argument('--EXPLORATION_ITERS', type=int, default=10)
+    parser.add_argument('--EXPLORATION_ITERS', type=int, default=20)
     parser.add_argument('--NUM_TREES', type=int, default=100)
 
     # FEX optimizer settings
