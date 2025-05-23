@@ -232,8 +232,8 @@ for dim in range(0+1,3+1):
         logprint(f"Optimal operator sequence saved to {optimal_idx_path}")
 
 
-Formula_1 = [0.4938, 1.0031, 0.2461, 1.18]
-Formula_2 = [0.1119, 0.3845, 0.1397, 0.24]
+Formula_1 = [-1.6100, 0.9751, -0.2461, 0.8654] # −0.2461x1+0.9751x2−1.6100x3+0.8654x2x3−0.0229
+Formula_2 = [-0.9674, -2.0017, -0.15087, -0.3720]
 Formula_3 = [1.5229, 1.2813, 0.1577, 1.05]
 plot_latex_formula(params,Formula_1, Formula_2, Formula_3)
 

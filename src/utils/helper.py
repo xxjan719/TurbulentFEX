@@ -87,9 +87,9 @@ def plot_latex_formula(params,Formula_1:list, Formula_2:list, Formula_3:list):
     ground_truth = (
         r"\textbf{Ground Truth:}\\[0.3em]"
         r"\begin{aligned}"
-        fr"\frac{{du_1}}{{dt}} &= {L2}u_3 - {L3}u_2 - {d1:.1f}u_1 + {B1:.1f}u_2 u_3 + F_1 + \text{{noise}} \\"
-        fr"\frac{{du_2}}{{dt}} &= {L3}u_1 - {L1}u_3 - {d2:.1f}u_2 + {B2:.1f}u_3 u_1 + F_2 + \text{{noise}} \\"
-        fr"\frac{{du_3}}{{dt}} &= {L1}u_2 - {L2}u_1 - {d3:.1f}u_3 + {B3:.1f}u_1 u_2 + F_3 + \text{{noise}}"
+        fr"\frac{{du_1}}{{dt}} &= {-L2}u_3 - {-L3}u_2 - {d1:.1f}u_1 + {B1:.1f}u_2 u_3 + F_1 + \text{{noise}} \\"
+        fr"\frac{{du_2}}{{dt}} &= {-L3}u_1 - {-L1}u_3 - {d2:.1f}u_2 + {B2:.1f}u_3 u_1 + F_2 + \text{{noise}} \\"
+        fr"\frac{{du_3}}{{dt}} &= {-L1}u_2 - {-L2}u_1 - {d3:.1f}u_3 + {B3:.1f}u_1 u_2 + F_3 + \text{{noise}}"
         r"\end{aligned}"
     )
 
