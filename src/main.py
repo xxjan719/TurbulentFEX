@@ -4,7 +4,7 @@ sys.path.append("..")  # So you can import from top-level utils
 from utils import FEX
 from utils.plotting import plot_stats, plot_third_order_moments,plot_deviation_subplots
 from utils.constant import *
-from utils.helper import logprint,adjust_learning_rate
+from utils.helper import logprint,adjust_learning_rate,plot_latex_formula
 from utils.controller import Controller
 from utils.Sampler import Sampler
 from utils.Pool import Pool
@@ -101,6 +101,7 @@ for dim in range(0+1,3+1):
         model_optimal = FEX(optimal_idx)
         model_optimal.load_state_dict(torch.load(model_save_path, map_location=DEVICE))
         model_optimal.eval()
+        print(f'dimension: {dim}',model_optimal.expression_visualize())
     else:
         print(f'There is no model for dimension {dim} in this environment, it generates automatically'.center(60,'-'))
         log_file = os.path.join(args.log_save_path, f'log_dimension_{dim}.txt')
@@ -231,6 +232,10 @@ for dim in range(0+1,3+1):
         logprint(f"Optimal operator sequence saved to {optimal_idx_path}")
 
 
+Formula_1 = [0.4938, 1.0031, 0.2461, 1.18]
+Formula_2 = [0.1119, 0.3845, 0.1397, 0.24]
+Formula_3 = [1.5229, 1.2813, 0.1577, 1.05]
+plot_latex_formula(params,Formula_1, Formula_2, Formula_3)
 
 
 
