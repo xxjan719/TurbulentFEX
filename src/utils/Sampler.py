@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from typing import Tuple
 from torch import Tensor
 
 SAMPLER_EPSILON = 0.2
@@ -7,7 +8,7 @@ class Sampler(nn.Module):
     def __init__(self):
         super().__init__()
     
-    def forward(self, pmfs: tuple[Tensor], output: Tensor):       
+    def forward(self, pmfs: Tuple[Tensor, ...], output: Tensor):       
         for i, pmf in enumerate(pmfs):
             # print(f'this is {i} times and corresponding pmf is {pmf}')
             u = torch.rand(1)

@@ -1,3 +1,6 @@
+import os
+os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
+
 import sys
 sys.path.append("..")  # So you can import from top-level utils
 
