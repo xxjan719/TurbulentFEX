@@ -274,7 +274,7 @@ else:
         elif dim == 2:
             op_seqs = [1, 0, 2, 2, 0, 2, 1, 2, 2, 1, 0, 2]
         elif dim == 3:
-            op_seqs = [2, 1, 2, 2, 0, 2, 2, 2, 1, 0, 1, 2]
+            op_seqs = [2, 1, 1, 2, 0, 1, 2, 2, 1, 0, 1, 2]
         model = FEX(op_seqs)
         model.apply(weights_init)
         model_optim = torch.optim.Adam(model.parameters(),lr=FEX_LR)
@@ -295,10 +295,17 @@ else:
                 # Simplify nonlinear part
                 nonlinear_expr = sp.sympify(nonlinear_str)
                 nonlinear_simplified = sp.simplify(nonlinear_expr)
+                nonlinear_expanded = sp.expand(nonlinear_expr)
+                total_expr = linear_expr + nonlinear_expanded
+                total_simplified = sp.simplify(total_expr)
                 print(f"Training index: {train_idx}, Loss: {loss.item()}")
                 print(f'overall expression:{expr_str}')
                 print(f"Simplified Linear: {linear_simplified}")
                 print(f"Simplified Nonlinear: {nonlinear_simplified}")
+                print(f'expanded simplified nonlinear: {nonlinear_expanded}')
+                print(f"Combined and simplified: {total_simplified}")
+                
+                
 
 
 
