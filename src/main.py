@@ -4,7 +4,7 @@ os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
 import sys
 sys.path.append("..")  # So you can import from top-level utils
 
-from utils import FEX
+from utils import FEX#, ThreeDimensionFEX
 from utils.plotting import plot_stats, plot_third_order_moments,plot_deviation_subplots
 from utils.constant import *
 from utils.helper import logprint,adjust_learning_rate,plot_latex_formula,weights_init
@@ -21,6 +21,7 @@ import numpy as np
 import os
 import random
 import logging
+import sympy as sp
 
 parser = get_parser()
 args = parser.parse_args()
@@ -134,7 +135,7 @@ if args.TRAIN_GROUND_TRUTH == False:
                     # print(op_seqs[tree_idx,:])
                     model = FEX(op_seqs[tree_idx,:])
                     model.apply(weights_init)
-                    expression = model.expression_visualize()
+                    expression,_,_ = model.expression_visualize()
                     parts = expression.split(') + (')
                     nonlinear_expr = parts[1].strip()
                     if "x1" not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" not in nonlinear_expr:
@@ -153,9 +154,38 @@ if args.TRAIN_GROUND_TRUTH == False:
                         loss = mse(du_pred,du_target)
                         loss.backward()
                         model_optim.step()
-                        # if train_idx % 10 == 0:
-                            # print(f"Training index: {train_idx}, Loss: {loss.item()}")
-                            # print(model.expression_visualize())
+                        if train_idx % 10 == 0:
+                            # Get the expression string from FEX
+                            expr_str,_,_ = model.expression_visualize()
+                            # Try to split and simplify each part (linear and nonlinear)
+                            try:
+                                # Split into linear and nonlinear parts if possible
+                                if ") + (" in expr_str:
+                                    linear_str, nonlinear_str = expr_str.split(") + (", 1)
+                                    linear_str = linear_str.lstrip("(")
+                                    nonlinear_str = nonlinear_str.rstrip(")")
+                                    # Simplify linear part
+                                    x1, x2, x3 = sp.symbols('x1 x2 x3')
+                                    linear_expr = sp.sympify(linear_str)
+                                    linear_simplified = sp.simplify(linear_expr)
+                                    # Simplify nonlinear part
+                                    nonlinear_expr = sp.sympify(nonlinear_str)
+                                    nonlinear_simplified = sp.simplify(nonlinear_expr)
+                                    print(f"Training index: {train_idx}, Loss: {loss.item()}")
+                                    print(f"Simplified Linear: {linear_simplified}")
+                                    print(f"Simplified Nonlinear: {nonlinear_simplified}")
+                                else:
+                                    # If not split, just try to simplify the whole thing
+                                    x1, x2, x3 = sp.symbols('x1 x2 x3')
+                                    expr = sp.sympify(expr_str)
+                                    simplified = sp.simplify(expr)
+                                    print(f"Training index: {train_idx}, Loss: {loss.item()}")
+                                    print(f"Simplified: {simplified}")
+                            except Exception as e:
+                                print(f"Training index: {train_idx}, Loss: {loss.item()}")
+                                print("Could not simplify expression:")
+                                print(expr_str)
+                                print(f"Error: {e}")
                     if not math.isnan(loss.item()):
                         if dim == 1:
                             scores[tree_idx] = 1/ (1+0.1*(loss-245))
@@ -165,11 +195,12 @@ if args.TRAIN_GROUND_TRUTH == False:
                             scores[tree_idx] = 1/(1+0.1*(loss))
                     else:
                         scores[tree_idx] = 0.
+                    final_expr,_,_ = model.expression_visualize()
                     logprint('✅'*40)
                     logprint(f'Operator Sequence: {op_seqs[tree_idx,:].tolist()}')
                     logprint(f'Final Loss: {loss.item():.6f}')
                     logprint(f'Score: {scores[tree_idx]:.6f}')
-                    logprint(f'Final Expression look like:{model.expression_visualize()}')
+                    logprint(f'Final Expression look like:{final_expr}')
                     logprint('✅'*40)
                     pool.add(scores[tree_idx],model,loss.item(),op_seqs[tree_idx,:].tolist())
                     # print(f'Pool summaries'.center(80,'-'))
@@ -255,8 +286,20 @@ else:
             loss.backward()
             model_optim.step()
             if train_idx % 10 == 0:
+                # Get the expression string from FEX
+                expr_str,linear_str,nonlinear_str = model.expression_visualize()
+                # Try to split and simplify each part (linear and nonlinear)    
+                x1, x2, x3 = sp.symbols('x1 x2 x3')
+                linear_expr = sp.sympify(linear_str)
+                linear_simplified = sp.simplify(linear_expr)
+                # Simplify nonlinear part
+                nonlinear_expr = sp.sympify(nonlinear_str)
+                nonlinear_simplified = sp.simplify(nonlinear_expr)
                 print(f"Training index: {train_idx}, Loss: {loss.item()}")
-                print(model.expression_visualize())
+                print(f'overall expression:{expr_str}')
+                print(f"Simplified Linear: {linear_simplified}")
+                print(f"Simplified Nonlinear: {nonlinear_simplified}")
+
 
 
 # Formula_1 = [-1.6100, 0.9751, -0.2461, 0.8654] # −0.2461x1+0.9751x2−1.6100x3+0.8654x2x3−0.0229
