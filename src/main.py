@@ -26,11 +26,11 @@ parser = get_parser()
 args = parser.parse_args()
 base_path = f'Example/{args.Model}/results'
 if args.data_save_path is None:
-    args.data_save_path = f'{base_path}/simulation_results.npz'
+    args.data_save_path = f'{base_path}/{args.params_name}/simulation_results.npz'
 if args.log_save_path is None:
-    args.log_save_path = base_path
+    args.log_save_path = f'{base_path}/{args.params_name}'
 if args.figure_save_path is None:
-    args.figure_save_path = base_path
+    args.figure_save_path = f'{base_path}/{args.params_name}'
 
 
 DEVICE = args.DEVICE
@@ -95,16 +95,16 @@ pool = Pool()
 # print(dataset.shape)
 
 for dim in range(0+1,3+1):
-    model_save_path = os.path.join(args.log_save_path, f"optimal_FEX_{dim}.pth")
+    # model_save_path = os.path.join(args.log_save_path, f"optimal_FEX_{dim}.pth")
     optimal_idx_path = os.path.join(os.path.dirname(args.data_save_path), f"optimal_idx_{dim}.npy")
 
-    if os.path.exists(model_save_path) and os.path.exists(optimal_idx_path):
+    if os.path.exists(optimal_idx_path): #os.path.exists(model_save_path) and 
         print(f'Model for dimension {dim} has already generated, just using for the second stage training:FEX'.center(60, '='))
         optimal_idx = np.load(optimal_idx_path)
-        model_optimal = FEX(optimal_idx)
-        model_optimal.load_state_dict(torch.load(model_save_path, map_location=DEVICE))
-        model_optimal.eval()
-        print(f'dimension: {dim}',model_optimal.expression_visualize())
+        # model_optimal = FEX(optimal_idx)
+        # model_optimal.load_state_dict(torch.load(model_save_path, map_location=DEVICE))
+        # model_optimal.eval()
+        # print(f'dimension: {dim}',model_optimal.expression_visualize())
     else:
         print(f'There is no model for dimension {dim} in this environment, it generates automatically'.center(60,'-'))
         log_file = os.path.join(args.log_save_path, f'log_dimension_{dim}.txt')
@@ -216,22 +216,22 @@ for dim in range(0+1,3+1):
         best_candidate = min(pool, key=lambda c: c.error)
         optimal_idx = best_candidate.action
         print(f'Optimal operator sequence: {optimal_idx}')
-        model_optimal = FEX(optimal_idx)
-        model_optim_optimal = torch.optim.Adam(model_optimal.parameters(),lr=FEX_LR)
-        for train_idx in range(TRAIN_EPOCHS_SECOND):
-            adjust_learning_rate(model_optim_optimal,train_idx,FEX_LR,TRAIN_EPOCHS_SECOND)
-            model_optim_optimal.zero_grad()
-            integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model_optimal, index=dim)
-            du_pred,du_target = integrator.integrate(integration_args)
-            loss = mse(du_pred,du_target)
-            loss.backward()
-            model_optim_optimal.step()
-            if train_idx % 100 == 0:
-                logprint(f"Training step {train_idx} | Loss: {loss.item():.6f}")
+        # model_optimal = FEX(optimal_idx)
+        # model_optim_optimal = torch.optim.Adam(model_optimal.parameters(),lr=FEX_LR)
+        # for train_idx in range(TRAIN_EPOCHS_SECOND):
+        #     adjust_learning_rate(model_optim_optimal,train_idx,FEX_LR,TRAIN_EPOCHS_SECOND)
+        #     model_optim_optimal.zero_grad()
+        #     integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model_optimal, index=dim)
+        #     du_pred,du_target = integrator.integrate(integration_args)
+        #     loss = mse(du_pred,du_target)
+        #     loss.backward()
+        #     model_optim_optimal.step()
+        #     if train_idx % 100 == 0:
+        #         logprint(f"Training step {train_idx} | Loss: {loss.item():.6f}")
 
         np.save(optimal_idx_path, optimal_idx)
-        torch.save(model_optimal.state_dict(), model_save_path)
-        logprint(f"Model saved to {model_save_path}")
+        # torch.save(model_optimal.state_dict(), model_save_path)
+        # logprint(f"Model saved to {model_save_path}")
         logprint(f"Optimal operator sequence saved to {optimal_idx_path}")
 
 
