@@ -5,7 +5,7 @@ from .constant import unary_ops, binary_ops
 # from .helper import weights_init
 # from .trainingstep import Body4TrainIntegrationArgs
 class FEX(nn.Module):
-    def __init__(self, operator_sequence: Tensor) -> None:
+    def __init__(self, operator_sequence: Tensor,) -> None:
         super().__init__()
         self.op_seq = operator_sequence
         # Define the linear element
@@ -106,6 +106,10 @@ class FEX(nn.Module):
             op_ptr += 4        
         nonlinear_expr = f"({exprs[0]})*({exprs[1]})*({exprs[2]})"
         return f"({linear_expr}) + ({nonlinear_expr})",f"{linear_expr}",f"{nonlinear_expr}"
+    
+
+
+
 
 # class ThreeDimensionFEX(nn.Module):
 #     def __init__(self, op_seqs: dict):

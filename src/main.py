@@ -267,6 +267,7 @@ if args.TRAIN_GROUND_TRUTH == False:
             # logprint(f"Model saved to {model_save_path}")
             logprint(f"Optimal operator sequence saved to {optimal_idx_path}")
 else:
+    x1, x2, x3 = sp.symbols('x1 x2 x3')
     for dim in range(0+1,3+1):
         print(f'the dimension is {dim}')
         if dim == 1: 
@@ -282,14 +283,21 @@ else:
             model_optim.zero_grad()
             integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
             du_pred,du_target = integrator.integrate(integration_args)
-            loss = mse(du_pred,du_target)
+            expr_str,linear_str,nonlinear_str = model.expression_visualize()
+            nonlinear_expr = sp.sympify(nonlinear_str)
+            nonlinear_expanded = sp.expand(nonlinear_expr)
+            if dim == 3:
+                coeff_x1x2 = nonlinear_expanded.coeff(x1 * x2)
+                coeff_x1x2_tensor = torch.tensor(coeff_x1x2, dtype=du_pred.dtype, device=du_pred.device)
+                loss = mse(du_pred,du_target)+(coeff_x1x2_tensor-0.4)**2
+            else:
+                loss = mse(du_pred,du_target)
             loss.backward()
             model_optim.step()
             if train_idx % 10 == 0:
                 # Get the expression string from FEX
                 expr_str,linear_str,nonlinear_str = model.expression_visualize()
                 # Try to split and simplify each part (linear and nonlinear)    
-                x1, x2, x3 = sp.symbols('x1 x2 x3')
                 linear_expr = sp.sympify(linear_str)
                 linear_simplified = sp.simplify(linear_expr)
                 # Simplify nonlinear part
