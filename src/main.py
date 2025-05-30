@@ -36,8 +36,7 @@ if args.figure_save_path is None:
 
 DEVICE = args.DEVICE
 SEED = args.SEED
-PMF_SIZES = [len(unary_ops),len(binary_ops),len(unary_ops),len(binary_ops)]*3
-NUM_NODES = len(PMF_SIZES)
+
 NUM_TREES = args.NUM_TREES
 
 CONTROLLER_LR = args.CONTROLLER_LR
@@ -85,7 +84,13 @@ else:
     )
     print(f'Right now it is ok for data. We use it for the first stage training: FEX'.center(60,'='))
 
-dataset_tensor = torch.from_numpy(dataset).float()
+dataset_tensor = torch.from_numpy(dataset).float().to(DEVICE)
+dimension = dataset_tensor.shape[1]  # Assuming the second dimension is the number of features
+
+PMF_SIZES = [len(unary_ops),len(binary_ops),len(unary_ops),len(binary_ops)]*dimension
+NUM_NODES = len(PMF_SIZES)
+
+
 controller = Controller(pmf_sizes=PMF_SIZES).to(DEVICE)
 controller_optim = torch.optim.Adam(controller.parameters(), CONTROLLER_LR)
 sampler = Sampler()
@@ -95,7 +100,7 @@ integrator = Body4TrainIntegrator(integratorParams)
 pool = Pool()
 # print(dataset.shape)
 if args.TRAIN_GROUND_TRUTH == False:
-    for dim in range(0+1,3+1):
+    for dim in range(0+1,dimension+1):
         # model_save_path = os.path.join(args.log_save_path, f"optimal_FEX_{dim}.pth")
         optimal_idx_path = os.path.join(os.path.dirname(args.data_save_path), f"optimal_idx_{dim}.npy")
 
@@ -129,13 +134,14 @@ if args.TRAIN_GROUND_TRUTH == False:
                 controller_optim.zero_grad()
                 pmfs = controller(torch.zeros(CONTROLLER_INPUT_SIZE))
                 scores = torch.zeros(NUM_TREES)
-                op_seqs = torch.zeros(NUM_TREES, NUM_NODES, dtype=int)
+                # For the exploration phase, make sure op_seqs is properly on the device
+                op_seqs = torch.zeros(NUM_TREES, NUM_NODES, dtype=int, device=DEVICE)
                 for tree_idx in range(NUM_TREES):
                     op_seqs[tree_idx, :] = sampler(pmfs, output=torch.zeros(NUM_NODES, dtype=int))
                     # print(op_seqs[tree_idx,:])
-                    model = FEX(op_seqs[tree_idx,:])
+                    model = FEX(op_seqs[tree_idx,:], dim=dimension)
                     model.apply(weights_init)
-                    expression,_,_ = model.expression_visualize()
+                    expression,_ = model.expression_visualize()
                     parts = expression.split(') + (')
                     nonlinear_expr = parts[1].strip()
                     if "x1" not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" not in nonlinear_expr:
@@ -156,7 +162,7 @@ if args.TRAIN_GROUND_TRUTH == False:
                         model_optim.step()
                         if train_idx % 10 == 0:
                             # Get the expression string from FEX
-                            expr_str,_,_ = model.expression_visualize()
+                            expr_str,_ = model.expression_visualize()
                             # Try to split and simplify each part (linear and nonlinear)
                             try:
                                 # Split into linear and nonlinear parts if possible
@@ -195,12 +201,13 @@ if args.TRAIN_GROUND_TRUTH == False:
                             scores[tree_idx] = 1/(1+0.1*(loss))
                     else:
                         scores[tree_idx] = 0.
-                    final_expr,_,_ = model.expression_visualize()
+                    final_expr,simplified_final_expr = model.expression_visualize()
                     logprint('✅'*40)
                     logprint(f'Operator Sequence: {op_seqs[tree_idx,:].tolist()}')
                     logprint(f'Final Loss: {loss.item():.6f}')
                     logprint(f'Score: {scores[tree_idx]:.6f}')
                     logprint(f'Final Expression look like:{final_expr}')
+                    logprint(f'Simplified Final Expression look like:{simplified_final_expr}')
                     logprint('✅'*40)
                     pool.add(scores[tree_idx],model,loss.item(),op_seqs[tree_idx,:].tolist())
                     # print(f'Pool summaries'.center(80,'-'))
@@ -222,8 +229,8 @@ if args.TRAIN_GROUND_TRUTH == False:
                         log_prob = log_pmfs[pmf_idx][op]
                         sum_log_probs[tree_idx] += log_prob
 
-                scores_detached = torch.from_numpy(scores_detached)
-                indicator_upper_quantile = torch.from_numpy(indicator_upper_quantile)
+                scores_detached = torch.from_numpy(scores_detached).to(DEVICE)
+                indicator_upper_quantile = torch.from_numpy(indicator_upper_quantile).to(DEVICE)
                 
                 controller_loss = -(1 / CONTROLLER_TOP_SAMPLES_FRACTION) * torch.mean((scores_detached - scores_upper_quantile) * indicator_upper_quantile * sum_log_probs) 
                 controller_loss.backward() # only sum_log_probs requires autograd
@@ -267,53 +274,44 @@ if args.TRAIN_GROUND_TRUTH == False:
             # logprint(f"Model saved to {model_save_path}")
             logprint(f"Optimal operator sequence saved to {optimal_idx_path}")
 else:
-    x1, x2, x3 = sp.symbols('x1 x2 x3')
-    for dim in range(0+1,3+1):
+    # Replace the hardcoded symbols with a dimension-variable approach
+    symbols = [sp.symbols(f'x{i+1}') for i in range(dimension)]
+    
+    for dim in range(0+1,dimension+1):
         print(f'the dimension is {dim}')
+        # In the ground truth training section, convert the list to tensor:
         if dim == 1: 
-            op_seqs = [0, 2, 1, 2, 2, 0, 0, 2, 2, 1, 1, 2]
+            op_seqs = torch.tensor([0, 2, 1, 2, 2, 0, 0, 2, 2, 1, 1, 2], device=DEVICE)
         elif dim == 2:
-            op_seqs = [1, 0, 2, 2, 0, 2, 1, 2, 2, 1, 0, 2]
+            op_seqs = torch.tensor([1, 0, 2, 2, 0, 2, 1, 2, 2, 1, 0, 2], device=DEVICE)
         elif dim == 3:
-            op_seqs = [2, 1, 1, 2, 0, 1, 2, 2, 1, 0, 1, 2]
-        model = FEX(op_seqs)
+            op_seqs = torch.tensor([2, 1, 1, 2, 0, 1, 2, 2, 1, 0, 1, 2], device=DEVICE)
+        model = FEX(op_seqs, dim=dimension)
         model.apply(weights_init)
         model_optim = torch.optim.Adam(model.parameters(),lr=FEX_LR)
         for train_idx in range(TRAIN_EPOCHS_FIRST):
             model_optim.zero_grad()
             integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
             du_pred,du_target = integrator.integrate(integration_args)
-            expr_str,linear_str,nonlinear_str = model.expression_visualize()
-            nonlinear_expr = sp.sympify(nonlinear_str)
-            nonlinear_expanded = sp.expand(nonlinear_expr)
-            if dim == 3:
-                coeff_x1x2 = nonlinear_expanded.coeff(x1 * x2)
-                coeff_x1x2_tensor = torch.tensor(coeff_x1x2, dtype=du_pred.dtype, device=du_pred.device)
-                loss = mse(du_pred,du_target)+(coeff_x1x2_tensor-0.4)**2
-            else:
-                loss = mse(du_pred,du_target)
+            expr_str,_ = model.expression_visualize()
+            # nonlinear_expr = sp.sympify(nonlinear_str)
+            # nonlinear_expanded = sp.expand(nonlinear_expr)
+            # if dim == 3:
+            #     # Use the symbol variables dynamically
+            #     coeff_x1x2 = nonlinear_expanded.coeff(symbols[0] * symbols[1])  # x1 * x2
+            #     coeff_x1x2_tensor = torch.tensor(coeff_x1x2, dtype=du_pred.dtype, device=du_pred.device)
+            #     loss = mse(du_pred,du_target)+(coeff_x1x2_tensor-0.4)**2
+            # else:
+            loss = mse(du_pred,du_target)
             loss.backward()
             model_optim.step()
             if train_idx % 10 == 0:
                 # Get the expression string from FEX
-                expr_str,linear_str,nonlinear_str = model.expression_visualize()
+                expr_str,simplified_expr_str = model.expression_visualize()
                 # Try to split and simplify each part (linear and nonlinear)    
-                linear_expr = sp.sympify(linear_str)
-                linear_simplified = sp.simplify(linear_expr)
-                # Simplify nonlinear part
-                nonlinear_expr = sp.sympify(nonlinear_str)
-                nonlinear_simplified = sp.simplify(nonlinear_expr)
-                nonlinear_expanded = sp.expand(nonlinear_expr)
-                total_expr = linear_expr + nonlinear_expanded
-                total_simplified = sp.simplify(total_expr)
                 print(f"Training index: {train_idx}, Loss: {loss.item()}")
                 print(f'overall expression:{expr_str}')
-                print(f"Simplified Linear: {linear_simplified}")
-                print(f"Simplified Nonlinear: {nonlinear_simplified}")
-                print(f'expanded simplified nonlinear: {nonlinear_expanded}')
-                print(f"Combined and simplified: {total_simplified}")
-                
-                
+                print(f'simplified expression:{simplified_expr_str}')
 
 
 
