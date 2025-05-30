@@ -2,6 +2,7 @@ import numpy as np
 import logging
 import math
 import matplotlib.pyplot as plt
+import torch
 def Buu(B,u,v):
     '''Compute the Buu operator terms for the triad model.'''
     if len(u.shape) == 1:
@@ -112,3 +113,10 @@ def plot_latex_formula(params,Formula_1:list, Formula_2:list, Formula_3:list):
 
     plt.tight_layout()
     plt.show()
+
+
+def weights_init(m):
+    if isinstance(m, torch.nn.Linear):  # or whatever layers you use
+        torch.nn.init.kaiming_normal_(m.weight)
+        if m.bias is not None:
+            torch.nn.init.zeros_(m.bias)

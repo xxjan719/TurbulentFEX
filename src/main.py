@@ -7,7 +7,7 @@ sys.path.append("..")  # So you can import from top-level utils
 from utils import FEX
 from utils.plotting import plot_stats, plot_third_order_moments,plot_deviation_subplots
 from utils.constant import *
-from utils.helper import logprint,adjust_learning_rate,plot_latex_formula
+from utils.helper import logprint,adjust_learning_rate,plot_latex_formula,weights_init
 from utils.controller import Controller
 from utils.Sampler import Sampler
 from utils.Pool import Pool
@@ -93,152 +93,177 @@ integratorParams = Body4TrainIntegrationParams(dt=params['Dt'],)
 integrator = Body4TrainIntegrator(integratorParams)
 pool = Pool()
 # print(dataset.shape)
+if args.TRAIN_GROUND_TRUTH == False:
+    for dim in range(0+1,3+1):
+        # model_save_path = os.path.join(args.log_save_path, f"optimal_FEX_{dim}.pth")
+        optimal_idx_path = os.path.join(os.path.dirname(args.data_save_path), f"optimal_idx_{dim}.npy")
 
-for dim in range(0+1,3+1):
-    # model_save_path = os.path.join(args.log_save_path, f"optimal_FEX_{dim}.pth")
-    optimal_idx_path = os.path.join(os.path.dirname(args.data_save_path), f"optimal_idx_{dim}.npy")
+        if os.path.exists(optimal_idx_path): #os.path.exists(model_save_path) and 
+            print(f'Model for dimension {dim} has already generated, just using for the second stage training:FEX'.center(60, '='))
+            optimal_idx = np.load(optimal_idx_path)
+            print(f'dimension:{dim}, operator indx is {optimal_idx}')
+            # model_optimal = FEX(optimal_idx)
+            # model_optimal.load_state_dict(torch.load(model_save_path, map_location=DEVICE))
+            # model_optimal.eval()
+            # print(f'dimension: {dim}',model_optimal.expression_visualize())
+        else:
+            print(f'There is no model for dimension {dim} in this environment, it generates automatically'.center(60,'-'))
+            log_file = os.path.join(args.log_save_path, f'log_dimension_{dim}.txt')
+            os.makedirs(os.path.dirname(log_file), exist_ok=True)
+            # Remove any existing handlers
+            for handler in logging.root.handlers[:]:
+                logging.root.removeHandler(handler)
 
-    if os.path.exists(optimal_idx_path): #os.path.exists(model_save_path) and 
-        print(f'Model for dimension {dim} has already generated, just using for the second stage training:FEX'.center(60, '='))
-        optimal_idx = np.load(optimal_idx_path)
-        # model_optimal = FEX(optimal_idx)
-        # model_optimal.load_state_dict(torch.load(model_save_path, map_location=DEVICE))
-        # model_optimal.eval()
-        # print(f'dimension: {dim}',model_optimal.expression_visualize())
-    else:
-        print(f'There is no model for dimension {dim} in this environment, it generates automatically'.center(60,'-'))
-        log_file = os.path.join(args.log_save_path, f'log_dimension_{dim}.txt')
-        os.makedirs(os.path.dirname(log_file), exist_ok=True)
-        # Remove any existing handlers
-        for handler in logging.root.handlers[:]:
-            logging.root.removeHandler(handler)
+            # Set up logging to both file and console
+            logging.basicConfig(
+                level=logging.INFO,
+                format='%(asctime)s - %(levelname)s - %(message)s',
+                handlers=[
+                logging.FileHandler(log_file, encoding='utf-8'),  
+                logging.StreamHandler(sys.stdout)])
 
-        # Set up logging to both file and console
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-            logging.FileHandler(log_file, encoding='utf-8'),  
-            logging.StreamHandler(sys.stdout)])
+            # dimension 1 need 10 EXPLORATION_ITERS
+            for explore_idx in range(EXPLORATION_ITERS):
+                logprint(f' Exploration index: {explore_idx} '.center(60, '='))
+                controller_optim.zero_grad()
+                pmfs = controller(torch.zeros(CONTROLLER_INPUT_SIZE))
+                scores = torch.zeros(NUM_TREES)
+                op_seqs = torch.zeros(NUM_TREES, NUM_NODES, dtype=int)
+                for tree_idx in range(NUM_TREES):
+                    op_seqs[tree_idx, :] = sampler(pmfs, output=torch.zeros(NUM_NODES, dtype=int))
+                    # print(op_seqs[tree_idx,:])
+                    model = FEX(op_seqs[tree_idx,:])
+                    model.apply(weights_init)
+                    expression = model.expression_visualize()
+                    parts = expression.split(') + (')
+                    nonlinear_expr = parts[1].strip()
+                    if "x1" not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" not in nonlinear_expr:
+                        logprint("❌ Skipping model with trivial nonlinear expression.")
+                        continue
+                    if ("x1" in nonlinear_expr and "x2" not in nonlinear_expr and "x3" not in nonlinear_expr)  or ("x1"not in nonlinear_expr and "x2" in nonlinear_expr and "x3" not in nonlinear_expr) or \
+                    ("x1"  not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" in nonlinear_expr):
+                        logprint("❌ Skipping model with trivial nonlinear expression.")
+                        continue
+                    # print(f'expression: {expression}; nonlinear_expr: {nonlinear_expr}')
+                    model_optim = torch.optim.Adam(model.parameters(),lr=FEX_LR)
+                    for train_idx in range(TRAIN_EPOCHS_FIRST):
+                        model_optim.zero_grad()
+                        integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+                        du_pred,du_target = integrator.integrate(integration_args)
+                        loss = mse(du_pred,du_target)
+                        loss.backward()
+                        model_optim.step()
+                        # if train_idx % 10 == 0:
+                            # print(f"Training index: {train_idx}, Loss: {loss.item()}")
+                            # print(model.expression_visualize())
+                    if not math.isnan(loss.item()):
+                        if dim == 1:
+                            scores[tree_idx] = 1/ (1+0.1*(loss-245))
+                        elif dim ==2:
+                            scores[tree_idx] = 1/(1+0.1*(loss-120))
+                        elif dim ==3:
+                            scores[tree_idx] = 1/(1+0.1*(loss))
+                    else:
+                        scores[tree_idx] = 0.
+                    logprint('✅'*40)
+                    logprint(f'Operator Sequence: {op_seqs[tree_idx,:].tolist()}')
+                    logprint(f'Final Loss: {loss.item():.6f}')
+                    logprint(f'Score: {scores[tree_idx]:.6f}')
+                    logprint(f'Final Expression look like:{model.expression_visualize()}')
+                    logprint('✅'*40)
+                    pool.add(scores[tree_idx],model,loss.item(),op_seqs[tree_idx,:].tolist())
+                    # print(f'Pool summaries'.center(80,'-'))
+                    # for candidate_ in pool:
+                    #     print('loss: {:.6f} | operator sequence: {} | formula: {}'.format(
+                    # candidate_.error,
+                    # [v for v in candidate_.action],
+                    # candidate_.expression))
+                    # print(f''.center(80,'-'))
+                # ======= Formula (3.8), (3.9) for controller update==========================
+                scores_detached = scores.detach().numpy()
+                scores_upper_quantile = np.percentile(scores_detached, q=(1 - CONTROLLER_TOP_SAMPLES_FRACTION), method=CONTROLLER_QUANTILE_METHOD)
+                indicator_upper_quantile = (scores_detached >= scores_upper_quantile).astype(int)
+                
+                sum_log_probs = torch.zeros(NUM_TREES)
+                log_pmfs = [torch.log(pmf) for pmf in pmfs]
+                for tree_idx, ops in enumerate(op_seqs): # loop over trees
+                    for pmf_idx, op in enumerate(ops): # loop over nodes
+                        log_prob = log_pmfs[pmf_idx][op]
+                        sum_log_probs[tree_idx] += log_prob
 
-        # dimension 1 need 10 EXPLORATION_ITERS
-        for explore_idx in range(EXPLORATION_ITERS):
-            logprint(f' Exploration index: {explore_idx} '.center(60, '='))
-            controller_optim.zero_grad()
-            pmfs = controller(torch.zeros(CONTROLLER_INPUT_SIZE))
-            scores = torch.zeros(NUM_TREES)
-            op_seqs = torch.zeros(NUM_TREES, NUM_NODES, dtype=int)
-            for tree_idx in range(NUM_TREES):
-                op_seqs[tree_idx, :] = sampler(pmfs, output=torch.zeros(NUM_NODES, dtype=int))
-                # print(op_seqs[tree_idx,:])
-                model = FEX(op_seqs[tree_idx,:])
-                expression = model.expression_visualize()
-                parts = expression.split(') + (')
-                nonlinear_expr = parts[1].strip()
-                if "x1" not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" not in nonlinear_expr:
-                    logprint("❌ Skipping model with trivial nonlinear expression.")
-                    continue
-                if ("x1" in nonlinear_expr and "x2" not in nonlinear_expr and "x3" not in nonlinear_expr)  or ("x1"not in nonlinear_expr and "x2" in nonlinear_expr and "x3" not in nonlinear_expr) or \
-                ("x1"  not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" in nonlinear_expr):
-                    logprint("❌ Skipping model with trivial nonlinear expression.")
-                    continue
-                # print(f'expression: {expression}; nonlinear_expr: {nonlinear_expr}')
-                model_optim = torch.optim.Adam(model.parameters(),lr=FEX_LR)
-                for train_idx in range(TRAIN_EPOCHS_FIRST):
-                    model_optim.zero_grad()
-                    integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
-                    du_pred,du_target = integrator.integrate(integration_args)
-                    loss = mse(du_pred,du_target)
-                    loss.backward()
-                    model_optim.step()
-                    # if train_idx % 10 == 0:
-                        # print(f"Training index: {train_idx}, Loss: {loss.item()}")
-                        # print(model.expression_visualize())
-                if not math.isnan(loss.item()):
-                    if dim == 1:
-                        scores[tree_idx] = 1/ (1+0.1*(loss-245))
-                    elif dim ==2:
-                        scores[tree_idx] = 1/(1+0.1*(loss-120))
-                    elif dim ==3:
-                        scores[tree_idx] = 1/(1+0.1*(loss))
-                else:
-                    scores[tree_idx] = 0.
-                logprint('✅'*40)
-                logprint(f'Operator Sequence: {op_seqs[tree_idx,:].tolist()}')
-                logprint(f'Final Loss: {loss.item():.6f}')
-                logprint(f'Score: {scores[tree_idx]:.6f}')
-                logprint(f'Final Expression look like:{model.expression_visualize()}')
-                logprint('✅'*40)
-                pool.add(scores[tree_idx],model,loss.item(),op_seqs[tree_idx,:].tolist())
-                # print(f'Pool summaries'.center(80,'-'))
-                # for candidate_ in pool:
-                #     print('loss: {:.6f} | operator sequence: {} | formula: {}'.format(
-                # candidate_.error,
-                # [v for v in candidate_.action],
-                # candidate_.expression))
-                # print(f''.center(80,'-'))
-            # ======= Formula (3.8), (3.9) for controller update==========================
-            scores_detached = scores.detach().numpy()
-            scores_upper_quantile = np.percentile(scores_detached, q=(1 - CONTROLLER_TOP_SAMPLES_FRACTION), method=CONTROLLER_QUANTILE_METHOD)
-            indicator_upper_quantile = (scores_detached >= scores_upper_quantile).astype(int)
-            
-            sum_log_probs = torch.zeros(NUM_TREES)
-            log_pmfs = [torch.log(pmf) for pmf in pmfs]
-            for tree_idx, ops in enumerate(op_seqs): # loop over trees
-                for pmf_idx, op in enumerate(ops): # loop over nodes
-                    log_prob = log_pmfs[pmf_idx][op]
-                    sum_log_probs[tree_idx] += log_prob
+                scores_detached = torch.from_numpy(scores_detached)
+                indicator_upper_quantile = torch.from_numpy(indicator_upper_quantile)
+                
+                controller_loss = -(1 / CONTROLLER_TOP_SAMPLES_FRACTION) * torch.mean((scores_detached - scores_upper_quantile) * indicator_upper_quantile * sum_log_probs) 
+                controller_loss.backward() # only sum_log_probs requires autograd
+                controller_optim.step()
 
-            scores_detached = torch.from_numpy(scores_detached)
-            indicator_upper_quantile = torch.from_numpy(indicator_upper_quantile)
-            
-            controller_loss = -(1 / CONTROLLER_TOP_SAMPLES_FRACTION) * torch.mean((scores_detached - scores_upper_quantile) * indicator_upper_quantile * sum_log_probs) 
-            controller_loss.backward() # only sum_log_probs requires autograd
-            controller_optim.step()
-
-            logprint(f'PMFs'.center(60, '-'))
-            for i in range(NUM_NODES):
-                logprint(f'Node {i}:{np.around(pmfs[i].detach().numpy(),decimals = 4)}')
-            
-            logprint(f'Final Pool'.center(60, '='))
-            for candidate_ in pool:
-                    logprint('loss: {:.6f} | operator sequence: {} | formula: {}'.format(
-                candidate_.error,
-                [v for v in candidate_.action],
-                candidate_.expression))
-            logprint(f''.center(60,'-'))
-
-
-        logprint('✅'*40)
-        logprint(f' Below is code for training FEX with a set fixed operator sequence. '.center(60, '='))   
-        logprint('✅'*40)
-
-        best_candidate = min(pool, key=lambda c: c.error)
-        optimal_idx = best_candidate.action
-        print(f'Optimal operator sequence: {optimal_idx}')
-        # model_optimal = FEX(optimal_idx)
-        # model_optim_optimal = torch.optim.Adam(model_optimal.parameters(),lr=FEX_LR)
-        # for train_idx in range(TRAIN_EPOCHS_SECOND):
-        #     adjust_learning_rate(model_optim_optimal,train_idx,FEX_LR,TRAIN_EPOCHS_SECOND)
-        #     model_optim_optimal.zero_grad()
-        #     integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model_optimal, index=dim)
-        #     du_pred,du_target = integrator.integrate(integration_args)
-        #     loss = mse(du_pred,du_target)
-        #     loss.backward()
-        #     model_optim_optimal.step()
-        #     if train_idx % 100 == 0:
-        #         logprint(f"Training step {train_idx} | Loss: {loss.item():.6f}")
-
-        np.save(optimal_idx_path, optimal_idx)
-        # torch.save(model_optimal.state_dict(), model_save_path)
-        # logprint(f"Model saved to {model_save_path}")
-        logprint(f"Optimal operator sequence saved to {optimal_idx_path}")
+                logprint(f'PMFs'.center(60, '-'))
+                for i in range(NUM_NODES):
+                    logprint(f'Node {i}:{np.around(pmfs[i].detach().numpy(),decimals = 4)}')
+                
+                logprint(f'Final Pool'.center(60, '='))
+                for candidate_ in pool:
+                        logprint('loss: {:.6f} | operator sequence: {} | formula: {}'.format(
+                    candidate_.error,
+                    [v for v in candidate_.action],
+                    candidate_.expression))
+                logprint(f''.center(60,'-'))
 
 
-Formula_1 = [-1.6100, 0.9751, -0.2461, 0.8654] # −0.2461x1+0.9751x2−1.6100x3+0.8654x2x3−0.0229
-Formula_2 = [-0.9674, -2.0017, -0.15087, -0.3720]
-Formula_3 = [1.5229, 1.2813, 0.1577, 1.05]
-plot_latex_formula(params,Formula_1, Formula_2, Formula_3)
+            logprint('✅'*40)
+            logprint(f' Below is code for training FEX with a set fixed operator sequence. '.center(60, '='))   
+            logprint('✅'*40)
+
+            best_candidate = min(pool, key=lambda c: c.error)
+            optimal_idx = best_candidate.action
+            print(f'Optimal operator sequence: {optimal_idx}')
+            # model_optimal = FEX(optimal_idx)
+            # model_optim_optimal = torch.optim.Adam(model_optimal.parameters(),lr=FEX_LR)
+            # for train_idx in range(TRAIN_EPOCHS_SECOND):
+            #     adjust_learning_rate(model_optim_optimal,train_idx,FEX_LR,TRAIN_EPOCHS_SECOND)
+            #     model_optim_optimal.zero_grad()
+            #     integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model_optimal, index=dim)
+            #     du_pred,du_target = integrator.integrate(integration_args)
+            #     loss = mse(du_pred,du_target)
+            #     loss.backward()
+            #     model_optim_optimal.step()
+            #     if train_idx % 100 == 0:
+            #         logprint(f"Training step {train_idx} | Loss: {loss.item():.6f}")
+
+            np.save(optimal_idx_path, optimal_idx)
+            # torch.save(model_optimal.state_dict(), model_save_path)
+            # logprint(f"Model saved to {model_save_path}")
+            logprint(f"Optimal operator sequence saved to {optimal_idx_path}")
+else:
+    for dim in range(0+1,3+1):
+        print(f'the dimension is {dim}')
+        if dim == 1: 
+            op_seqs = [0, 2, 1, 2, 2, 0, 0, 2, 2, 1, 1, 2]
+        elif dim == 2:
+            op_seqs = [1, 0, 2, 2, 0, 2, 1, 2, 2, 1, 0, 2]
+        elif dim == 3:
+            op_seqs = [2, 1, 2, 2, 0, 2, 2, 2, 1, 0, 1, 2]
+        model = FEX(op_seqs)
+        model.apply(weights_init)
+        model_optim = torch.optim.Adam(model.parameters(),lr=FEX_LR)
+        for train_idx in range(TRAIN_EPOCHS_FIRST):
+            model_optim.zero_grad()
+            integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+            du_pred,du_target = integrator.integrate(integration_args)
+            loss = mse(du_pred,du_target)
+            loss.backward()
+            model_optim.step()
+            if train_idx % 10 == 0:
+                print(f"Training index: {train_idx}, Loss: {loss.item()}")
+                print(model.expression_visualize())
+
+
+# Formula_1 = [-1.6100, 0.9751, -0.2461, 0.8654] # −0.2461x1+0.9751x2−1.6100x3+0.8654x2x3−0.0229
+# Formula_2 = [-0.9674, -2.0017, -0.15087, -0.3720]
+# Formula_3 = [1.5229, 1.2813, 0.1577, 1.05]
+# plot_latex_formula(params,Formula_1, Formula_2, Formula_3)
+
 
 
 
@@ -254,4 +279,6 @@ plot_latex_formula(params,Formula_1, Formula_2, Formula_3)
 # plot_stats(np.arange(params['Nt']+1), mean_MC_all, cov_MC_all, moment3_MC_all, Energy_MC_all, Energy_dyn,save_path)
 # plot_third_order_moments(np.arange(params['Nt']+1), moment3_MC_all,save_path)
 # plot_deviation_subplots(np.arange(params['Nt']+1), cov_MC_all, moment3_MC_norm_all,save_path)
+
+
 
