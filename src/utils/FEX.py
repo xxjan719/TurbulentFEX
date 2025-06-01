@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch import Tensor
-from .constant import unary_ops, binary_ops
+from constant import unary_ops, binary_ops
 import sympy as sp
 # from .helper import weights_init
 # from .trainingstep import Body4TrainIntegrationArgs
@@ -118,7 +118,7 @@ class FEX(nn.Module):
         nonlinear_expanded = sp.expand(nonlinear_str)
         expr = linear_simplified + nonlinear_expanded
         total_expr = sp.simplify(expr)
-
+        # print(nonlinear_expr,nonlinear_expanded)
         return expr_str,total_expr
 
 
