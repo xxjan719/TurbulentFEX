@@ -18,3 +18,4 @@ src/Example/MC_triad/Results/cascade/simulation_results.npz
 src/Example/MC_triad/Results/cascade/log_dimension_1.txt
 src/Example/MC_triad/Results/cascade/log_dimension_2.txt
 src/Example/MC_triad/Results/cascade/log_dimension_3.txt
+src/Example/MC_triad/Results/previous_result.zip

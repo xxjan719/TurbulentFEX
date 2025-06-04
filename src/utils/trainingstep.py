@@ -3,7 +3,11 @@
 from dataclasses import dataclass
 import torch
 from torch import Tensor
-from .FEX import FEX
+
+try:
+    from .FEX import FEX
+except:
+    from FEX import FEX
 
 @dataclass
 class Body4TrainIntegrationParams:
@@ -16,8 +20,19 @@ class Body4TrainIntegrationArgs:
     index: int
 
 class Body4TrainIntegrator:
-    def __init__(self, integratorParams: Body4TrainIntegrationParams):
+    def __init__(self, integratorParams: Body4TrainIntegrationParams, method: str = "integration-based"):
+        """
+        Initialize the integrator
+        Args:
+            integratorParams: Integration parameters
+            method: Integration method to use. Options:
+                   - "derivative-based": Uses derivative-based method (ui_next - ui)/dt
+                   - "integration-based": Uses Runge-Kutta 2nd order (RK2) integration
+        """
         self._integratorparams = integratorParams
+        self.method = method.lower()
+        if self.method not in ["derivative-based", "integration-based"]:
+            raise ValueError("Method must be either 'derivative-based' or 'integration-based'")
     
     def integrate(self, integrationArgs: Body4TrainIntegrationArgs) -> Tensor:
         trainingset = integrationArgs.y0
@@ -30,7 +45,6 @@ class Body4TrainIntegrator:
         u2 = current_state[:,1,:]
         u3 = current_state[:,2,:]
 
-        # print(u1.shape)
         u1_flat = u1.reshape(-1, 1)
         u2_flat = u2.reshape(-1, 1)
         u3_flat = u3.reshape(-1, 1)
@@ -40,11 +54,23 @@ class Body4TrainIntegrator:
         ui_next_flat = ui_next.reshape(-1, 1)
         ui_flat = ui.reshape(-1, 1)
         
-        # print(f'the shape of u flat is {u_flat.shape}')  
-        label = (ui_next_flat - ui_flat)/self._integratorparams.dt
-        expression_pred = integration_func(u_flat)
-        # print(f'expression_pred.shape: {expression_pred.shape}; label.shape: {label.shape}')
-
+        if self.method == "derivative-based":
+            # Derivative-based method
+            label = (ui_next_flat - ui_flat)/self._integratorparams.dt
+            expression_pred = integration_func(u_flat)
+        elif self.method == "integration-based":  # RK2 method
+            dt = self._integratorparams.dt
+            derivative_func = integration_func
+            
+            # Compute the two k values for RK2
+            k1 = derivative_func(u_flat)
+            k2 = derivative_func(u_flat + dt * k1)
+            
+            # Compute the next state using RK2 formula
+            expression_pred = ui_flat + (dt/2.0) * (k1 + k2)
+            label = ui_next_flat
+        else:
+            raise ValueError("Method must be either 'derivative-based' or 'integration-based'")
         return expression_pred, label
 
 
@@ -55,12 +81,14 @@ if __name__ == "__main__":
     op_seqs = [2,0,3,2,
             4,2,5,2,
             6,1,7,2]
-    model = FEX(op_seqs)
+    model = FEX(op_seqs, dim=3)
     integratorParams = Body4TrainIntegrationParams(
-    dt=10**-3,)
-    x = torch.randn(10**4,3,10**4+1)
+    dt=10**-2,)
+    x = torch.randn(10**4,3,10**2+1)
     integration_args = Body4TrainIntegrationArgs(y0=x, integration_func=model, index=1)
-    integrator = Body4TrainIntegrator(integratorParams)
+    integrator = Body4TrainIntegrator(integratorParams, method="integration-based")
     
-    integrator.integrate(integration_args)
+    expression_pred, label = integrator.integrate(integration_args)
+    print(expression_pred.shape)
+    print(label.shape)
     

@@ -16,11 +16,11 @@ def get_parser():
     parser.add_argument('--CONTROLLER_QUANTILE_METHOD', type=str, default='linear')
     parser.add_argument('--EXPLORATION_ITERS', type=int, default=20)
     parser.add_argument('--NUM_TREES', type=int, default=100)
-
+    parser.add_argument('--INTEGRATOR_METHOD', type=str, default='integration-based')
     # FEX optimizer settings
     parser.add_argument('--FEX_LR', type=float, default=8e-3)
     parser.add_argument('--TRAIN_EPOCHS_FIRST', type=int, default=100)
     parser.add_argument('--TRAIN_EPOCHS_SECOND', type=int, default=2000)
-    parser.add_argument('--TRAIN_GROUND_TRUTH',type=bool,default = True)
+    parser.add_argument('--TRAIN_GROUND_TRUTH',type=bool,default = False)
     return parser
 

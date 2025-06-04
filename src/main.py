@@ -2,7 +2,8 @@ import os
 os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
 
 import sys
-sys.path.append("..")  # So you can import from top-level utils
+# Add the project root directory to Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils import FEX#, ThreeDimensionFEX
 from utils.plotting import plot_stats, plot_third_order_moments,plot_deviation_subplots
@@ -25,7 +26,7 @@ import sympy as sp
 
 parser = get_parser()
 args = parser.parse_args()
-base_path = f'Example/{args.Model}/results'
+base_path = f'src/Example/{args.Model}/Results'
 if args.data_save_path is None:
     args.data_save_path = f'{base_path}/{args.params_name}/simulation_results.npz'
 if args.log_save_path is None:
@@ -33,6 +34,10 @@ if args.log_save_path is None:
 if args.figure_save_path is None:
     args.figure_save_path = f'{base_path}/{args.params_name}'
 
+# Create necessary directories
+os.makedirs(os.path.dirname(args.data_save_path), exist_ok=True)
+os.makedirs(args.log_save_path, exist_ok=True)
+os.makedirs(args.figure_save_path, exist_ok=True)
 
 DEVICE = args.DEVICE
 SEED = args.SEED
@@ -49,6 +54,7 @@ FEX_LR = args.FEX_LR
 TRAIN_EPOCHS_FIRST = args.TRAIN_EPOCHS_FIRST
 TRAIN_EPOCHS_SECOND = args.TRAIN_EPOCHS_SECOND
 
+INTEGRATOR_METHOD = args.INTEGRATOR_METHOD
 
 
 torch.manual_seed(SEED)
@@ -96,7 +102,7 @@ controller_optim = torch.optim.Adam(controller.parameters(), CONTROLLER_LR)
 sampler = Sampler()
 mse = nn.MSELoss()
 integratorParams = Body4TrainIntegrationParams(dt=params['Dt'],)
-integrator = Body4TrainIntegrator(integratorParams)
+integrator = Body4TrainIntegrator(integratorParams,method=INTEGRATOR_METHOD)
 pool = Pool()
 # print(dataset.shape)
 if args.TRAIN_GROUND_TRUTH == False:
@@ -108,10 +114,7 @@ if args.TRAIN_GROUND_TRUTH == False:
             print(f'Model for dimension {dim} has already generated, just using for the second stage training:FEX'.center(60, '='))
             optimal_idx = np.load(optimal_idx_path)
             print(f'dimension:{dim}, operator indx is {optimal_idx}')
-            # model_optimal = FEX(optimal_idx)
-            # model_optimal.load_state_dict(torch.load(model_save_path, map_location=DEVICE))
-            # model_optimal.eval()
-            # print(f'dimension: {dim}',model_optimal.expression_visualize())
+
         else:
             print(f'There is no model for dimension {dim} in this environment, it generates automatically'.center(60,'-'))
             log_file = os.path.join(args.log_save_path, f'log_dimension_{dim}.txt')
@@ -129,7 +132,7 @@ if args.TRAIN_GROUND_TRUTH == False:
                 logging.StreamHandler(sys.stdout)])
 
             # dimension 1 need 10 EXPLORATION_ITERS
-            for explore_idx in range(EXPLORATION_ITERS):
+            for explore_idx in range(1):#EXPLORATION_ITERS):
                 logprint(f' Exploration index: {explore_idx} '.center(60, '='))
                 controller_optim.zero_grad()
                 pmfs = controller(torch.zeros(CONTROLLER_INPUT_SIZE))
@@ -162,52 +165,68 @@ if args.TRAIN_GROUND_TRUTH == False:
                         model_optim.step()
                         if train_idx % 10 == 0:
                             # Get the expression string from FEX
-                            expr_str,_ = model.expression_visualize()
-                            # Try to split and simplify each part (linear and nonlinear)
-                            try:
-                                # Split into linear and nonlinear parts if possible
-                                if ") + (" in expr_str:
-                                    linear_str, nonlinear_str = expr_str.split(") + (", 1)
-                                    linear_str = linear_str.lstrip("(")
-                                    nonlinear_str = nonlinear_str.rstrip(")")
-                                    # Simplify linear part
-                                    x1, x2, x3 = sp.symbols('x1 x2 x3')
-                                    linear_expr = sp.sympify(linear_str)
-                                    linear_simplified = sp.simplify(linear_expr)
-                                    # Simplify nonlinear part
-                                    nonlinear_expr = sp.sympify(nonlinear_str)
-                                    nonlinear_simplified = sp.simplify(nonlinear_expr)
-                                    print(f"Training index: {train_idx}, Loss: {loss.item()}")
-                                    print(f"Simplified Linear: {linear_simplified}")
-                                    print(f"Simplified Nonlinear: {nonlinear_simplified}")
-                                else:
-                                    # If not split, just try to simplify the whole thing
-                                    x1, x2, x3 = sp.symbols('x1 x2 x3')
-                                    expr = sp.sympify(expr_str)
-                                    simplified = sp.simplify(expr)
-                                    print(f"Training index: {train_idx}, Loss: {loss.item()}")
-                                    print(f"Simplified: {simplified}")
-                            except Exception as e:
-                                print(f"Training index: {train_idx}, Loss: {loss.item()}")
-                                print("Could not simplify expression:")
-                                print(expr_str)
-                                print(f"Error: {e}")
+                            expr_str = model.expression_visualize()
+                            print(f'Training index: {train_idx}, Loss: {loss.item()}')
+                            print(f'Expression: {expr_str}')
+
+                    # Second phase: LBFGS fine-tuning
+                    print("\nStarting LBFGS fine-tuning...")
+                    lbfgs_optim = torch.optim.LBFGS(model.parameters(),
+                                                  lr=0.1,  # Smaller learning rate for fine-tuning
+                                                  max_iter=20,
+                                                  max_eval=25,
+                                                  tolerance_grad=1e-7,
+                                                  tolerance_change=1e-9,
+                                                  history_size=50)
+
+                    def lbfgs_closure():
+                        lbfgs_optim.zero_grad()
+                        integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+                        du_pred, du_target = integrator.integrate(integration_args)
+                        loss = mse(du_pred, du_target)
+                        # Check for NaN in loss
+                        if torch.isnan(loss):
+                            print("Warning: NaN detected in loss during LBFGS closure")
+                            return torch.tensor(1e6, requires_grad=True)  # Return a large value
+                        loss.backward()
+                        return loss
+
+                    # Run LBFGS for fewer epochs since we're just fine-tuning
+                    for train_idx in range(10):  # You can adjust this number
+                        try:
+                            loss = lbfgs_optim.step(lbfgs_closure)
+                            if torch.isnan(loss):
+                                print("Warning: NaN detected in loss, stopping LBFGS optimization")
+                                break
+                                
+                            if train_idx % 5 == 0:  # Print more frequently during fine-tuning
+                                print('✅'*40)
+                                print(f'LBFGS Epoch {train_idx}, Loss: {loss.item()}')
+                                try:
+                                    expr_str = model.expression_visualize()
+                                    print(f"Current expression: {expr_str}")
+                                except Exception as e:
+                                    print(f"Could not visualize expression: {e}")
+                                print('✅'*40)
+                        except Exception as e:
+                            print(f"Error in LBFGS step: {e}")
+                            break
+
                     if not math.isnan(loss.item()):
                         if dim == 1:
-                            scores[tree_idx] = 1/ (1+0.1*(loss-245))
+                            scores[tree_idx] = 1/ (1+(loss))
                         elif dim ==2:
-                            scores[tree_idx] = 1/(1+0.1*(loss-120))
+                            scores[tree_idx] = 1/(1+(loss))
                         elif dim ==3:
-                            scores[tree_idx] = 1/(1+0.1*(loss))
+                            scores[tree_idx] = 1/(1+(loss))
                     else:
                         scores[tree_idx] = 0.
-                    final_expr,simplified_final_expr = model.expression_visualize()
+                    final_expr= model.expression_visualize()
                     logprint('✅'*40)
                     logprint(f'Operator Sequence: {op_seqs[tree_idx,:].tolist()}')
                     logprint(f'Final Loss: {loss.item():.6f}')
                     logprint(f'Score: {scores[tree_idx]:.6f}')
                     logprint(f'Final Expression look like:{final_expr}')
-                    logprint(f'Simplified Final Expression look like:{simplified_final_expr}')
                     logprint('✅'*40)
                     pool.add(scores[tree_idx],model,loss.item(),op_seqs[tree_idx,:].tolist())
                     # print(f'Pool summaries'.center(80,'-'))

@@ -1,8 +1,12 @@
 import torch
 import torch.nn as nn
 from torch import Tensor
-from constant import unary_ops, binary_ops
 import sympy as sp
+
+try:
+    from .constant import unary_ops, binary_ops
+except:
+    from constant import unary_ops, binary_ops
 # from .helper import weights_init
 # from .trainingstep import Body4TrainIntegrationArgs
 class FEX(nn.Module):
@@ -89,7 +93,7 @@ class FEX(nn.Module):
             a = self.linear_a[i].item()
             b = self.linear_b[i].item()
             linear_terms.append(f"{a:.4f}*x{i+1}+{b:.4f}")
-        linear_expr = "+".join(linear_terms)
+        self.linear_expr = "+".join(linear_terms)
 
         # Non-linear part
         exprs = []
@@ -106,20 +110,26 @@ class FEX(nn.Module):
                   f"+{b[2].item():.4f}"
             exprs.append(out)
             op_ptr += 4        
-        nonlinear_expr = f"({exprs[0]})*({exprs[1]})*({exprs[2]})"
+        self.nonlinear_expr = f"({exprs[0]})*({exprs[1]})*({exprs[2]})"
 
-        expr_str = f"({linear_expr}) + ({nonlinear_expr})"
+        expr_str = f"({self.linear_expr}) + ({self.nonlinear_expr})"
 
+        
+        return expr_str
+    
+    def expression_visualize_simplified(self,) -> str:
         # Try to split and simplify each part (linear and nonlinear)    
-        linear_str = sp.sympify(linear_expr)
+        self.expression_visualize()
+        linear_str = sp.sympify(self.linear_expr)
         linear_simplified = sp.simplify(linear_str)
         # Simplify nonlinear part
-        nonlinear_str = sp.sympify(nonlinear_expr)
+        nonlinear_str = sp.sympify(self.nonlinear_expr)
         nonlinear_expanded = sp.expand(nonlinear_str)
         expr = linear_simplified + nonlinear_expanded
         total_expr = sp.simplify(expr)
         # print(nonlinear_expr,nonlinear_expanded)
-        return expr_str,total_expr
+        return total_expr
+
 
 
 
