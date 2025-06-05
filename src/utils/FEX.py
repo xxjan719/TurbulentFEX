@@ -100,27 +100,84 @@ class FEX(nn.Module):
         for idx in range(self.dim):
             a = self.nonlinear_a[idx]
             b = self.nonlinear_b[idx]
-            part1 = f"{a[0].item():.4f}*{unary_ops[self.op_seq[op_ptr]].format(f'x{idx+1}')}" \
+            part1 = f"{a[0].item():.4f}*({unary_ops[self.op_seq[op_ptr]].format(f'x{idx+1}')})" \
                     f"+{b[0].item():.4f}"
-            part2 = f"{a[1].item():.4f}*{unary_ops[self.op_seq[op_ptr+2]].format(f'x{idx+1}')}" \
+            part2 = f"{a[1].item():.4f}*({unary_ops[self.op_seq[op_ptr+2]].format(f'x{idx+1}')})" \
                     f"+{b[1].item():.4f}"
             binary_expr = binary_ops[self.op_seq[op_ptr+1]].format(part1, part2)
-            out = f"{a[2].item():.4f}*{unary_ops[self.op_seq[op_ptr+3]].format(binary_expr)}" \
+            out = f"{a[2].item():.4f}*({unary_ops[self.op_seq[op_ptr+3]].format(binary_expr)})" \
                   f"+{b[2].item():.4f}"
             exprs.append(out)
-            op_ptr += 4        
+            op_ptr += 4
+        self.exprs_0 = exprs[0]
+        self.exprs_1 = exprs[1]
+        self.exprs_2 = exprs[2]
         self.nonlinear_expr = f"({exprs[0]})*({exprs[1]})*({exprs[2]})"
 
         expr_str = f"({self.linear_expr}) + ({self.nonlinear_expr})"
-
-        
         return expr_str
     
     def expression_visualize_simplified(self,) -> str:
         # Try to split and simplify each part (linear and nonlinear)    
-        print(self.nonlinear_expr)
+        self.expression_visualize()
+        #print("Nonlinear expression:")
+        #print(self.nonlinear_expr)
+        
+        # Remove outer parentheses and split by )*(
+        parts = self.nonlinear_expr.strip('()').split(')*(')
+        
+        # Function to check if expression is constant (no x1,x2,x3)
+        def is_constant_expr(expr):
+            return all(f'x{i+1}' not in expr for i in range(self.dim))
+        
+        # Function to evaluate constant expression
+        def eval_constant_expr(expr):
+            # Replace mathematical operations with Python syntax
+            expr = expr.replace('^', '**')
+            try:
+                return f"{eval(expr):.4f}"
+            except:
+                return expr
 
-        #return total_expr
+        # Process each expression
+        exprs = [self.exprs_0, self.exprs_1, self.exprs_2]
+        simplified_exprs = []
+        
+        #print("\nSimplified parts:")
+        for i, expr in enumerate(exprs):
+            if is_constant_expr(expr):
+                result = eval_constant_expr(expr)
+                #print(f"Part {i+1}: {expr} = {result} (constant)")
+                simplified_exprs.append(result)
+            else:
+                #print(f"Part {i+1}: {expr} (contains variables)")
+                simplified = sp.expand(expr)
+                #print(f"Part {i+1} simplified: {simplified}")
+                simplified_exprs.append(simplified)
+        
+        # Combine the parts
+        nonlinear_expr = f"({simplified_exprs[0]})*({simplified_exprs[1]})*({simplified_exprs[2]})"
+        # print("\nNonlinear before expansion:")
+        # print(nonlinear_expr)
+        
+        # Convert both expressions to sympy for proper expansion
+        nonlinear_sympy = sp.sympify(nonlinear_expr)
+        linear_sympy = sp.sympify(self.linear_expr)
+        
+        # Expand each part separately
+        nonlinear_expanded = sp.expand(nonlinear_sympy)
+        linear_expanded = sp.expand(linear_sympy)
+        
+        # print("\nExpanded nonlinear term:")
+        # print(nonlinear_expanded)
+        
+        # Combine and expand final expression
+        final_expr = linear_expanded + nonlinear_expanded
+        final_expanded = sp.expand(final_expr)
+        
+        # print("\nFinal expanded expression:")
+        # print(final_expanded)  
+        return str(final_expanded)
 
 
 

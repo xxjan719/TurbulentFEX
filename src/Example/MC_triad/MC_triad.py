@@ -2,9 +2,14 @@ import sys
 import os
 import numpy as np
 import random
+import torch
+from pathlib import Path
+import os
+import sympy as sp
+import matplotlib.pyplot as plt
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..",'..')))
 from utils.helper import Buu, compute_third_order_moments
-
+from utils.FEX import FEX
 SEED = 42
 np.random.seed(SEED)
 random.seed(SEED)
@@ -234,12 +239,189 @@ def MC_triad_initial_value():
 
 
 
+def get_matrix_coefficients_from_FEX(path):
+    """
+    Extract matrix coefficients from FEX models for different dimensions and construct matrices.
+    
+    Args:
+        path (Path): Path to the directory containing saved models
+        
+    Returns:
+        tuple: (L, G, B) matrices where:
+            - L: 3x3 matrix for linear terms (x1,x2,x3)
+            - G: 3x3 diagonal matrix for damping terms
+            - B: 3-element vector for quadratic terms (x2x3,x1x3,x1x2)
+    """
+    path = Path(path)
+    # Load operator sequences with allow_pickle=True
+    op_seq_file = np.load(os.path.join(path, 'op_seqs_all.npy'), allow_pickle=True).item()
+    
+    # Initialize matrices
+    L = np.zeros((3, 3))  # Linear coefficients
+    G = np.zeros(3)       # Diagonal damping terms
+    B = np.zeros(3)       # Quadratic interaction terms vector
+    
+    # Variables to track coefficients
+    coeffs = {
+        'x1': np.zeros(3),
+        'x2': np.zeros(3),
+        'x3': np.zeros(3),
+        'x1x2': 0.0,
+        'x2x3': 0.0,
+        'x1x3': 0.0
+    }
+    
+    for dim in range(1, 4):  # dimensions 1, 2, 3
+        model_file = path / f'FEX_dim_{dim}.pth'
+        if model_file.exists():
+            print(f"\nProcessing dimension {dim}:")
+            op_seq = op_seq_file[dim]
+            # Create FEX model with dim=3 since all models were trained with 3D data
+            FEX_model = FEX(op_seq, dim=3)
+            FEX_model.load_state_dict(torch.load(str(model_file), weights_only=True))
+            expr = FEX_model.expression_visualize_simplified()
+            print(f"Expression for dimension {dim}:")
+            print(expr)
+            
+            # Convert expression to sympy and expand
+            expr_sympy = sp.expand(expr)
+            print(f"Expanded expression:")
+            print(expr_sympy)
+            
+            # Create symbolic variables
+            x1, x2, x3 = sp.symbols('x1 x2 x3')
+            
+            def get_numeric_coeff(expr, term):
+                """Helper function to safely extract numeric coefficient"""
+                try:
+                    # Get the coefficient dictionary
+                    coeff_dict = expr.as_coefficients_dict()
+                    # Look for the term in the dictionary
+                    if term in coeff_dict:
+                        return float(coeff_dict[term].evalf())
+                    return 0.0
+                except:
+                    return 0.0
+            
+            # Extract coefficients for linear terms
+            if dim == 1:  # Looking for x2, x3, x2*x3
+                coeffs['x2'][0] = get_numeric_coeff(expr_sympy, x2)
+                coeffs['x3'][0] = get_numeric_coeff(expr_sympy, x3)
+                coeffs['x2x3'] = get_numeric_coeff(expr_sympy, x2*x3)
+                G[0] = -get_numeric_coeff(expr_sympy, x1)  # Damping term for x1
+                print(f"Dim 1 coefficients: x2={coeffs['x2'][0]}, x3={coeffs['x3'][0]}, x2x3={coeffs['x2x3']}, G[0]={G[0]}")
+                
+            elif dim == 2:  # Looking for x1, x3, x1*x3
+                coeffs['x1'][1] = get_numeric_coeff(expr_sympy, x1)
+                coeffs['x3'][1] = get_numeric_coeff(expr_sympy, x3)
+                coeffs['x1x3'] = get_numeric_coeff(expr_sympy, x1*x3)
+                G[1] = -get_numeric_coeff(expr_sympy, x2)  # Damping term for x2
+                print(f"Dim 2 coefficients: x1={coeffs['x1'][1]}, x3={coeffs['x3'][1]}, x1x3={coeffs['x1x3']}, G[1]={G[1]}")
+                
+            elif dim == 3:  # Looking for x1, x2, x1*x2
+                coeffs['x1'][2] = get_numeric_coeff(expr_sympy, x1)
+                coeffs['x2'][2] = get_numeric_coeff(expr_sympy, x2)
+                coeffs['x1x2'] = get_numeric_coeff(expr_sympy, x1*x2)
+                G[2] = -get_numeric_coeff(expr_sympy, x3)  # Damping term for x3
+                print(f"Dim 3 coefficients: x1={coeffs['x1'][2]}, x2={coeffs['x2'][2]}, x1x2={coeffs['x1x2']}, G[2]={G[2]}")
+    
+    # Construct L matrix (linear terms)
+    # For dim 1: x2, x3 coefficients go to first row
+    # For dim 2: x1, x3 coefficients go to second row
+    # For dim 3: x1, x2 coefficients go to third row
+    L[0, 1] = coeffs['x2'][0]  # x2 coefficient in first equation
+    L[0, 2] = coeffs['x3'][0]  # x3 coefficient in first equation
+    L[1, 0] = coeffs['x1'][1]  # x1 coefficient in second equation
+    L[1, 2] = coeffs['x3'][1]  # x3 coefficient in second equation
+    L[2, 0] = coeffs['x1'][2]  # x1 coefficient in third equation
+    L[2, 1] = coeffs['x2'][2]  # x2 coefficient in third equation
+    
+    # Construct B vector (quadratic terms)
+    B[0] = coeffs['x2x3']  # x2x3 term in first equation
+    B[1] = coeffs['x1x3']  # x1x3 term in second equation
+    B[2] = coeffs['x1x2']  # x1x2 term in third equation
+    
+    print("\nExtracted Matrices:")
+    print("\nL matrix (linear terms):")
+    print(np.array2string(L, precision=4, suppress_small=True))
+    print("\nG vector (damping terms):")
+    print(np.array2string(G, precision=4, suppress_small=True))
+    print("\nB vector (quadratic terms):")
+    print(np.array2string(B, precision=4, suppress_small=True))
+    
+    return L, G, B
+
+
+def plot_latex_formula(params, path):
+    # Configure LaTeX rendering
+    plt.rcParams.update({
+         "text.usetex": True,
+    "font.family": "serif",
+    "text.latex.preamble": r"\usepackage{amsmath}"
+    })
+
+    # Extract parameters
+    L = params['L']
+    G = params['G']
+    B = params['B']
+
+    L_learned, G_learned, B_learned = get_matrix_coefficients_from_FEX(path)
+
+    # Extract individual values from matrices
+    print(L)
+    L1 = L[2, 0]  # u_2 -> u_3
+    L2 = L[0, 2]  # u_3 -> u_1
+    L3 = L[0, 1]  # u_1 -> u_2
+    d1 = G[0, 0]
+    d2 = G[1, 1]
+    d3 = G[2, 2]
+    B1, B2, B3 = B[0], B[1], B[2]
+
+    d1_learned = G_learned[0]
+    d2_learned = G_learned[1]
+    d3_learned = G_learned[2]
+    B1_learned, B2_learned, B3_learned = B_learned[0], B_learned[1], B_learned[2]
+
+    # Define LaTeX equations with formatted coefficients
+    ground_truth = (
+        r"\textbf{Ground Truth:}\\[0.3em]"
+        r"\begin{aligned}"
+        fr"\frac{{du_1}}{{dt}} &= {L2}u_3 - {L3}u_2 - {d1:.4f}u_1 + {B1:.4f}u_2 u_3 + F_1 + \text{{noise}} \\"
+        fr"\frac{{du_2}}{{dt}} &= {L[1,0]}u_1 - {-L[1,2]}u_3 - {d2:.4f}u_2 + {B2:.4f}u_3 u_1 + F_2 + \text{{noise}} \\"
+        fr"\frac{{du_3}}{{dt}} &= {L[2,1]}u_2 - {L[2,0]}u_1 - {d3:.4f}u_3 + {B3:.4f}u_1 u_2 + F_3 + \text{{noise}}"
+        r"\end{aligned}"
+    )
+
+    FEX_expression = (
+        r"\textbf{FEX:}\\[0.3em]"
+        r"\begin{aligned}"
+        fr"FEX_1 &= {L_learned[0,2]}u_3 - {L_learned[0,1]}u_2 - {d1_learned:.4f}u_1 + {B1_learned:.4f}u_2 u_3 + \text{{residual term}} \\"
+        fr"FEX_2 &= {L_learned[1,0]}u_1 - {-L_learned[1,2]}u_3 - {d2_learned:.4f}u_2 + {B2_learned:.4f}u_3 u_1 + \text{{residual term}} \\"
+        fr"FEX_3 &= {L_learned[2,1]}u_2 - {L_learned[2,0]}u_1 - {d3_learned:.4f}u_3 + {B3_learned:.4f}u_1 u_2+ \text{{residual term}}"
+        r"\end{aligned}"
+    )
+
+    # Combine all lines into a LaTeX aligned environment
+    fig, axs = plt.subplots(1, 2, figsize=(14, 4))
+    axs[0].text(0.05, 0.5, f"${ground_truth}$", fontsize=14, va='center', ha='left')
+    axs[0].axis('off')
+
+    axs[1].text(0.05, 0.5, f"${FEX_expression}$", fontsize=14, va='center', ha='left')
+    axs[1].axis('off')
+
+    plt.tight_layout()
+    plt.show()
+
+
 
 
 
 
 if __name__ == "__main__":
-    m0, var0 = MC_triad_initial_value()
+    
+    model_path = Path(os.path.join(os.path.dirname(__file__), 'Results', 'equipart'))
+    # Get matrix coefficients for each dimension
+    # get_matrix_coefficients_from_FEX(model_path)
     params = params_init('equipart')
-    print(params['SS'])
-    # u_all, mean_MC_all, cov_MC_all, moment3_MC_all, Energy_MC_all, Energy_dyn = MC_triad_direct(params, m0, var0)
+    plot_latex_formula(params, model_path)
+    #print("Matrix coefficients extraction completed.")

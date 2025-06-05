@@ -2,6 +2,9 @@ src/Example/MC_triad/Results/equipart/simulation_results.npz
 src/Example/MC_triad/Results/equipart/log_dimension_1.txt
 src/Example/MC_triad/Results/equipart/log_dimension_2.txt
 src/Example/MC_triad/Results/equipart/log_dimension_3.txt
+src/Example/MC_triad/Results/equipart/FEX_dim_1.pth
+src/Example/MC_triad/Results/equipart/FEX_dim_2.pth
+src/Example/MC_triad/Results/equipart/FEX_dim_3.pth 
 src/Example/MC_triad/Results/equipart/optimal_FEX_1.pth
 src/Example/MC_triad/Results/equipart/optimal_FEX_2.pth
 src/Example/MC_triad/Results/equipart/optimal_FEX_3.pth
@@ -19,3 +22,4 @@ src/Example/MC_triad/Results/cascade/log_dimension_1.txt
 src/Example/MC_triad/Results/cascade/log_dimension_2.txt
 src/Example/MC_triad/Results/cascade/log_dimension_3.txt
 src/Example/MC_triad/Results/previous_result.zip
+src/Example/MC_triad/Results/equipart/op_seqs_all.npy

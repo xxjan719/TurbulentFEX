@@ -62,59 +62,6 @@ def adjust_learning_rate(optimizer, epoch, start_lr, num_iter):
         param_group['lr'] = lr
 
 
-def plot_latex_formula(params,Formula_1:list, Formula_2:list, Formula_3:list):
-    # Configure LaTeX rendering
-    plt.rcParams.update({
-         "text.usetex": True,
-    "font.family": "serif",
-    "text.latex.preamble": r"\usepackage{amsmath}"
-    })
-
-    # Extract parameters
-    L = params['L']
-    G = params['G']
-    B = params['B']
-
-    # Extract individual values from matrices
-    L1 = L[1, 2]  # u_2 -> u_3
-    L2 = L[2, 0]  # u_3 -> u_1
-    L3 = L[0, 1]  # u_1 -> u_2
-    d1 = G[0, 0]
-    d2 = G[1, 1]
-    d3 = G[2, 2]
-    B1, B2, B3 = B[0], B[1], B[2]
-
-    # Define LaTeX equations with formatted coefficients
-    ground_truth = (
-        r"\textbf{Ground Truth:}\\[0.3em]"
-        r"\begin{aligned}"
-        fr"\frac{{du_1}}{{dt}} &= {-L2}u_3 - {-L3}u_2 - {d1:.1f}u_1 + {B1:.1f}u_2 u_3 + F_1 + \text{{noise}} \\"
-        fr"\frac{{du_2}}{{dt}} &= {-L3}u_1 - {-L1}u_3 - {d2:.1f}u_2 + {B2:.1f}u_3 u_1 + F_2 + \text{{noise}} \\"
-        fr"\frac{{du_3}}{{dt}} &= {-L1}u_2 - {-L2}u_1 - {d3:.1f}u_3 + {B3:.1f}u_1 u_2 + F_3 + \text{{noise}}"
-        r"\end{aligned}"
-    )
-
-    FEX_expression = (
-        r"\textbf{FEX:}\\[0.3em]"
-        r"\begin{aligned}"
-        fr"F_1 &= {Formula_1[0]}u_3 - {Formula_1[1]}u_2 - {Formula_1[2]:.1f}u_1 + {Formula_1[3]:.1f}u_2 u_3 + residual term\\"
-        fr"F_2 &= {Formula_2[0]}u_1 - {Formula_2[1]}u_3 - {Formula_2[2]:.1f}u_2 + {Formula_2[3]:.1f}u_3 u_1 + residual term\\"
-        fr"F_3 &= {Formula_3[0]}u_2 - {Formula_3[1]}u_1 - {Formula_3[2]:.1f}u_3 + {Formula_3[3]:.1f}u_1 u_2+ residual term"
-        r"\end{aligned}"
-    )
-
-    # Combine all lines into a LaTeX aligned environment
-    fig, axs = plt.subplots(1, 2, figsize=(14, 4))
-    axs[0].text(0.05, 0.5, f"${ground_truth}$", fontsize=14, va='center', ha='left')
-    axs[0].axis('off')
-
-    axs[1].text(0.05, 0.5, f"${FEX_expression}$", fontsize=14, va='center', ha='left')
-    axs[1].axis('off')
-
-    plt.tight_layout()
-    plt.show()
-
-
 def weights_init(m):
     if isinstance(m, torch.nn.Linear):  # or whatever layers you use
         torch.nn.init.kaiming_normal_(m.weight)

@@ -8,7 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import FEX#, ThreeDimensionFEX
 from utils.plotting import plot_stats, plot_third_order_moments,plot_deviation_subplots
 from utils.constant import *
-from utils.helper import logprint,adjust_learning_rate,plot_latex_formula,weights_init
+from utils.helper import logprint,adjust_learning_rate,weights_init
 from utils.controller import Controller
 from utils.Sampler import Sampler
 from utils.Pool import Pool
@@ -430,6 +430,7 @@ else:
             model_optim = torch.optim.Adam(model.parameters(), lr=FEX_LR)
             for train_idx in range(TRAIN_EPOCHS_SECOND):
                 model_optim.zero_grad()
+                adjust_learning_rate(model_optim,train_idx,FEX_LR,TRAIN_EPOCHS_SECOND)
                 integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
                 du_pred, du_target = integrator.integrate(integration_args)
                 loss = mse(du_pred, du_target)
@@ -453,7 +454,7 @@ else:
 # Formula_1 = [-1.6100, 0.9751, -0.2461, 0.8654] # −0.2461x1+0.9751x2−1.6100x3+0.8654x2x3−0.0229
 # Formula_2 = [-0.9674, -2.0017, -0.15087, -0.3720]
 # Formula_3 = [1.5229, 1.2813, 0.1577, 1.05]
-# plot_latex_formula(params,Formula_1, Formula_2, Formula_3)
+
 
 
 
