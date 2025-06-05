@@ -3,10 +3,30 @@
 ## Changelog
 
 ### 2025-06-05 Updates
-- For energy descent, the result is turning to linear case. And it is not good. We can just use single formula to compute the results.
-- For the latex results, I have already updated for equipart case.
-- My simplified expression in `FEX` class may have some problem when calculating. So I compute it by myself.
+1. **Matrix Coefficient Extraction**:
+   - Implemented proper coefficient extraction from FEX expressions
+   - Added support for extracting L (linear coupling), G (damping), and B (quadratic) terms
+   - Fixed numerical precision issues in coefficient extraction
 
+2. **LaTeX Visualization**:
+   - Added new `plot_latex_formula` function to visualize equations
+   - Side-by-side comparison of ground truth and FEX-learned expressions
+   - Improved formatting with proper mathematical notation
+
+3. **Expression Handling**:
+   - Fixed issues with sympy expression parsing and coefficient extraction
+   - Added better handling of numeric coefficients in expressions
+   - Improved debugging output for coefficient extraction
+
+4. **Code Structure**:
+   - Reorganized matrix construction for better clarity
+   - Updated coefficient storage format (L: 3x3 matrix, G: vector, B: vector)
+   - Added detailed documentation and type hints
+
+5. **Bug Fixes**:
+   - Fixed sign conventions in matrix L construction
+   - Corrected coefficient extraction for quadratic terms
+   - Improved error handling in symbolic computations
 
 ### 2024-06-04 Updates
 1. **Optimization Improvements**:
