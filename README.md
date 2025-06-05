@@ -39,10 +39,8 @@ TurbulentFEX/
 ## Recent Updates
 
 ### Need to Update (2025-06-06)
-- Improve 
-- Add more comprehensive test cases
-- Implement automated testing pipeline
-- Add support for more complex turbulent systems
+- Finish `ODEParser.py`
+- print all the dataset performance in `prediction.py`
 
 ### Updates (2025-06-05)
 1. **Matrix Coefficient Extraction**
