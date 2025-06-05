@@ -3,7 +3,7 @@ import argparse
 def get_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--Model', type=str, default='MC_triad')
-    parser.add_argument('--DEVICE', type=str, default='cpu')
+    parser.add_argument('--DEVICE', type=str, default='cuda:0')
     parser.add_argument('--data_save_path', type=str, default=None)
     parser.add_argument('--log_save_path', type=str, default=None)
     parser.add_argument('--figure_save_path', type=str, default=None)

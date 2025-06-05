@@ -11,12 +11,12 @@ class Sampler(nn.Module):
     def forward(self, pmfs: Tuple[Tensor, ...], output: Tensor):       
         for i, pmf in enumerate(pmfs):
             # print(f'this is {i} times and corresponding pmf is {pmf}')
-            u = torch.rand(1)
+            u = torch.rand(1, device=pmf.device)
             # print(u<SAMPLER_EPSILON)
             if u < SAMPLER_EPSILON:
                 classes: int = pmf.shape[0]
                 # print(classes)
-                pmf_unif = torch.full((classes,), fill_value=1/classes)
+                pmf_unif = torch.full((classes,), fill_value=1/classes, device=pmf.device)
                 # print(pmf_unif)
                 output[i] = torch.multinomial(pmf_unif, 1, replacement=True)
                 # print(output)

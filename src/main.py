@@ -39,7 +39,14 @@ os.makedirs(os.path.dirname(args.data_save_path), exist_ok=True)
 os.makedirs(args.log_save_path, exist_ok=True)
 os.makedirs(args.figure_save_path, exist_ok=True)
 
-DEVICE = args.DEVICE
+# Check if CUDA is available and set device accordingly
+if torch.cuda.is_available() and args.DEVICE.startswith('cuda'):
+    DEVICE = torch.device(args.DEVICE)
+    print(f"Using {args.DEVICE}")
+else:
+    DEVICE = torch.device('cpu')
+    print("CUDA is not available, using CPU instead")
+
 SEED = args.SEED
 
 NUM_TREES = args.NUM_TREES
@@ -134,14 +141,14 @@ if args.TRAIN_GROUND_TRUTH == False:
             for explore_idx in range(EXPLORATION_ITERS):
                 logprint(f' Exploration index: {explore_idx} '.center(60, '='))
                 controller_optim.zero_grad()
-                pmfs = controller(torch.zeros(CONTROLLER_INPUT_SIZE))
-                scores = torch.zeros(NUM_TREES)
+                pmfs = controller(torch.zeros(CONTROLLER_INPUT_SIZE, device=DEVICE))
+                scores = torch.zeros(NUM_TREES, device=DEVICE)
                 # For the exploration phase, make sure op_seqs is properly on the device
                 op_seqs = torch.zeros(NUM_TREES, NUM_NODES, dtype=int, device=DEVICE)
                 for tree_idx in range(NUM_TREES):
-                    op_seqs[tree_idx, :] = sampler(pmfs, output=torch.zeros(NUM_NODES, dtype=int))
+                    op_seqs[tree_idx, :] = sampler(pmfs, output=torch.zeros(NUM_NODES, dtype=int, device=DEVICE))
                     # print(op_seqs[tree_idx,:])
-                    model = FEX(op_seqs[tree_idx,:], dim=dimension)
+                    model = FEX(op_seqs[tree_idx,:], dim=dimension).to(DEVICE)
                     model.apply(weights_init)
                     expression = model.expression_visualize()
                     parts = expression.split(') + (')
