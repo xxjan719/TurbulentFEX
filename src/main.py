@@ -106,18 +106,17 @@ integrator = Body4TrainIntegrator(integratorParams,method=INTEGRATOR_METHOD)
 pool = Pool()
 # print(dataset.shape)
 if args.TRAIN_GROUND_TRUTH == False:
-    for dim in range(0+1,dimension+1):
+    for dim in range(0+2,dimension+1):
         # model_save_path = os.path.join(args.log_save_path, f"optimal_FEX_{dim}.pth")
-        optimal_idx_path = os.path.join(os.path.dirname(args.data_save_path), f"optimal_idx_{dim}.npy")
-
-        if os.path.exists(optimal_idx_path): #os.path.exists(model_save_path) and 
+        log_file = os.path.join(args.log_save_path, f'log_dimension_{dim}.txt')
+        if os.path.exists(log_file): #os.path.exists(model_save_path) and 
             print(f'Model for dimension {dim} has already generated, just using for the second stage training:FEX'.center(60, '='))
-            optimal_idx = np.load(optimal_idx_path)
-            print(f'dimension:{dim}, operator indx is {optimal_idx}')
+            # optimal_idx = np.load(optimal_idx_path)
+            # print(f'dimension:{dim}, operator indx is {optimal_idx}')
 
         else:
             print(f'There is no model for dimension {dim} in this environment, it generates automatically'.center(60,'-'))
-            log_file = os.path.join(args.log_save_path, f'log_dimension_{dim}.txt')
+            
             os.makedirs(os.path.dirname(log_file), exist_ok=True)
             # Remove any existing handlers
             for handler in logging.root.handlers[:]:
@@ -288,10 +287,10 @@ if args.TRAIN_GROUND_TRUTH == False:
             #     if train_idx % 100 == 0:
             #         logprint(f"Training step {train_idx} | Loss: {loss.item():.6f}")
 
-            np.save(optimal_idx_path, optimal_idx)
+            # np.save(optimal_idx_path, optimal_idx)
             # torch.save(model_optimal.state_dict(), model_save_path)
             # logprint(f"Model saved to {model_save_path}")
-            logprint(f"Optimal operator sequence saved to {optimal_idx_path}")
+            # logprint(f"Optimal operator sequence saved to {optimal_idx_path}")
 else:
     # Replace the hardcoded symbols with a dimension-variable approach
     symbols = [sp.symbols(f'x{i+1}') for i in range(dimension)]
