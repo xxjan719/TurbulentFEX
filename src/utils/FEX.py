@@ -56,18 +56,17 @@ class FEX(nn.Module):
             raise ValueError(f"Binary operator index {op_idx} is undefined.")
     
     def linear(self, x: Tensor) -> Tensor:
-        linear_part = self.unary(2,x)
-        # Apply the linear operator
-        linear_output = (self.linear_a * linear_part+self.linear_b).sum(dim=-1,keepdim = True)
+        linear_part = x
+        linear_output = (self.linear_a.to(x.device) * linear_part + self.linear_b.to(x.device)).sum(dim=-1,keepdim = True)
         return linear_output
     
     def nonlinear(self, x: Tensor) -> Tensor:
         nonlinear_outputs = []
         op_ptr = 0
         for i in range(self.dim):
-            xi = x[:,i].unsqueeze(-1)
-            a = self.nonlinear_a[i]
-            b = self.nonlinear_b[i]
+            xi = x[:, i:i+1]
+            a = self.nonlinear_a[i].to(x.device)
+            b = self.nonlinear_b[i].to(x.device)
             part1 = a[0] * self.unary(self.op_seq[op_ptr], xi) + b[0]
             part2 = a[1] * self.unary(self.op_seq[op_ptr+2], xi) + b[1]
             binary_out = self.binary(self.op_seq[op_ptr+1], part1, part2)
@@ -119,16 +118,9 @@ class FEX(nn.Module):
     
     def expression_visualize_simplified(self,) -> str:
         # Try to split and simplify each part (linear and nonlinear)    
-        self.expression_visualize()
-        linear_str = sp.sympify(self.linear_expr)
-        linear_simplified = sp.simplify(linear_str)
-        # Simplify nonlinear part
-        nonlinear_str = sp.sympify(self.nonlinear_expr)
-        nonlinear_expanded = sp.expand(nonlinear_str)
-        expr = linear_simplified + nonlinear_expanded
-        total_expr = sp.simplify(expr)
-        # print(nonlinear_expr,nonlinear_expanded)
-        return total_expr
+        print(self.nonlinear_expr)
+
+        #return total_expr
 
 
 

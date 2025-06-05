@@ -2,6 +2,12 @@
 
 ## Changelog
 
+### 2025-06-05 Updates
+- For energy descent, the result is turning to linear case. And it is not good. We can just use single formula to compute the results.
+- For the latex results, I have already updated for equipart case.
+- My simplified expression in `FEX` class may have some problem when calculating. So I compute it by myself.
+
+
 ### 2024-06-04 Updates
 1. **Optimization Improvements**:
    - Added LBFGS optimization as a second phase after Adam

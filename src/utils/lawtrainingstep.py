@@ -6,8 +6,12 @@ import numpy as np
 import sympy as sp
 import os
 from typing import List, Dict, Optional, Tuple
-from FEX import FEX
-from helper import weights_init
+try:
+    from .FEX import FEX
+    from .helper import weights_init
+except:
+    from FEX import FEX
+    from helper import weights_init
 
 @dataclass
 class JointTrainerParams:
@@ -45,10 +49,10 @@ class MultiDimensionFEX(nn.Module):
         for model in self.models.values():
             model.apply(weights_init)
         
-        print('✅'*40)
-        print(f"Initialized MultiDimensionFEX with {self.dim} dimensions.")
-        self.get_cross_term_coefficients()
-        print('✅'*40)
+        # print('✅'*40)
+        # print(f"Initialized MultiDimensionFEX with {self.dim} dimensions.")
+        # self.get_cross_term_coefficients()
+        # print('✅'*40)
     
     def forward(self, x: Tensor) -> Tensor:
         outputs = []
@@ -62,10 +66,9 @@ class MultiDimensionFEX(nn.Module):
 
     def get_cross_term_coefficients(self):
         """
-        For each model, print the 4-element op_seq chunk for each dimension,
-        and if unary op is 2 (identity), print the corresponding coefficient.
+        Extract cross-term coefficients and maintain gradients for training.
+        Returns a dictionary with cross-term coefficients that maintain gradient information.
         """
-
         coeffs_dict = {}
         pairs = [(i,j) for i in range(self.dim) for j in range(i+1,self.dim)]
         keys = [f'x{i+1}x{j+1}' for i, j in pairs]
@@ -74,139 +77,28 @@ class MultiDimensionFEX(nn.Module):
         
         xs = sp.symbols(' '.join([f'x{i+1}' for i in range(self.dim)]))
         cross_map = {f'x{i+1}x{j+1}': xs[i]*xs[j] for i in range(self.dim) for j in range(i+1, self.dim)}
-        final_coeffs = {key: 0 for key in cross_map}
+        
         for dim in range(1, self.dim+1):
             model = self.models[str(dim)]
-            _, simplied_expr = model.expression_visualize()
-            # print(simplied_expr)
-            coeffs_check = {}
-            for key, sym in cross_map.items():
-                coeff = simplied_expr.coeff(sym)
-                final_coeffs[key] += coeff  # sum across models
+            simplified_expr = model.expression_visualize_simplified()
             
-            op_seq = model.op_seq
-            # print(f"Model {dim} op_seq: {op_seq}")
-            coefficents = 1.0
-            index_set = set()
-            for i in range(self.dim):
-                
-                op_chunk = op_seq[i*4:(i+1)*4]
-                # print(f"  Dimension {i+1} op_seq chunk: {op_chunk}")
-                unary_0 = op_chunk[0].item() if hasattr(op_chunk[0], 'item') else op_chunk[0]
-                unary_2 = op_chunk[2].item() if hasattr(op_chunk[2], 'item') else op_chunk[2]
-                unary_3 = op_chunk[3].item() if hasattr(op_chunk[3], 'item') else op_chunk[3]
-                binary_0 = op_chunk[1].item() if hasattr(op_chunk[1], 'item') else op_chunk[1]
-                coeff = 0
-                is_constant_term = False
-
-                if unary_3 == 1:
-                    coeff = model.nonlinear_a[i][2]*1+model.nonlinear_b[i][2]
-                    is_constant_term = True
-
-                elif unary_3 ==2:
-                    if (unary_0 == 2 and unary_2 !=2):
-                        if binary_0 == 2 and unary_2 == 1:
-                            coeff = model.nonlinear_a[i][0]*model.nonlinear_a[i][1]*model.nonlinear_a[i][2]
-                        else:
-                            coeff = model.nonlinear_a[i][0]*model.nonlinear_a[i][2]
+            # Process each cross term
+            for key, sym in cross_map.items():
+                coeff = simplified_expr.coeff(sym)
+                if coeff != 0:
+                    # Extract indices from key (e.g., 'x1x2' -> 0,1)
+                    i, j = int(key[1])-1, int(key[3])-1
+                    
+                    # Calculate coefficient with gradient tracking
+                    if dim == 1 and key == 'x2x3':  # For dimension 1, look for x2*x3 term
+                        coeffs_dict[key].append(model.nonlinear_a[1][2] * model.nonlinear_a[2][2])
+                    elif dim == 2 and key == 'x1x3':  # For dimension 2, look for x1*x3 term
+                        coeffs_dict[key].append(model.nonlinear_a[0][2] * model.nonlinear_a[2][2])
+                    elif dim == 3 and key == 'x1x2':  # For dimension 3, look for x1*x2 term
+                        coeffs_dict[key].append(model.nonlinear_a[0][2] * model.nonlinear_a[1][2])
         
-                            
-                    elif (unary_0!=2 and unary_2 ==2): 
-                        if binary_0 == 2 and unary_0 == 1:
-                            coeff = model.nonlinear_a[i][0]*model.nonlinear_a[i][1]*model.nonlinear_a[i][2]
-                        elif binary_0 == 1:
-                            coeff = -1*model.nonlinear_a[i][1]*model.nonlinear_a[i][2]
-                        elif binary_0 == 0:
-                            coeff = model.nonlinear_a[i][1]*model.nonlinear_a[i][2]
-                            
-                    elif (unary_0==2 and unary_2 ==2) and (binary_0 == 0):
-                        coeff = (model.nonlinear_a[i][0]+model.nonlinear_a[i][1])*model.nonlinear_a[i][2]
-                    
-                    elif unary_0==1 and unary_2 == 0:
-                        if binary_0 == 0:
-                            coeff = (model.nonlinear_a[i][0]*1+model.nonlinear_b[i][0])+(model.nonlinear_a[i][1]*0+model.nonlinear_b[i][1])*model.nonlinear_a[i][2]+ model.nonlinear_b[i][2]
-                            # print('this is constant term in this dimension')
-                        elif binary_0 == 1:
-                            coeff = (model.nonlinear_a[i][0]*1+model.nonlinear_b[i][0])-(model.nonlinear_a[i][1]*0+model.nonlinear_b[i][1])*model.nonlinear_a[i][2]+ model.nonlinear_b[i][2]
-                            # print('this is constant term in this dimension')
-                        elif binary_0 == 2:
-                            coeff = (model.nonlinear_a[i][0]*1+model.nonlinear_b[i][0])*(model.nonlinear_a[i][1]*0+model.nonlinear_b[i][1])*model.nonlinear_a[i][2]+ model.nonlinear_b[i][2]
-                            # print('this is constant term in this dimension')
-                        is_constant_term = True
-                    
-                    elif unary_0==1 and unary_2 == 1:
-                        if binary_0 == 0:
-                            coeff = (model.nonlinear_a[i][0]*1+model.nonlinear_b[i][0])+(model.nonlinear_a[i][1]*1+model.nonlinear_b[i][1])*model.nonlinear_a[i][2]+ model.nonlinear_b[i][2]
-                            # print('this is constant term in this dimension')
-                        elif binary_0 == 1:
-                            coeff = (model.nonlinear_a[i][0]*1+model.nonlinear_b[i][0])-(model.nonlinear_a[i][1]*1+model.nonlinear_b[i][1])*model.nonlinear_a[i][2]+ model.nonlinear_b[i][2]
-                            # print('this is constant term in this dimension')
-                        elif binary_0 == 2:
-                            coeff = (model.nonlinear_a[i][0]*1+model.nonlinear_b[i][0])*(model.nonlinear_a[i][1]*1+model.nonlinear_b[i][1])*model.nonlinear_a[i][2]+ model.nonlinear_b[i][2]
-                            # print('this is constant term in this dimension')
-                        is_constant_term = True
-                    
-                    elif unary_0 ==0 and unary_2 == 0:
-                        if binary_0 == 0:
-                            coeff = (model.nonlinear_a[i][0]*0+model.nonlinear_b[i][0])+(model.nonlinear_a[i][1]*0+model.nonlinear_b[i][1])*model.nonlinear_a[i][2]+ model.nonlinear_b[i][2]
-                            # print('this is constant term in this dimension')
-                        elif binary_0 == 1:
-                            coeff = (model.nonlinear_a[i][0]*0+model.nonlinear_b[i][0])-(model.nonlinear_a[i][1]*0+model.nonlinear_b[i][1])*model.nonlinear_a[i][2]+ model.nonlinear_b[i][2]
-                            # print('this is constant term in this dimension')
-                        elif binary_0 == 2:
-                            coeff = (model.nonlinear_a[i][0]*0+model.nonlinear_b[i][0])*(model.nonlinear_a[i][1]*0+model.nonlinear_b[i][1])*model.nonlinear_a[i][2]+ model.nonlinear_b[i][2]
-                            # print('this is constant term in this dimension')
-                        is_constant_term = True
-
-                    elif unary_0 == 0 and unary_2 == 1:
-                        if binary_0 == 0:
-                            coeff = (model.nonlinear_a[i][0]*0+model.nonlinear_b[i][0])+(model.nonlinear_a[i][1]*1+model.nonlinear_b[i][1])*model.nonlinear_a[i][2]+ model.nonlinear_b[i][2]
-                            # print('this is constant term in this dimension')
-                        elif binary_0 == 1:
-                            coeff = (model.nonlinear_a[i][0]*0+model.nonlinear_b[i][0])-(model.nonlinear_a[i][1]*1+model.nonlinear_b[i][1])*model.nonlinear_a[i][2]+ model.nonlinear_b[i][2]
-                            # print('this is constant term in this dimension')
-                        elif binary_0 == 2:
-                            coeff = (model.nonlinear_a[i][0]*0+model.nonlinear_b[i][0])*(model.nonlinear_a[i][1]*1+model.nonlinear_b[i][1])*model.nonlinear_a[i][2]+ model.nonlinear_b[i][2]
-                            # print('this is constant term in this dimension')
-                        is_constant_term = True
-
-                else:
-                    coeff = model.nonlinear_a[i][2]*0+model.nonlinear_b[i][2]
-                    is_constant_term = True
-                
-                if not isinstance(coeff, torch.Tensor):
-                    coeff = torch.tensor(coeff, dtype=torch.float32)
-
-                if is_constant_term:
-                    print(f"    Term for x{i+1} is constant.")
-                else:
-                    index_set.add(f"x{i+1}")
-                    print(f"    Term for x{i+1} involves variables: {index_set}")
-
-                coefficents *= coeff
-                # print(f"    Coefficient after x{i+1}: {coefficents}, requires_grad={coefficents.requires_grad}")
-
-                # print(f"\n==> Final combined coefficient for dimension {dim}: {coefficents}\n")
-
-                if len(index_set) == 2:
-                    var_pair = sorted(index_set)
-                    key = ''.join(var_pair)  # e.g., 'x1x2'
-                    if key in coeffs_dict:
-                        coeffs_dict[key].append(coefficents)
-                    print(f"==> Final combined coefficient for {key}: {coefficents}")
-                
-                
-                print("\n===== Final Coefficient Dictionary =====")
-            # print(coeffs_dict)    
-            for key in coeffs_dict:
-                unique_values = []
-                for v in coeffs_dict[key]:
-                    if not any(torch.allclose(v, u) for u in unique_values):
-                        unique_values.append(v)
-                coeffs_dict[key] = unique_values
-            print("==> Final combined cross-term coefficients for symoblic:", final_coeffs)
-            print('==> Final combined cross-term coefficients for callback:', coeffs_dict)
-            self.B_coeffs_dict = coeffs_dict
+        self.B_coeffs_dict = coeffs_dict
+        return coeffs_dict
 
     # def train_step(self, dataset_tensor: Tensor, integrator, mse, FEX_LR: float, TRAIN_EPOCHS: int):
     #     # Create a single optimizer for all models

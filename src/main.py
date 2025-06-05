@@ -12,6 +12,7 @@ from utils.helper import logprint,adjust_learning_rate,plot_latex_formula,weight
 from utils.controller import Controller
 from utils.Sampler import Sampler
 from utils.Pool import Pool
+from utils.lawtrainingstep import MultiDimensionFEX
 from utils.trainingstep import Body4TrainIntegrationParams, Body4TrainIntegrationArgs, Body4TrainIntegrator
 from Example.MC_triad.MC_triad import params_init, MC_triad_direct, MC_triad_initial_value
 from config.arg_parser import get_parser
@@ -114,12 +115,20 @@ pool = Pool()
 # print(dataset.shape)
 if args.TRAIN_GROUND_TRUTH == False:
     for dim in range(0+2,dimension+1):
-        # model_save_path = os.path.join(args.log_save_path, f"optimal_FEX_{dim}.pth")
+        model_save_path = os.path.join(args.log_save_path, f"FEX_dim_{dim}.pth")
         log_file = os.path.join(args.log_save_path, f'log_dimension_{dim}.txt')
-        if os.path.exists(log_file): #os.path.exists(model_save_path) and 
+        if os.path.exists(model_save_path) and os.path.exists(log_file): #os.path.exists(model_save_path) and 
             print(f'Model for dimension {dim} has already generated, just using for the second stage training:FEX'.center(60, '='))
-            # optimal_idx = np.load(optimal_idx_path)
-            # print(f'dimension:{dim}, operator indx is {optimal_idx}')
+            # Load the saved model
+            optimal_idx = np.load(os.path.join(args.log_save_path, f'optimal_idx_{dim}.npy'))
+            print(f'dimension:{dim}, operator indx is {optimal_idx}')
+            model = FEX(torch.tensor(optimal_idx, device=DEVICE), dim=dimension).to(DEVICE)  # Initialize with dummy sequence
+            model.load_state_dict(torch.load(model_save_path))
+            print(f"Loaded model from {model_save_path}")
+            print(f"Model expression: {model.expression_visualize()}")
+            # Store the loaded model's operator sequence
+            optimal_idx = model.op_seqs.tolist()
+            print(f"Loaded operator sequence: {optimal_idx}")
 
         else:
             print(f'There is no model for dimension {dim} in this environment, it generates automatically'.center(60,'-'))
@@ -164,7 +173,7 @@ if args.TRAIN_GROUND_TRUTH == False:
                     model_optim = torch.optim.Adam(model.parameters(),lr=FEX_LR)
                     for train_idx in range(TRAIN_EPOCHS_FIRST):
                         model_optim.zero_grad()
-                        integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+                        integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor.to(DEVICE), integration_func=model, index=dim)
                         du_pred,du_target = integrator.integrate(integration_args)
                         loss = mse(du_pred,du_target)
                         loss.backward()
@@ -187,7 +196,7 @@ if args.TRAIN_GROUND_TRUTH == False:
 
                     def lbfgs_closure():
                         lbfgs_optim.zero_grad()
-                        integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+                        integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor.to(DEVICE), integration_func=model, index=dim)
                         du_pred, du_target = integrator.integrate(integration_args)
                         loss = mse(du_pred, du_target)
                         # Check for NaN in loss
@@ -243,7 +252,7 @@ if args.TRAIN_GROUND_TRUTH == False:
                     # candidate_.expression))
                     # print(f''.center(80,'-'))
                 # ======= Formula (3.8), (3.9) for controller update==========================
-                scores_detached = scores.detach().numpy()
+                scores_detached = scores.cpu().detach().numpy()
                 scores_upper_quantile = np.percentile(scores_detached, q=(1 - CONTROLLER_TOP_SAMPLES_FRACTION), method=CONTROLLER_QUANTILE_METHOD)
                 indicator_upper_quantile = (scores_detached >= scores_upper_quantile).astype(int)
                 
@@ -266,77 +275,178 @@ if args.TRAIN_GROUND_TRUTH == False:
                     logprint(f'Node {i}:{np.around(pmfs[i].detach().numpy(),decimals = 4)}')
                 
                 logprint(f'Final Pool'.center(60, '='))
-                for candidate_ in pool:
-                        logprint('loss: {:.6f} | operator sequence: {} | formula: {}'.format(
-                    candidate_.error,
-                    [v for v in candidate_.action],
-                    candidate_.expression))
-                logprint(f''.center(60,'-'))
+                print("\nAvailable candidates for second stage training:")
+                print("-" * 80)
+                for idx, candidate_ in enumerate(pool):
+                    print(f"\nCandidate {idx + 1}:")
+                    print(f"Loss: {candidate_.error:.6f}")
+                    print(f"Operator sequence: {candidate_.action}")
+                    print(f"Expression: {candidate_.expression}")
+                    print("-" * 80)
+                
+                # Ask for user input
+                choice = input("\nEnter the candidate number you want to use for second stage training (1, 2, 3, etc.), or 'q' to quit: ")
+                if choice.lower() != 'q':
+                    try:
+                        choice_idx = int(choice) - 1
+                        if 0 <= choice_idx < len(pool):
+                            best_candidate = list(pool)[choice_idx]
+                            optimal_idx = best_candidate.action
+                            print(f'\nSelected candidate {choice}:')
+                            print(f'Operator sequence: {optimal_idx}')
+                            print(f'Expression: {best_candidate.expression}')
+                        else:
+                            print("Invalid choice. Using best candidate by loss.")
+                            best_candidate = min(pool, key=lambda c: c.error)
+                            optimal_idx = best_candidate.action
+                    except ValueError:
+                        print("Invalid input. Using best candidate by loss.")
+                        best_candidate = min(pool, key=lambda c: c.error)
+                        optimal_idx = best_candidate.action
+                else:
+                    print("Exiting without second stage training.")
+                    sys.exit(0)
 
+                logprint('✅'*40)
 
-            logprint('✅'*40)
-            logprint(f' Below is code for training FEX with a set fixed operator sequence. '.center(60, '='))   
-            logprint('✅'*40)
+                best_candidate = min(pool, key=lambda c: c.error)
+                optimal_idx = best_candidate.action
+                logprint(f'Optimal operator sequence: {optimal_idx}')
 
-            best_candidate = min(pool, key=lambda c: c.error)
-            optimal_idx = best_candidate.action
-            print(f'Optimal operator sequence: {optimal_idx}')
-            # model_optimal = FEX(optimal_idx)
-            # model_optim_optimal = torch.optim.Adam(model_optimal.parameters(),lr=FEX_LR)
-            # for train_idx in range(TRAIN_EPOCHS_SECOND):
-            #     adjust_learning_rate(model_optim_optimal,train_idx,FEX_LR,TRAIN_EPOCHS_SECOND)
-            #     model_optim_optimal.zero_grad()
-            #     integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model_optimal, index=dim)
-            #     du_pred,du_target = integrator.integrate(integration_args)
-            #     loss = mse(du_pred,du_target)
-            #     loss.backward()
-            #     model_optim_optimal.step()
-            #     if train_idx % 100 == 0:
-            #         logprint(f"Training step {train_idx} | Loss: {loss.item():.6f}")
-
-            # np.save(optimal_idx_path, optimal_idx)
-            # torch.save(model_optimal.state_dict(), model_save_path)
-            # logprint(f"Model saved to {model_save_path}")
-            # logprint(f"Optimal operator sequence saved to {optimal_idx_path}")
+                # Train and save the model
+                model = FEX(torch.tensor(optimal_idx, device=DEVICE), dim=dimension).to(DEVICE)
+                model.apply(weights_init)
+                model_optim = torch.optim.Adam(model.parameters(), lr=FEX_LR)
+                for train_idx in range(TRAIN_EPOCHS_SECOND):
+                    adjust_learning_rate(model_optim,train_idx,FEX_LR,TRAIN_EPOCHS_SECOND)
+                    model_optim.zero_grad()
+                    integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+                    du_pred, du_target = integrator.integrate(integration_args)
+                    loss = mse(du_pred, du_target)
+                    loss.backward()
+                    model_optim.step()
+                    if train_idx % 100 == 0:
+                        logprint('✅'*40)
+                        logprint(f"Training index: {train_idx}")
+                        logprint(f"Loss: {loss.item():.6f}")
+                        logprint(f"Expression: {model.expression_visualize()}")
+                        logprint('✅'*40)
+                # Save both the model and its operator sequence
+                save_path = os.path.join(args.log_save_path, f'FEX_dim_{dim}.pth')
+                optimal_idx_path = os.path.join(args.log_save_path, f'optimal_idx_{dim}.npy')
+                torch.save(model.state_dict(), save_path)
+                np.save(optimal_idx_path, optimal_idx)
+                logprint(f"Model for dimension {dim} saved to {save_path}")
+                logprint(f"Optimal operator sequence saved to {optimal_idx_path}")
 else:
     # Replace the hardcoded symbols with a dimension-variable approach
     symbols = [sp.symbols(f'x{i+1}') for i in range(dimension)]
+    op_seqs_all = {}
     
     for dim in range(0+1,dimension+1):
         print(f'the dimension is {dim}')
         # In the ground truth training section, convert the list to tensor:
         if dim == 1: 
             op_seqs = torch.tensor([0, 2, 1, 2, 2, 0, 0, 2, 2, 1, 1, 2], device=DEVICE)
+            
         elif dim == 2:
             op_seqs = torch.tensor([1, 0, 2, 2, 0, 2, 1, 2, 2, 1, 0, 2], device=DEVICE)
         elif dim == 3:
             op_seqs = torch.tensor([2, 1, 1, 2, 0, 1, 2, 2, 1, 0, 1, 2], device=DEVICE)
-        model = FEX(op_seqs, dim=dimension)
-        model.apply(weights_init)
-        model_optim = torch.optim.Adam(model.parameters(),lr=FEX_LR)
-        for train_idx in range(TRAIN_EPOCHS_FIRST):
+        op_seqs_all[dim] = op_seqs
+
+    print(f'the op_seqs_all is {op_seqs_all}')
+    if args.MULTI_FEX_OPEN == True:
+        combined_conservation_law = MultiDimensionFEX(op_seqs_all, dimension).to(DEVICE)
+        # Initialize all models
+        for dim in range(1, dimension+1):
+            model = combined_conservation_law.models[str(dim)]
+            model.apply(weights_init)
+        
+        # Create optimizer for all parameters
+        all_params = []
+        for model in combined_conservation_law.models.values():
+            all_params.extend(model.parameters())
+        model_optim = torch.optim.Adam(all_params, lr=FEX_LR)
+        # Training loop
+        for train_idx in range(TRAIN_EPOCHS_SECOND):
             model_optim.zero_grad()
-            integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
-            du_pred,du_target = integrator.integrate(integration_args)
-            expr_str,_ = model.expression_visualize()
-            # nonlinear_expr = sp.sympify(nonlinear_str)
-            # nonlinear_expanded = sp.expand(nonlinear_expr)
-            # if dim == 3:
-            #     # Use the symbol variables dynamically
-            #     coeff_x1x2 = nonlinear_expanded.coeff(symbols[0] * symbols[1])  # x1 * x2
-            #     coeff_x1x2_tensor = torch.tensor(coeff_x1x2, dtype=du_pred.dtype, device=du_pred.device)
-            #     loss = mse(du_pred,du_target)+(coeff_x1x2_tensor-0.4)**2
-            # else:
-            loss = mse(du_pred,du_target)
-            loss.backward()
+            # Calculate prediction loss for all dimensions
+            total_pred_loss = 0
+            for dim in range(1, dimension+1):
+                model = combined_conservation_law.models[str(dim)]
+                integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+                du_pred, du_target = integrator.integrate(integration_args)
+                total_pred_loss += mse(du_pred, du_target)
+            
+            # Get cross-term coefficients and calculate constraint loss
+            coeffs = combined_conservation_law.get_cross_term_coefficients()
+            x1x2 = coeffs['x1x2'][0] if len(coeffs['x1x2']) > 0 else torch.zeros(1, device=DEVICE)
+            x1x3 = coeffs['x1x3'][0] if len(coeffs['x1x3']) > 0 else torch.zeros(1, device=DEVICE)
+            x2x3 = coeffs['x2x3'][0] if len(coeffs['x2x3']) > 0 else torch.zeros(1, device=DEVICE)
+        
+            # Calculate squared loss for x2x3 = -(x1x2 + x1x3)
+            constraint_loss = torch.abs(x1x2+x1x3+x2x3)
+        
+            # Combine prediction loss and coefficient constraint
+            constraint_weight = 0.1  # Adjust this weight as needed
+            total_loss = total_pred_loss + constraint_weight * constraint_loss
+        
+            # Backpropagate and update
+            total_loss.backward()
             model_optim.step()
-            if train_idx % 10 == 0:
-                # Get the expression string from FEX
-                expr_str,simplified_expr_str = model.expression_visualize()
-                # Try to split and simplify each part (linear and nonlinear)    
-                print(f"Training index: {train_idx}, Loss: {loss.item()}")
-                print(f'overall expression:{expr_str}')
-                print(f'simplified expression:{simplified_expr_str}')
+        
+            if train_idx % 100 == 0:
+                print('✅'*40)
+                print(f"Training index: {train_idx}")
+                print(f"Total Prediction Loss: {total_pred_loss.item():.6f}")
+                print(f"Constraint Loss: {constraint_loss.item():.6f}")
+                print(f"Total Loss: {total_loss.item():.6f}")
+                print(f"Cross terms - x1x2: {x1x2.item():.4f}, x1x3: {x1x3.item():.4f}, x2x3: {x2x3.item():.4f}")
+                print(f"Sum check: x2x3 + (x1x2 + x1x3) = {(x2x3 + x1x2 + x1x3).item():.4f}")
+                for dim in range(1, dimension+1):
+                    print(f"Dimension {dim} expression: {combined_conservation_law.models[str(dim)].expression_visualize()}")
+                print('✅'*40)
+    
+            # Print final expressions and coefficients
+            print("\nFinal Expressions:")
+            for dim in range(1, dimension+1):
+                print(f"\nDimension {dim}:")
+                print(f"Expression: {combined_conservation_law.models[str(dim)].expression_visualize()}")
+        final_coeffs = combined_conservation_law.get_cross_term_coefficients()
+        print("\nFinal cross-term coefficients:")
+        x1x2 = final_coeffs['x1x2'][0] if len(final_coeffs['x1x2']) > 0 else torch.zeros(1, device=DEVICE)
+        x1x3 = final_coeffs['x1x3'][0] if len(final_coeffs['x1x3']) > 0 else torch.zeros(1, device=DEVICE)
+        x2x3 = final_coeffs['x2x3'][0] if len(final_coeffs['x2x3']) > 0 else torch.zeros(1, device=DEVICE)
+        print(f"x1x2: {x1x2.item():.4f}")
+        print(f"x1x3: {x1x3.item():.4f}")
+        print(f"x2x3: {x2x3.item():.4f}")
+        print(f"Sum check: x2x3 + (x1x2 + x1x3) = {(x2x3 + x1x2 + x1x3).item():.4f}")
+        print(f"Final coefficient dictionary: {combined_conservation_law.B_coeffs_dict}")    
+    else:
+        for dim in range(1, dimension+1):
+            model = FEX(op_seqs_all[dim], dim=dimension).to(DEVICE)
+            model.apply(weights_init)
+            model_optim = torch.optim.Adam(model.parameters(), lr=FEX_LR)
+            for train_idx in range(TRAIN_EPOCHS_SECOND):
+                model_optim.zero_grad()
+                integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+                du_pred, du_target = integrator.integrate(integration_args)
+                loss = mse(du_pred, du_target)
+                loss.backward()
+                model_optim.step()
+                if train_idx % 100 == 0:
+                    print(f"Training index: {train_idx}")
+                    print(f"Loss: {loss.item():.6f}")
+                    print(f"Expression: {model.expression_visualize()}")
+                    
+            # Save individual model after training
+            save_path = os.path.join(args.log_save_path, f'FEX_dim_{dim}.pth')
+            torch.save(model.state_dict(), save_path)
+            print(f"Model for dimension {dim} saved to {save_path}")
+    
+
+
 
 
 
