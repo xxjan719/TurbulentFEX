@@ -132,7 +132,7 @@ if args.TRAIN_GROUND_TRUTH == False:
                 logging.StreamHandler(sys.stdout)])
 
             # dimension 1 need 10 EXPLORATION_ITERS
-            for explore_idx in range(1):#EXPLORATION_ITERS):
+            for explore_idx in range(EXPLORATION_ITERS):
                 logprint(f' Exploration index: {explore_idx} '.center(60, '='))
                 controller_optim.zero_grad()
                 pmfs = controller(torch.zeros(CONTROLLER_INPUT_SIZE))
@@ -144,7 +144,7 @@ if args.TRAIN_GROUND_TRUTH == False:
                     # print(op_seqs[tree_idx,:])
                     model = FEX(op_seqs[tree_idx,:], dim=dimension)
                     model.apply(weights_init)
-                    expression,_ = model.expression_visualize()
+                    expression = model.expression_visualize()
                     parts = expression.split(') + (')
                     nonlinear_expr = parts[1].strip()
                     if "x1" not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" not in nonlinear_expr:
@@ -214,11 +214,11 @@ if args.TRAIN_GROUND_TRUTH == False:
 
                     if not math.isnan(loss.item()):
                         if dim == 1:
-                            scores[tree_idx] = 1/ (1+(loss))
+                            scores[tree_idx] = 1/ (1+torch.sqrt(loss))
                         elif dim ==2:
-                            scores[tree_idx] = 1/(1+(loss))
+                            scores[tree_idx] = 1/(1+torch.sqrt(loss))
                         elif dim ==3:
-                            scores[tree_idx] = 1/(1+(loss))
+                            scores[tree_idx] = 1/(1+torch.sqrt(loss))
                     else:
                         scores[tree_idx] = 0.
                     final_expr= model.expression_visualize()
