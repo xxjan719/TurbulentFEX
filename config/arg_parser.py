@@ -14,18 +14,18 @@ def get_parser():
     parser.add_argument('--CONTROLLER_INPUT_SIZE', type=int, default=20)
     parser.add_argument('--CONTROLLER_TOP_SAMPLES_FRACTION', type=float, default=0.25)
     parser.add_argument('--CONTROLLER_QUANTILE_METHOD', type=str, default='linear')
-    parser.add_argument('--EXPLORATION_ITERS', type=int, default=20)
+    parser.add_argument('--EXPLORATION_ITERS', type=int, default=30)
     parser.add_argument('--NUM_TREES', type=int, default=100)
     parser.add_argument('--INTEGRATOR_METHOD', type=str, default='integration-based')
     # FEX optimizer settings
-    parser.add_argument('--FEX_STAGE_OPEN_BOOL',type=bool,default = False)
+    parser.add_argument('--FEX_STAGE_OPEN_BOOL',type=bool,default = True)
     parser.add_argument('--FEX_LR', type=float, default=8e-3)
     parser.add_argument('--TRAIN_EPOCHS_FIRST', type=int, default=20)
     parser.add_argument('--TRAIN_EPOCHS_SECOND', type=int, default=2000)
     parser.add_argument('--TRAIN_GROUND_TRUTH',type=bool,default = False)
     parser.add_argument('--MULTI_FEX_OPEN',type=float,default = False)
     #FEX-DM settings
-    parser.add_argument('--SECOND_STAGE_OPEN_BOOL',type=bool,default = True)
+    parser.add_argument('--SECOND_STAGE_OPEN_BOOL',type=bool,default = False)
     parser.add_argument('--DIFF_SCALE',type=float,default = 100)
     parser.add_argument('--ODESLOVER_TIME_STEPS',type=int,default = 2000)
     return parser

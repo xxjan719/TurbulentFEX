@@ -289,70 +289,69 @@ if SECOND_STAGE_OPEN_BOOL == False:
                         for i in range(NUM_NODES):
                             logprint(f'Node {i}:{np.around(pmfs[i].detach().numpy(),decimals = 4)}')
                         
-                        logprint(f'Final Pool'.center(60, '='))
-                        print("\nAvailable candidates for second stage training:")
-                        print("-" * 80)
+                        logprint(f'Pool for Exploration {explore_idx}'.center(60, '='))
+                        logprint("\nAvailable candidates for this exploration:")
+                        logprint("-" * 80)
                         for idx, candidate_ in enumerate(pool):
-                            print(f"\nCandidate {idx + 1}:")
-                            print(f"Loss: {candidate_.error:.6f}")
-                            print(f"Operator sequence: {candidate_.action}")
-                            print(f"Expression: {candidate_.expression}")
-                            print("-" * 80)
+                            logprint(f"\nCandidate {idx + 1}:")
+                            logprint(f"Loss: {candidate_.error:.6f}")
+                            logprint(f"Operator sequence: {candidate_.action}")
+                            logprint(f"Expression: {candidate_.expression}")
+                            logprint("-" * 80)
                         
-                        # Ask for user input
-                        choice = input("\nEnter the candidate number you want to use for second stage training (1, 2, 3, etc.), or 'q' to quit: ")
-                        if choice.lower() != 'q':
-                            try:
-                                choice_idx = int(choice) - 1
-                                if 0 <= choice_idx < len(pool):
-                                    best_candidate = list(pool)[choice_idx]
-                                    optimal_idx = best_candidate.action
-                                    print(f'\nSelected candidate {choice}:')
-                                    print(f'Operator sequence: {optimal_idx}')
-                                    print(f'Expression: {best_candidate.expression}')
-                                else:
-                                    print("Invalid choice. Using best candidate by loss.")
-                                    best_candidate = min(pool, key=lambda c: c.error)
-                                    optimal_idx = best_candidate.action
-                            except ValueError:
-                                print("Invalid input. Using best candidate by loss.")
+                    # Ask for user input
+                    choice = input("\nEnter the candidate number you want to use for second stage training (1, 2, 3, etc.), or 'q' to quit: ")
+                    if choice.lower() != 'q':
+                        try:
+                            choice_idx = int(choice) - 1
+                            if 0 <= choice_idx < len(pool):
+                                best_candidate = list(pool)[choice_idx]
+                                optimal_idx = best_candidate.action
+                                print(f'\nSelected candidate {choice}:')
+                                print(f'Operator sequence: {optimal_idx}')
+                                print(f'Expression: {best_candidate.expression}')
+                            else:
+                                print("Invalid choice. Using best candidate by loss.")
                                 best_candidate = min(pool, key=lambda c: c.error)
                                 optimal_idx = best_candidate.action
-                        else:
-                            print("Exiting without second stage training.")
-                            sys.exit(0)
+                        except ValueError:
+                            print("Invalid input. Using best candidate by loss.")
+                            best_candidate = min(pool, key=lambda c: c.error)
+                            optimal_idx = best_candidate.action
+                    else:
+                        print("Exiting without second stage training.")
+                        sys.exit(0)
 
-                        logprint('✅'*40)
+                    logprint('✅'*40)
+                    best_candidate = min(pool, key=lambda c: c.error)
+                    optimal_idx = best_candidate.action
+                    logprint(f'Optimal operator sequence: {optimal_idx}')
 
-                        best_candidate = min(pool, key=lambda c: c.error)
-                        optimal_idx = best_candidate.action
-                        logprint(f'Optimal operator sequence: {optimal_idx}')
-
-                        # Train and save the model
-                        model = FEX(torch.tensor(optimal_idx, device=DEVICE), dim=dimension).to(DEVICE)
-                        model.apply(weights_init)
-                        model_optim = torch.optim.Adam(model.parameters(), lr=FEX_LR)
-                        for train_idx in range(TRAIN_EPOCHS_SECOND):
-                            adjust_learning_rate(model_optim,train_idx,FEX_LR,TRAIN_EPOCHS_SECOND)
-                            model_optim.zero_grad()
-                            integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
-                            du_pred, du_target = integrator.integrate(integration_args)
-                            loss = mse(du_pred, du_target)
-                            loss.backward()
-                            model_optim.step()
-                            if train_idx % 100 == 0:
-                                logprint('✅'*40)
-                                logprint(f"Training index: {train_idx}")
-                                logprint(f"Loss: {loss.item():.6f}")
-                                logprint(f"Expression: {model.expression_visualize()}")
-                                logprint('✅'*40)
-                        # Save both the model and its operator sequence
-                        save_path = os.path.join(args.log_save_path, f'FEX_dim_{dim}.pth')
-                        optimal_idx_path = os.path.join(args.log_save_path, f'optimal_idx_{dim}.npy')
-                        torch.save(model.state_dict(), save_path)
-                        np.save(optimal_idx_path, optimal_idx)
-                        logprint(f"Model for dimension {dim} saved to {save_path}")
-                        logprint(f"Optimal operator sequence saved to {optimal_idx_path}")
+                    # Train and save the model
+                    model = FEX(torch.tensor(optimal_idx, device=DEVICE), dim=dimension).to(DEVICE)
+                    model.apply(weights_init)
+                    model_optim = torch.optim.Adam(model.parameters(), lr=FEX_LR)
+                    for train_idx in range(TRAIN_EPOCHS_SECOND):
+                        adjust_learning_rate(model_optim,train_idx,FEX_LR,TRAIN_EPOCHS_SECOND)
+                        model_optim.zero_grad()
+                        integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+                        du_pred, du_target = integrator.integrate(integration_args)
+                        loss = mse(du_pred, du_target)
+                        loss.backward()
+                        model_optim.step()
+                        if train_idx % 100 == 0:
+                            logprint('✅'*40)
+                            logprint(f"Training index: {train_idx}")
+                            logprint(f"Loss: {loss.item():.6f}")
+                            logprint(f"Expression: {model.expression_visualize()}")
+                            logprint('✅'*40)
+                    # Save both the model and its operator sequence
+                    save_path = os.path.join(args.log_save_path, f'FEX_dim_{dim}.pth')
+                    optimal_idx_path = os.path.join(args.log_save_path, f'optimal_idx_{dim}.npy')
+                    torch.save(model.state_dict(), save_path)
+                    np.save(optimal_idx_path, optimal_idx)
+                    logprint(f"Model for dimension {dim} saved to {save_path}")
+                    logprint(f"Optimal operator sequence saved to {optimal_idx_path}")
         else:
             # Replace the hardcoded symbols with a dimension-variable approach
             symbols = [sp.symbols(f'x{i+1}') for i in range(dimension)]
