@@ -493,6 +493,8 @@ else:
 
 # [2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2] dimension 2  11 epochs
 
+# Selected candidate 4:
+# Operator sequence: [8, 2, 2, 2, 5, 2, 1, 0, 2, 2, 7, 2]
 
 
 
