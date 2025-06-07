@@ -129,7 +129,7 @@ if SECOND_STAGE_OPEN_BOOL == False:
         
         # print(dataset.shape)
         if args.TRAIN_GROUND_TRUTH == False:
-            for dim in range(0+2,dimension+1):
+            for dim in range(0+1,dimension+1):
                 model_save_path = os.path.join(args.log_save_path, f"FEX_dim_{dim}.pth")
                 log_file = os.path.join(args.log_save_path, f'log_dimension_{dim}.txt')
                 if os.path.exists(model_save_path) and os.path.exists(log_file): #os.path.exists(model_save_path) and 

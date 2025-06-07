@@ -429,9 +429,9 @@ def plot_latex_formula(params, path):
 
 if __name__ == "__main__":
     
-    model_path = Path(os.path.join(os.path.dirname(__file__), 'Results', 'equipart'))
+    model_path = Path(os.path.join(os.path.dirname(__file__), 'Results', 'cascade'))
     # Get matrix coefficients for each dimension
     # get_matrix_coefficients_from_FEX(model_path)
-    params = params_init('equipart')
+    params = params_init('cascade')
     plot_latex_formula(params, model_path)
     #print("Matrix coefficients extraction completed.")
