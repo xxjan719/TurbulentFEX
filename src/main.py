@@ -5,10 +5,10 @@ import sys
 # Add the project root directory to Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils import FEX#, ThreeDimensionFEX
-from utils.ODEParser import ODE_solver
+from utils.FEX import FEX#, ThreeDimensionFEX
+from utils.ODEParser import ODE_solver,FN_Net
 from utils.constant import *
-from utils.helper import logprint,adjust_learning_rate,weights_init
+from utils.helper import logprint,adjust_learning_rate,weights_init,process_chunk_cpu
 from utils.controller import Controller
 from utils.Sampler import Sampler
 from utils.Pool import Pool
@@ -71,7 +71,7 @@ TRAIN_EPOCHS_SECOND = args.TRAIN_EPOCHS_SECOND
 
 INTEGRATOR_METHOD = args.INTEGRATOR_METHOD
 SECOND_STAGE_OPEN_BOOL = args.SECOND_STAGE_OPEN_BOOL
-
+SHORT_SIZE = args.SHORT_SIZE
 
 torch.manual_seed(SEED)
 np.random.seed(SEED)
@@ -514,12 +514,18 @@ else:
     diff_scale = args.DIFF_SCALE
     print(f'the dataset shape is {dataset.shape}')
     
+    batch_size = 4000  # Changed from 4000 to 1000 to match the actual data size
+    x_sample = dataset[:,:,:-1].reshape(-1, 3) 
+    train_size = int(x_sample.shape[0]/10)
+    print(f'train_size is {train_size}')
     # Reshape dataset to get x_sample
-    x_sample = dataset[:,:,:-1].reshape(-1, 3)  # Shape: (1000000, 3)
+    SELECTED_ROW_INDICES = np.random.permutation(x_sample.shape[0])[:train_size]
+     # Shape: (1000000, 3)
+    X_TRAIN = x_sample[SELECTED_ROW_INDICES]
     print(f'x_sample shape is {x_sample.shape}')
     
     # Calculate z_short
-    z_short = np.zeros((x_sample.shape[0], dimension))
+    DIFFEREMCE = np.zeros((x_sample.shape[0], dimension))
     for idx in range(1, dimension+1):
         model_file = os.path.join(args.log_save_path, f'FEX_dim_{idx}.pth')
         if not os.path.exists(model_file):
@@ -530,15 +536,31 @@ else:
         integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor.to(DEVICE), integration_func=FEX_model, index=idx)
         du_pred, du_target = integrator.integrate(integration_args)
         difference = (du_target-du_pred)*diff_scale
-        z_short[:,idx-1] = np.squeeze(difference.cpu().detach().numpy())
+        DIFFEREMCE[:,idx-1] = np.squeeze(difference.cpu().detach().numpy())
     print('✅'*40)
-    print(f'z_short shape is {z_short.shape}')
+    print(f'DIFFEREMCE shape is {DIFFEREMCE.shape}')
     print(f'First few x_sample values:\n{x_sample[:5]}')
-    print(f'First few z_short values:\n{z_short[:5]}')
-    ZT = np.random.randn(x_sample.shape[0], dimension)
-    ODE_solution = np.zeros((x_sample.shape[0], dimension))
-    batch_size = 5000
-    EPOCHS_ODE_BATCH = int(x_sample.shape[0]/batch_size)
+    print(f'First few DIFFEREMCE values:\n{DIFFEREMCE[:5]}')
+    
+    it_n_index = int(np.ceil(train_size / batch_size))
+    print(f'it_n_index is {it_n_index}')
+    TRAIN_INDEX_INITIAL = process_chunk_cpu(
+        it_n_index=it_n_index,
+        it_size_x0train=batch_size,
+        short_size=SHORT_SIZE,
+        x_sample=x_sample,
+        x0_train=X_TRAIN,  # Using x_sample as both training and query data
+        train_size=train_size,
+        x_dim=dimension
+    )
+    print(f'Index search completed. Shape of indices: {TRAIN_INDEX_INITIAL.shape}')
+    X_SHORT = x_sample[TRAIN_INDEX_INITIAL]
+    Z_SHORT = DIFFEREMCE[TRAIN_INDEX_INITIAL]
+    ZT = np.random.randn(train_size, dimension)
+    ODE_solution = np.zeros((train_size, dimension))
+    
+    print('✅'*40)
+    EPOCHS_ODE_BATCH = int(min(train_size, 200000)/batch_size)  # Changed from 400000 to 200000 to be more conservative
     print(f'ZT shape is {ZT.shape}; ODE_solution shape is {ODE_solution.shape}, EPOCHS_ODE_BATCH is {EPOCHS_ODE_BATCH}')
     print('✅'*40)
     print('right now, we are going to solve the reverse ODE')
@@ -549,15 +571,116 @@ else:
         end_idx = min((BATCH_IDX+1)*batch_size,x_sample.shape[0])
         print(f'start_idx is {start_idx}; end_idx is {end_idx}')
         ZT_BATCH = torch.tensor(ZT[start_idx:end_idx]).to(DEVICE,dtype = torch.float32)
-        INPUT_BATCH = torch.tensor(x_sample[start_idx:end_idx]).to(DEVICE,dtype = torch.float32)
-        MEAN_INPUT_BATCH = torch.mean(INPUT_BATCH,axis=0,keepdims=True)
-        RESIDUAL_BATCH = torch.tensor(z_short[start_idx:end_idx]).to(DEVICE,dtype = torch.float32)
+        INPUT_BATCH = torch.tensor(X_TRAIN[start_idx:end_idx]).to(DEVICE,dtype = torch.float32)
+        MEAN_INPUT_BATCH = torch.tensor(X_SHORT[start_idx:end_idx]).to(DEVICE,dtype = torch.float32)
+        RESIDUAL_BATCH = torch.tensor(Z_SHORT[start_idx:end_idx]).to(DEVICE,dtype = torch.float32)
         ODE_solution_BATCH = ODE_solver(ZT_BATCH,MEAN_INPUT_BATCH,RESIDUAL_BATCH,INPUT_BATCH)
         ODE_solution[start_idx:end_idx,:] = ODE_solution_BATCH.to('cpu').detach().numpy()
         if BATCH_IDX % 4 == 0:
             print(f'this is {BATCH_IDX} times / overall {EPOCHS_ODE_BATCH} times')
     print(f'ODE_solution shape is {ODE_solution.shape}')
     print('✅'*40)
+    print('\nright now, we are going to save the data for second stage training')
+    if not os.path.exists(os.path.join(args.log_save_path, 'DATA_TRAINING_X_SHORT.npy')):
+        np.save(os.path.join(args.log_save_path, 'DATA_TRAINING_X_SHORT.npy'), X_SHORT)
+    if not os.path.exists(os.path.join(args.log_save_path, 'DATA_TRAINING_Z_SHORT.npy')):
+        np.save(os.path.join(args.log_save_path, 'DATA_TRAINING_Z_SHORT.npy'), Z_SHORT)
+    if not os.path.exists(os.path.join(args.log_save_path, 'DATA_TRAINING_X_TRAIN.npy')):
+        np.save(os.path.join(args.log_save_path, 'DATA_TRAINING_X_TRAIN.npy'), X_TRAIN)
+    
+
+    SECOND_STAGE_TRAINING_DATA = np.hstack((X_TRAIN,ZT,))
+    if not os.path.exists(os.path.join(args.log_save_path, 'SECOND_STAGE_TRAINING_DATA.npy')):
+        np.save(os.path.join(args.log_save_path, 'SECOND_STAGE_TRAINING_DATA.npy'), SECOND_STAGE_TRAINING_DATA)
+    if not os.path.exists(os.path.join(args.log_save_path, 'ODE_REVERSE_SOLUTION.npy')):
+        np.save(os.path.join(args.log_save_path, 'ODE_REVERSE_SOLUTION.npy'), ODE_solution)
+
+    IS_FINITE_ODESOLUTION = np.isfinite(ODE_solution) &~np.isnan(ODE_solution)
+    SECOND_STAGE_TRAINING_DATA_FILTERED = SECOND_STAGE_TRAINING_DATA[IS_FINITE_ODESOLUTION.all(axis=1)]
+    ODE_REVERSE_SOLUTION_FILTERED = ODE_solution[IS_FINITE_ODESOLUTION.all(axis=1)]
+    print(f'SECOND_STAGE_TRAINING_DATA_FILTERED shape is {SECOND_STAGE_TRAINING_DATA_FILTERED.shape[0]}')
+    INDICES = np.random.permutation(SECOND_STAGE_TRAINING_DATA_FILTERED.shape[0])
+    SECOND_STAGE_TRAINING_DATA_SHUFFLED = SECOND_STAGE_TRAINING_DATA_FILTERED[INDICES]
+    ODE_REVERSE_SOLUTION_SHUFFLED = ODE_REVERSE_SOLUTION_FILTERED[INDICES]
+    print(f'SECOND_STAGE_TRAINING_DATA_SHUFFLED shape is {SECOND_STAGE_TRAINING_DATA_SHUFFLED.shape}')
+    print(f'ODE_REVERSE_SOLUTION_SHUFFLED shape is {ODE_REVERSE_SOLUTION_SHUFFLED.shape}')
+
+    SECOND_STAGE_TRAINING_DATA_MEAN = np.mean(SECOND_STAGE_TRAINING_DATA_SHUFFLED, axis=0, keepdims=True)
+    SECOND_STAGE_TRAINING_DATA_STD = np.std(SECOND_STAGE_TRAINING_DATA_SHUFFLED, axis=0, keepdims=True)
+    SECOND_STAGE_TRAINING_DATA_NEW = (SECOND_STAGE_TRAINING_DATA_SHUFFLED - SECOND_STAGE_TRAINING_DATA_MEAN) / SECOND_STAGE_TRAINING_DATA_STD
+
+    ODE_REVERSE_SOLUTION_MEAN = np.mean(ODE_REVERSE_SOLUTION_SHUFFLED, axis=0, keepdims=True)
+    ODE_REVERSE_SOLUTION_STD = np.std(ODE_REVERSE_SOLUTION_SHUFFLED, axis=0, keepdims=True)
+    ODE_REVERSE_SOLUTION_NEW = (ODE_REVERSE_SOLUTION_SHUFFLED - ODE_REVERSE_SOLUTION_MEAN) / ODE_REVERSE_SOLUTION_STD
+
+    SECOND_STAGE_TRAINING_DATA_MEAN = torch.tensor(SECOND_STAGE_TRAINING_DATA_MEAN, dtype=torch.float32).to(DEVICE)
+    SECOND_STAGE_TRAINING_DATA_STD = torch.tensor(SECOND_STAGE_TRAINING_DATA_STD, dtype=torch.float32).to(DEVICE)
+    ODE_REVERSE_SOLUTION_MEAN = torch.tensor(ODE_REVERSE_SOLUTION_MEAN, dtype=torch.float32).to(DEVICE)
+    ODE_REVERSE_SOLUTION_STD = torch.tensor(ODE_REVERSE_SOLUTION_STD, dtype=torch.float32).to(DEVICE)
+
+    SECOND_STAGE_TRAINING_DATA_NEW = torch.tensor(SECOND_STAGE_TRAINING_DATA_NEW, dtype=torch.float32).to(DEVICE)
+    ODE_REVERSE_SOLUTION_NEW = torch.tensor(ODE_REVERSE_SOLUTION_NEW, dtype=torch.float32).to(DEVICE)
+
+    dataname2 = os.path.join(args.log_save_path, 'data_inf.pt')
+    if not os.path.exists(dataname2):
+        torch.save({'SECOND_STAGE_TRAINING_DATA_MEAN': SECOND_STAGE_TRAINING_DATA_MEAN,
+                'SECOND_STAGE_TRAINING_DATA_STD': SECOND_STAGE_TRAINING_DATA_STD,
+                'ODE_REVERSE_SOLUTION_MEAN': ODE_REVERSE_SOLUTION_MEAN,
+                'ODE_REVERSE_SOLUTION_STD': ODE_REVERSE_SOLUTION_STD,
+                'diff_scale': diff_scale}, dataname2)
+        print(f'data saved to {dataname2}')
+    else:
+        print(f'data already exists in {dataname2}')
+    
+    print('✅'*40)
+    print('SECOND STAGE TRAINING DATA IS SAVED')
+    print(f'second stage mean is {SECOND_STAGE_TRAINING_DATA_MEAN}, std is {SECOND_STAGE_TRAINING_DATA_STD}')
+    print(f'ODE reverse solution mean is {ODE_REVERSE_SOLUTION_MEAN}, std is {ODE_REVERSE_SOLUTION_STD}')
+    print('✅'*40)
+
+    NTrain = int(SECOND_STAGE_TRAINING_DATA_SHUFFLED.shape[0]*0.8)
+    NValid = int(SECOND_STAGE_TRAINING_DATA_SHUFFLED.shape[0]*0.2)
+    SECOND_STAGE_TRAINING_DATA_NORMAL = SECOND_STAGE_TRAINING_DATA_NEW[:NTrain,:]
+    ODE_REVERSE_SOLUTION_NORMAL = ODE_REVERSE_SOLUTION_NEW[:NTrain,:]
+    SECOND_STAGE_TRAINING_DATA_VALID = SECOND_STAGE_TRAINING_DATA_NEW[NTrain:,:]
+    ODE_REVERSE_SOLUTION_VALID = ODE_REVERSE_SOLUTION_NEW[NTrain:,:]
+
+    FN = FN_Net(dimension*2,dimension,50).to(DEVICE)
+    FN.zero_grad()
+    optimizer = torch.optim.Adam(FN.parameters(),lr = args.NN_SOLVER_LR,weight_decay = 1e-6)
+    criterion = torch.nn.MSELoss()
+    best_valid_err = 5.0
+    for j in range(args.NN_SOLVER_EPOCHS):
+        optimizer.zero_grad()
+        pred = FN(SECOND_STAGE_TRAINING_DATA_NORMAL)
+        loss = criterion(pred,ODE_REVERSE_SOLUTION_NORMAL)
+        loss.backward()
+        optimizer.step()
+        pred1 = FN(SECOND_STAGE_TRAINING_DATA_VALID)
+        valid_loss = criterion(pred1,ODE_REVERSE_SOLUTION_VALID)
+        if valid_loss < best_valid_err:
+            FN.update_best()
+            best_valid_err = valid_loss
+            print(f'best valid loss is {best_valid_err} at iteration {j}')
+    FN.final_update()
+    torch.save(FN.state_dict(), os.path.join(args.log_save_path, 'FN_Net.pth'))
+    print('FN_Net saved to same folder')
+    print('✅'*40)
+    print('SECOND STAGE TRAINING IS COMPLETED')
+    print('✅'*40)
+    print('NOW, you can run the prediction file.')
+
+
+    
+
+
+
+    
+    
+    
+    
+
+
     
     
     

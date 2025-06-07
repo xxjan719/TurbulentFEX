@@ -3,6 +3,7 @@ import logging
 import math
 import matplotlib.pyplot as plt
 import torch
+import faiss
 def Buu(B,u,v):
     '''Compute the Buu operator terms for the triad model.'''
     if len(u.shape) == 1:
@@ -67,3 +68,30 @@ def weights_init(m):
         torch.nn.init.kaiming_normal_(m.weight)
         if m.bias is not None:
             torch.nn.init.zeros_(m.bias)
+
+
+
+
+
+
+def process_chunk_cpu(it_n_index, it_size_x0train, short_size, x_sample, x0_train, train_size, x_dim):
+    x0_train_index_initial = np.empty((train_size, short_size), dtype=int)
+    # Create CPU index
+    index = faiss.IndexFlatL2(x_dim)  # Create a FAISS index for exact searches
+    index.add(x_sample)  # Add x_sample to the index
+        
+    for jj in range(it_n_index):
+        start_idx = jj * it_size_x0train
+        end_idx = min((jj + 1) * it_size_x0train, train_size)
+        x0_train_chunk = x0_train[start_idx:end_idx]
+
+            # Perform the search on CPU
+        _, index_initial = index.search(x0_train_chunk, short_size)
+        x0_train_index_initial[start_idx:end_idx,:] = index_initial 
+
+        if jj % 500 == 0:
+            print('find index iteration:', jj, it_size_x0train)
+        
+        # Cleanup resources
+    del index
+    return x0_train_index_initial

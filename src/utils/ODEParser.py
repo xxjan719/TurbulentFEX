@@ -1,5 +1,5 @@
 import torch
-
+import torch.nn as nn
 def cond_alpha(t,dt): # in the training paper: it should be related to  b(\tau) in formula (3.1)
     return 1-t+dt
 
@@ -23,7 +23,7 @@ def g(t,dt):
 
 
 def ODE_solver(zt,x_sample,z_sample,x0_test,
-               ODESOLVER_TIME_STEPS:int=10000):
+               ODESOLVER_TIME_STEPS:int=1000):
     t_vec = torch.linspace(1.0,0.0,ODESOLVER_TIME_STEPS+1)
     log_weight_likelihood = -1.0* torch.sum( (x0_test[:,None,:]-x_sample)**2/2 , axis = 2, keepdims= False)
     weight_likelihood =torch.exp(log_weight_likelihood)
@@ -44,3 +44,47 @@ def ODE_solver(zt,x_sample,z_sample,x0_test,
         
         zt= zt - (f(t,dt)*zt-0.5*g2(t, dt)*score) *dt
     return zt
+
+
+class FN_Net(nn.Module):
+    
+    def __init__(self, input_dim, output_dim, hid_size):
+        super(FN_Net, self).__init__()
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.hid_size = hid_size
+        
+        self.input = nn.Linear(self.input_dim,self.hid_size)
+        self.fc1 = nn.Linear(self.hid_size,self.hid_size)
+        self.output = nn.Linear(self.hid_size,self.output_dim)
+
+        self.best_input_weight = torch.clone(self.input.weight.data)
+        self.best_input_bias = torch.clone(self.input.bias.data)
+        self.best_fc1_weight = torch.clone(self.fc1.weight.data)
+        self.best_fc1_bias = torch.clone(self.fc1.bias.data)
+        self.best_output_weight = torch.clone(self.output.weight.data)
+        self.best_output_bias = torch.clone(self.output.bias.data)
+    
+    def forward(self,x):
+        x = torch.tanh(self.input(x))
+        x = torch.tanh(self.fc1(x))
+        x = self.output(x)
+        return x
+
+    def update_best(self):
+
+        self.best_input_weight = torch.clone(self.input.weight.data)
+        self.best_input_bias = torch.clone(self.input.bias.data)
+        self.best_fc1_weight = torch.clone(self.fc1.weight.data)
+        self.best_fc1_bias = torch.clone(self.fc1.bias.data)
+        self.best_output_weight = torch.clone(self.output.weight.data)
+        self.best_output_bias = torch.clone(self.output.bias.data)
+
+    def final_update(self):
+
+        self.input.weight.data = self.best_input_weight 
+        self.input.bias.data = self.best_input_bias
+        self.fc1.weight.data = self.best_fc1_weight
+        self.fc1.bias.data = self.best_fc1_bias
+        self.output.weight.data = self.best_output_weight
+        self.output.bias.data = self.best_output_bias
