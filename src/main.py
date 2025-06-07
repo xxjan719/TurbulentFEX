@@ -315,15 +315,13 @@ if SECOND_STAGE_OPEN_BOOL == False:
                             
                             # If this candidate has the best loss or is close to it (within 10%)
                             if current_loss <= best_loss:
-                                # Check if we already have this expression
-                                if not any(c.expression == current_expr for c in best_candidates_pool):
-                                    
-                                    best_candidates_pool.append(candidate_)
-                                    logprint(f"\nAdded to best candidates pool:")
-                                    logprint(f"Loss: {current_loss:.6f}")
-                                    logprint(f"Expression: {current_expr}")
-                                    logprint(f"Operator sequence: {candidate_.action}")
-                                    logprint("-" * 80)
+                                # Check if we already have this expression    
+                                best_candidates_pool.append(candidate_)
+                                logprint(f"\nAdded to best candidates pool:")
+                                logprint(f"Loss: {current_loss:.6f}")
+                                logprint(f"Expression: {current_expr}")
+                                logprint(f"Operator sequence: {candidate_.action}")
+                                logprint("-" * 80)
 
                         # Print current best candidates pool
                         logprint(f'\nCurrent Best Candidates Pool (Size: {len(best_candidates_pool)})'.center(60, '='))
