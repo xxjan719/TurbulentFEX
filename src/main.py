@@ -6,7 +6,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils import FEX#, ThreeDimensionFEX
-from utils.plotting import plot_stats, plot_third_order_moments,plot_deviation_subplots
+from utils.ODEParser import ODE_solver
 from utils.constant import *
 from utils.helper import logprint,adjust_learning_rate,weights_init
 from utils.controller import Controller
@@ -503,22 +503,64 @@ if SECOND_STAGE_OPEN_BOOL == False:
                     np.save(optimal_idx_path,  op_seqs_all[dim] )
                     print(f"Model for dimension {dim} saved to {save_path}")
 else:
-    if not os.path.exists(os.path.join(args.log_save_path, 'op_seqs_all.npy')):
-        raise FileNotFoundError(f"op_seqs_all.npy not found in {args.log_save_path}, you should run the FEX stage first.")
+    if not os.path.exists(os.path.join(args.log_save_path, 'optimal_idx_1.npy')) and not os.path.exists(os.path.join(args.log_save_path, 'optimal_idx_2.npy')) and not os.path.exists(os.path.join(args.log_save_path, 'optimal_idx_3.npy')):
+        raise FileNotFoundError(f"optimal_idx_1.npy, optimal_idx_2.npy, optimal_idx_3.npy not found in {args.log_save_path}, you should run the FEX stage first.")
     
-    op_seq_file = np.load(os.path.join(args.log_save_path, 'op_seqs_all.npy'), allow_pickle=True).item()
+    # Load the optimal operator sequences
+    op_seq_file_1 = np.load(os.path.join(args.log_save_path, 'optimal_idx_1.npy'), allow_pickle=True)
+    op_seq_file_2 = np.load(os.path.join(args.log_save_path, 'optimal_idx_2.npy'), allow_pickle=True)
+    op_seq_file_3 = np.load(os.path.join(args.log_save_path, 'optimal_idx_3.npy'), allow_pickle=True)
+    op_seqs_all = [op_seq_file_1, op_seq_file_2, op_seq_file_3]
     diff_scale = args.DIFF_SCALE
+    print(f'the dataset shape is {dataset.shape}')
+    
+    # Reshape dataset to get x_sample
+    x_sample = dataset[:,:,:-1].reshape(-1, 3)  # Shape: (1000000, 3)
+    print(f'x_sample shape is {x_sample.shape}')
+    
+    # Calculate z_short
+    z_short = np.zeros((x_sample.shape[0], dimension))
     for idx in range(1, dimension+1):
         model_file = os.path.join(args.log_save_path, f'FEX_dim_{idx}.pth')
         if not os.path.exists(model_file):
             raise FileNotFoundError(f"FEX_dim_{idx}.pth not found in {args.log_save_path}, you should run the FEX stage first.")
-        op_seq = op_seq_file[idx]
+        op_seq = op_seqs_all[idx-1]
         FEX_model = FEX(op_seq, dim=dimension).to(DEVICE)
         FEX_model.load_state_dict(torch.load(str(model_file), weights_only=True))
         integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor.to(DEVICE), integration_func=FEX_model, index=idx)
-        du_pred,du_target = integrator.integrate(integration_args)
+        du_pred, du_target = integrator.integrate(integration_args)
         difference = (du_target-du_pred)*diff_scale
-        print(f'the difference is {difference}')
+        z_short[:,idx-1] = np.squeeze(difference.cpu().detach().numpy())
+    print('✅'*40)
+    print(f'z_short shape is {z_short.shape}')
+    print(f'First few x_sample values:\n{x_sample[:5]}')
+    print(f'First few z_short values:\n{z_short[:5]}')
+    ZT = np.random.randn(x_sample.shape[0], dimension)
+    ODE_solution = np.zeros((x_sample.shape[0], dimension))
+    batch_size = 5000
+    EPOCHS_ODE_BATCH = int(x_sample.shape[0]/batch_size)
+    print(f'ZT shape is {ZT.shape}; ODE_solution shape is {ODE_solution.shape}, EPOCHS_ODE_BATCH is {EPOCHS_ODE_BATCH}')
+    print('✅'*40)
+    print('right now, we are going to solve the reverse ODE')
+    
+    torch.cuda.empty_cache()
+    for BATCH_IDX in range(EPOCHS_ODE_BATCH):
+        start_idx = BATCH_IDX*batch_size
+        end_idx = min((BATCH_IDX+1)*batch_size,x_sample.shape[0])
+        print(f'start_idx is {start_idx}; end_idx is {end_idx}')
+        ZT_BATCH = torch.tensor(ZT[start_idx:end_idx]).to(DEVICE,dtype = torch.float32)
+        INPUT_BATCH = torch.tensor(x_sample[start_idx:end_idx]).to(DEVICE,dtype = torch.float32)
+        MEAN_INPUT_BATCH = torch.mean(INPUT_BATCH,axis=0,keepdims=True)
+        RESIDUAL_BATCH = torch.tensor(z_short[start_idx:end_idx]).to(DEVICE,dtype = torch.float32)
+        ODE_solution_BATCH = ODE_solver(ZT_BATCH,MEAN_INPUT_BATCH,RESIDUAL_BATCH,INPUT_BATCH)
+        ODE_solution[start_idx:end_idx,:] = ODE_solution_BATCH.to('cpu').detach().numpy()
+        if BATCH_IDX % 4 == 0:
+            print(f'this is {BATCH_IDX} times / overall {EPOCHS_ODE_BATCH} times')
+    print(f'ODE_solution shape is {ODE_solution.shape}')
+    print('✅'*40)
+    
+    
+    
 
 
     
