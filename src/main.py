@@ -161,6 +161,11 @@ if SECOND_STAGE_OPEN_BOOL == False:
                         logging.FileHandler(log_file, encoding='utf-8'),  
                         logging.StreamHandler(sys.stdout)])
 
+                    # Initialize best candidates pool
+                    best_candidates_pool = []
+                    best_loss = float('inf')
+                    MAX_BEST_CANDIDATES = 20
+
                     # dimension 1 need 10 EXPLORATION_ITERS
                     for explore_idx in range(EXPLORATION_ITERS):
                         logprint(f' Exploration index: {explore_idx} '.center(60, '='))
@@ -298,32 +303,70 @@ if SECOND_STAGE_OPEN_BOOL == False:
                             logprint(f"Operator sequence: {candidate_.action}")
                             logprint(f"Expression: {candidate_.expression}")
                             logprint("-" * 80)
+
+                            # Update best candidates pool
+                            current_loss = candidate_.error
+                            current_expr = candidate_.expression
+                            
+                            # Check if this is a new best loss
+                            if current_loss < best_loss:
+                                best_loss = current_loss
+                                best_candidates_pool = []  # Clear pool for new best loss
+                            
+                            # If this candidate has the best loss or is close to it (within 10%)
+                            if current_loss <= best_loss * 1.1:
+                                # Check if we already have this expression
+                                if not any(c.expression == current_expr for c in best_candidates_pool):
+                                    if len(best_candidates_pool) < MAX_BEST_CANDIDATES:
+                                        best_candidates_pool.append(candidate_)
+                                        logprint(f"\nAdded to best candidates pool:")
+                                        logprint(f"Loss: {current_loss:.6f}")
+                                        logprint(f"Expression: {current_expr}")
+                                        logprint(f"Operator sequence: {candidate_.action}")
+                                        logprint("-" * 80)
+
+                        # Print current best candidates pool
+                        logprint(f'\nCurrent Best Candidates Pool (Size: {len(best_candidates_pool)})'.center(60, '='))
+                        for idx, candidate_ in enumerate(best_candidates_pool):
+                            logprint(f"\nBest Candidate {idx + 1}:")
+                            logprint(f"Loss: {candidate_.error:.6f}")
+                            logprint(f"Operator sequence: {candidate_.action}")
+                            logprint(f"Expression: {candidate_.expression}")
+                            logprint("-" * 80)
                         
-                    # Ask for user input
+                    # Ask for user input from best candidates pool
+                    logprint("\nSelect from the best candidates pool:")
+                    for idx, candidate_ in enumerate(best_candidates_pool):
+                        logprint(f"\nCandidate {idx + 1}:")
+                        logprint(f"Loss: {candidate_.error:.6f}")
+                        logprint(f"Operator sequence: {candidate_.action}")
+                        logprint(f"Expression: {candidate_.expression}")
+                        logprint("-" * 80)
+                    
                     choice = input("\nEnter the candidate number you want to use for second stage training (1, 2, 3, etc.), or 'q' to quit: ")
                     if choice.lower() != 'q':
                         try:
                             choice_idx = int(choice) - 1
-                            if 0 <= choice_idx < len(pool):
-                                best_candidate = list(pool)[choice_idx]
+                            if 0 <= choice_idx < len(best_candidates_pool):
+                                best_candidate = best_candidates_pool[choice_idx]
                                 optimal_idx = best_candidate.action
                                 print(f'\nSelected candidate {choice}:')
                                 print(f'Operator sequence: {optimal_idx}')
                                 print(f'Expression: {best_candidate.expression}')
                             else:
                                 print("Invalid choice. Using best candidate by loss.")
-                                best_candidate = min(pool, key=lambda c: c.error)
+                                best_candidate = min(best_candidates_pool, key=lambda c: c.error)
                                 optimal_idx = best_candidate.action
                         except ValueError:
                             print("Invalid input. Using best candidate by loss.")
-                            best_candidate = min(pool, key=lambda c: c.error)
+                            best_candidate = min(best_candidates_pool, key=lambda c: c.error)
                             optimal_idx = best_candidate.action
                     else:
                         print("Exiting without second stage training.")
                         sys.exit(0)
 
                     logprint('✅'*40)
-                    best_candidate = min(pool, key=lambda c: c.error)
+                    best_candidate = min(best_candidates_pool, key=lambda c: c.error)
                     optimal_idx = best_candidate.action
                     logprint(f'Optimal operator sequence: {optimal_idx}')
 
@@ -364,9 +407,9 @@ if SECOND_STAGE_OPEN_BOOL == False:
                     op_seqs = torch.tensor([0, 2, 1, 2, 2, 0, 0, 2, 2, 1, 1, 2], device=DEVICE)
                     
                 elif dim == 2:
-                    op_seqs = torch.tensor([1, 0, 2, 2, 0, 2, 1, 2, 2, 1, 0, 2], device=DEVICE)
+                    op_seqs = torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
                 elif dim == 3:
-                    op_seqs = torch.tensor([2, 1, 1, 2, 0, 1, 2, 2, 1, 0, 1, 2], device=DEVICE)
+                    op_seqs = torch.tensor([0, 0, 2, 2, 2, 2, 2, 2, 5, 0, 7, 0], device=DEVICE)
                 op_seqs_all[dim] = op_seqs
 
             print(f'the op_seqs_all is {op_seqs_all}')
@@ -456,9 +499,11 @@ if SECOND_STAGE_OPEN_BOOL == False:
                             print(f"Expression: {model.expression_visualize()}")
                             
                     # Save individual model after training
-                    # save_path = os.path.join(args.log_save_path, f'FEX_dim_{dim}.pth')
-                    # torch.save(model.state_dict(), save_path)
-                    # print(f"Model for dimension {dim} saved to {save_path}")
+                    save_path = os.path.join(args.log_save_path, f'FEX_dim_{dim}.pth')
+                    torch.save(model.state_dict(), save_path)
+                    optimal_idx_path = os.path.join(args.log_save_path, f'optimal_idx_{dim}.npy')
+                    np.save(optimal_idx_path,  op_seqs_all[dim] )
+                    print(f"Model for dimension {dim} saved to {save_path}")
 else:
     if not os.path.exists(os.path.join(args.log_save_path, 'op_seqs_all.npy')):
         raise FileNotFoundError(f"op_seqs_all.npy not found in {args.log_save_path}, you should run the FEX stage first.")
@@ -492,7 +537,7 @@ else:
 
 
 # [2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2] dimension 2  11 epochs
-
+#  [0, 0, 2, 2, 2, 2, 2, 2, 5, 0, 7, 0] dimension 3 14 epochs
 # Selected candidate 4:
 # Operator sequence: [8, 2, 2, 2, 5, 2, 1, 0, 2, 2, 7, 2]
 

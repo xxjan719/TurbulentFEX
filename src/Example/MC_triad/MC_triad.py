@@ -1,5 +1,6 @@
 import sys
 import os
+os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
 import numpy as np
 import random
 import torch
@@ -253,8 +254,10 @@ def get_matrix_coefficients_from_FEX(path):
             - B: 3-element vector for quadratic terms (x2x3,x1x3,x1x2)
     """
     path = Path(path)
-    # Load operator sequences with allow_pickle=True
-    op_seq_file = np.load(os.path.join(path, 'op_seqs_all.npy'), allow_pickle=True).item()
+    # Load operator sequences
+    op_seq_file_1 = np.load(os.path.join(path, 'optimal_idx_1.npy'))
+    op_seq_file_2 = np.load(os.path.join(path, 'optimal_idx_2.npy'))
+    op_seq_file_3 = np.load(os.path.join(path, 'optimal_idx_3.npy'))
     
     # Initialize matrices
     L = np.zeros((3, 3))  # Linear coefficients
@@ -275,9 +278,16 @@ def get_matrix_coefficients_from_FEX(path):
         model_file = path / f'FEX_dim_{dim}.pth'
         if model_file.exists():
             print(f"\nProcessing dimension {dim}:")
-            op_seq = op_seq_file[dim]
+            if dim == 1:
+                op_seq = op_seq_file_1
+            elif dim == 2:
+                op_seq = op_seq_file_2
+            elif dim == 3:
+                op_seq = op_seq_file_3
+            else:
+                raise ValueError(f"Unknown dimension: {dim}")
             # Create FEX model with dim=3 since all models were trained with 3D data
-            FEX_model = FEX(op_seq, dim=3)
+            FEX_model = FEX(torch.tensor(op_seq), dim=3)
             FEX_model.load_state_dict(torch.load(str(model_file), weights_only=True))
             expr = FEX_model.expression_visualize_simplified()
             print(f"Expression for dimension {dim}:")
