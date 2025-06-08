@@ -433,5 +433,6 @@ if __name__ == "__main__":
     # Get matrix coefficients for each dimension
     # get_matrix_coefficients_from_FEX(model_path)
     params = params_init('equipart')
-    plot_latex_formula(params, model_path)
-    #print("Matrix coefficients extraction completed.")
+    # plot_latex_formula(params, model_path)
+    # #print("Matrix coefficients extraction completed.")
+    plot_drift_diffusion_prepare_dataset_ground_truth(params,10000)
