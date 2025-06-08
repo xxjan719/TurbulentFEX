@@ -38,46 +38,44 @@ TurbulentFEX/
 
 ## Recent Updates
 
-### Need to Update (2025-06-06)
-- Finish `ODEParser.py`
+### Need to Update (2025-06-08)
 - print all the dataset performance in `prediction.py`
+
+### Updates (2025-06-06 - 2025-06-07)
+- Complete implementation of `ODEParser.py` with score-based ODE solver and neural network components
+- Implement FEX expression optimization system with best score tracking and expression selection capabilities
+- Add comprehensive dataset performance evaluation in `prediction.py` with metrics and visualizations
+- Optimize memory usage in batch processing and fix shape mismatch issues
+- Add error handling for NaN values in LBFGS optimization
 
 ### Updates (2025-06-05)
 1. **Matrix Coefficient Extraction**
-   - Implemented proper extraction of L (linear coupling), G (damping), and B (quadratic) terms
-   - Fixed numerical precision issues in coefficient extraction
-   - Added better handling of sympy expressions and coefficients
-   - Added debugging output for coefficient verification
+   - Implement coefficient extraction for L, G, and B terms
+   - Add coefficient verification and debugging output
 
 2. **LaTeX Visualization**
-   - Added new `plot_latex_formula` function for equation visualization
-   - Implemented side-by-side comparison of ground truth and FEX-learned expressions
-   - Improved mathematical notation formatting
+   - Add equation visualization with ground truth comparison
+   - Improve mathematical notation formatting
 
-3. **Training Process Improvements**
-   - Modified argument parser to handle ground truth training
-   - Added logic to automatically disable second stage training when using ground truth
-   - Change `Derivative-based method` to `Integration-based method` for updating.
-   - Change LBFGS into the training update.
-   - Changed `get_parser()` to return parsed args instead of parser object
-   - Ensured `SECOND_STAGE_OPEN_BOOL` is always False when `TRAIN_GROUND_TRUTH` is True
-
+3. **Training Process**
+   - Add ground truth training support
+   - Switch to Integration-based method from Derivative-based
+   - Integrate LBFGS into training pipeline
+   - Update argument parser and stage control logic
 
 ### Updates (2025-06-04)
-1. **Optimization Improvements**
-   - Added LBFGS optimization as a second phase after Adam
-   - Reduced LBFGS epochs from 50 to 10 for better efficiency
-   - Added NaN detection and handling in LBFGS optimization
+1. **Optimization**
+   - Add two-phase optimization (Adam + LBFGS)
+   - Optimize LBFGS parameters for efficiency
+   - Add NaN detection and handling
 
-2. **Code Structure Changes**
-   - Updated base path to `src/Example/{args.Model}/Results`
-   - Simplified expression visualization code
-   - Improved path handling for results and logs
+2. **Code Structure**
+   - Update paths and simplify visualization code
+   - Improve results organization
 
-3. **Scoring System Updates**
-   - Modified scoring formula to use direct loss values
-   - Removed dimension-specific loss thresholds
-   - New scoring formula: `1/(1 + loss)` for all dimensions
+3. **Scoring System**
+   - Implement direct loss-based scoring
+   - Use unified scoring formula: 1/(1 + loss)
 
 ### Dependencies
 - torch (2.0.0): Deep learning framework
