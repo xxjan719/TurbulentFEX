@@ -658,7 +658,7 @@ else:
     SECOND_STAGE_TRAINING_DATA_VALID = SECOND_STAGE_TRAINING_DATA_NEW[NTrain:,:]
     ODE_REVERSE_SOLUTION_VALID = ODE_REVERSE_SOLUTION_NEW[NTrain:,:]
 
-    FN = FN_Net(dimension*2,dimension,50).to(DEVICE)
+    FN = FN_Net(dimension,dimension,50).to(DEVICE)
     FN.zero_grad()
     optimizer = torch.optim.Adam(FN.parameters(),lr = args.NN_SOLVER_LR,weight_decay = 1e-6)
     criterion = torch.nn.MSELoss()

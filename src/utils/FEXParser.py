@@ -82,6 +82,45 @@ class MultiDimensionFEX(nn.Module):
         return coeffs_dict
 
 
+class MultiDimFEXLoader(nn.Module):
+    def __init__(self, model_path: str, dimension: int, device='cpu'):
+        super().__init__()
+        self.model_path = model_path
+        self.dimension = dimension
+        self.device = device
+
+        # Load operator sequences
+        self.op_seqs = {}
+        for idx in range(1, dimension + 1):
+            op_file = os.path.join(model_path, f'optimal_idx_{idx}.npy')
+            if not os.path.exists(op_file):
+                raise FileNotFoundError(f"Missing operator index file: {op_file}")
+            self.op_seqs[idx] = torch.tensor(np.load(op_file, allow_pickle=True), dtype=torch.long)
+
+        # Build FEX models
+        self.models = nn.ModuleDict()
+        for idx, op_seq in self.op_seqs.items():
+            model = FEX(op_seq, dim=dimension)
+            weight_file = os.path.join(model_path, f'FEX_dim_{idx}.pth')
+            if not os.path.exists(weight_file):
+                raise FileNotFoundError(f"Missing model weight file: {weight_file}")
+            model.load_state_dict(torch.load(weight_file, map_location=device))
+            self.models[str(idx)] = model.to(device)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass over all dimensions"""
+        if not isinstance(x, torch.Tensor):
+            raise TypeError("Input must be a torch.Tensor")
+        x = x.to(self.device)
+
+        outputs = []
+        for idx in range(1, self.dimension + 1):
+            out = self.models[str(idx)](x)
+            outputs.append(out.squeeze(-1))  # remove last dim
+
+        return torch.stack(outputs, dim=1)
+
+
 if __name__ == "__main__":
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     op_seqs = {

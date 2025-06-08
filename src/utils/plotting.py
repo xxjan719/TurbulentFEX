@@ -3,8 +3,13 @@ import matplotlib as mpl
 import numpy as np
 
 def set_figure_position(x=100, y=100, width=800, height=600):
-    """Set the position and size of the current figure window."""
-    plt.get_current_fig_manager().window.setGeometry(x, y, width, height)
+    """Set the position and size of the current figure window (only if supported)."""
+    try:
+        manager = plt.get_current_fig_manager()
+        if hasattr(manager, 'window'):
+            manager.window.setGeometry(x, y, width, height)
+    except Exception as e:
+        print(f"Figure positioning skipped: {e}")
 
 def plot_stats(TT_MC, mean_MC, cov_MC, M3_MC, Ene_MC, Ene_dyn, save_path=None):
     # Set publication style
@@ -41,51 +46,64 @@ def plot_stats(TT_MC, mean_MC, cov_MC, M3_MC, Ene_MC, Ene_dyn, save_path=None):
 
     # Mean
     for i, key in enumerate(['u1', 'u2', 'u3']):
-        axs[0].scatter(TT_MC, mean_MC[i], s=9, color=line_colors[key], label=fr'$\langle u_{i+1} \rangle$')
+        mask = mean_MC[i] != 0
+        axs[0].scatter(TT_MC[mask], mean_MC[i][mask], s=9, color=line_colors[key], label=fr'$\langle u_{i+1} \rangle$')
     axs[0].set_xlabel('Time')
     axs[0].set_ylabel('Mean')
     axs[0].legend(loc='upper right', frameon=False)
 
     # Variance
     for i, key in enumerate(['u1', 'u2', 'u3']):
-        axs[1].scatter(TT_MC, cov_MC[i, i], s=9, color=line_colors[key], label=fr'$\mathrm{{Var}}(u_{i+1})$')
-    axs[1].scatter(TT_MC, np.sum(std_MC**2, axis=0), s=9, color=line_colors['total'], label='Total Var')
+        mask = cov_MC[i, i] != 0
+        axs[1].scatter(TT_MC[mask], cov_MC[i, i][mask], s=9, color=line_colors[key], label=fr'$\mathrm{{Var}}(u_{i+1})$')
+    total_var = np.sum(std_MC**2, axis=0)
+    mask_total = total_var != 0
+    axs[1].scatter(TT_MC[mask_total], total_var[mask_total], s=9, color=line_colors['total'], label='Total Var')
     axs[1].set_xlabel('Time')
     axs[1].set_ylabel('Variance')
     axs[1].legend(loc='upper left', frameon=False)
 
     # Cross-Covariance
-    axs[2].scatter(TT_MC, cov_MC[0, 1], s=9, color=line_colors['extra1'], label=r'$\mathrm{Cov}(u_1, u_2)$')
-    axs[2].scatter(TT_MC, cov_MC[0, 2], s=9, color=line_colors['extra2'], label=r'$\mathrm{Cov}(u_1, u_3)$')
-    axs[2].scatter(TT_MC, cov_MC[1, 2], s=9, color=line_colors['extra3'], label=r'$\mathrm{Cov}(u_2, u_3)$')
+    mask_01 = cov_MC[0, 1] != 0
+    mask_02 = cov_MC[0, 2] != 0
+    mask_12 = cov_MC[1, 2] != 0
+    axs[2].scatter(TT_MC[mask_01], cov_MC[0, 1][mask_01], s=9, color=line_colors['extra1'], label=r'$\mathrm{Cov}(u_1, u_2)$')
+    axs[2].scatter(TT_MC[mask_02], cov_MC[0, 2][mask_02], s=9, color=line_colors['extra2'], label=r'$\mathrm{Cov}(u_1, u_3)$')
+    axs[2].scatter(TT_MC[mask_12], cov_MC[1, 2][mask_12], s=9, color=line_colors['extra3'], label=r'$\mathrm{Cov}(u_2, u_3)$')
     axs[2].set_xlabel('Time')
     axs[2].set_ylabel('Cross-Covariance')
     axs[2].legend(loc='lower left', frameon=False)
 
     # 3rd-Order Moments
-    axs[3].scatter(TT_MC, M3_MC[0, 1, 2], s=9, color=line_colors['total'], label=r'$\langle M_{123} \rangle$')
-    axs[3].scatter(TT_MC, M3_MC[0, 1, 1], s=9, color=line_colors['u1'], label=r'$\langle M_{122} \rangle$')
-    axs[3].scatter(TT_MC, M3_MC[0, 2, 2], s=9, color=line_colors['u2'], label=r'$\langle M_{133} \rangle$')
-    axs[3].scatter(TT_MC, M3_MC[1, 1, 2], s=9, color=line_colors['u3'], label=r'$\langle M_{223} \rangle$')
+    mask_012 = M3_MC[0, 1, 2] != 0
+    mask_011 = M3_MC[0, 1, 1] != 0
+    mask_022 = M3_MC[0, 2, 2] != 0
+    mask_112 = M3_MC[1, 1, 2] != 0
+    axs[3].scatter(TT_MC[mask_012], M3_MC[0, 1, 2][mask_012], s=9, color=line_colors['total'], label=r'$\langle M_{123} \rangle$')
+    axs[3].scatter(TT_MC[mask_011], M3_MC[0, 1, 1][mask_011], s=9, color=line_colors['u1'], label=r'$\langle M_{122} \rangle$')
+    axs[3].scatter(TT_MC[mask_022], M3_MC[0, 2, 2][mask_022], s=9, color=line_colors['u2'], label=r'$\langle M_{133} \rangle$')
+    axs[3].scatter(TT_MC[mask_112], M3_MC[1, 1, 2][mask_112], s=9, color=line_colors['u3'], label=r'$\langle M_{223} \rangle$')
     axs[3].set_xlabel('Time')
     axs[3].set_ylabel('3rd Moment')
     axs[3].legend(loc='upper right', frameon=False)
 
     # Energy (Truth)
-    axs[4].scatter(TT_MC, Ene_MC[0], s=9, color=line_colors['total'], label='Total')
-    axs[4].scatter(TT_MC, Ene_MC[1], s=9, color=line_colors['u1'], label='Mode 1')
-    axs[4].scatter(TT_MC, Ene_MC[2], s=9, color=line_colors['u2'], label='Mode 2')
-    axs[4].scatter(TT_MC, Ene_MC[3], s=9, color=line_colors['u3'], label='Mode 3')
+    for i, key in enumerate(['total', 'u1', 'u2', 'u3']):
+        mask = Ene_MC[i] != 0
+        axs[4].scatter(TT_MC[mask], Ene_MC[i][mask], s=9, color=line_colors[key], label=['Total', 'Mode 1', 'Mode 2', 'Mode 3'][i])
     axs[4].set_xlabel('Time')
     axs[4].set_ylabel('Energy (Truth)')
     axs[4].legend(loc='upper left', frameon=False)
 
     # Energy (Dynamics)
-    axs[5].scatter(TT_MC, Ene_MC[0],  s=9, color=line_colors['total'], label='Truth')
-    axs[5].scatter(TT_MC, Ene_dyn[0], s=9, color=line_colors['extra1'], label='Full Eqn.')
-    axs[5].scatter(TT_MC, Ene_dyn[1], s=9, color=line_colors['extra2'], label='Lower Bound')
-    axs[5].scatter(TT_MC, Ene_dyn[2], s=9, color=line_colors['extra3'], label='Upper Bound')
-    axs[5].scatter(TT_MC, Ene_dyn[3], s=9, color=line_colors['gray'], label='Mean')
+    ene_dyn_labels = ['Truth', 'Full Eqn.', 'Lower Bound', 'Upper Bound', 'Mean']
+    ene_dyn_keys = ['total', 'extra1', 'extra2', 'extra3', 'gray']
+
+    for i in range(Ene_dyn.shape[0]):
+        key = ene_dyn_keys[i]
+        label = ene_dyn_labels[i]
+        mask = Ene_dyn[i] != 0
+        axs[5].scatter(TT_MC[mask], Ene_dyn[i][mask], s=9, color=line_colors[key], label=label)
     axs[5].set_xlabel('Time')
     axs[5].set_ylabel('Energy (Dynamics)')
     axs[5].legend(loc='lower right', frameon=False)
@@ -104,10 +122,14 @@ def plot_third_order_moments(TT_MC, M3_MC, save_path = None):
 
     plt.figure(figsize=(8, 5))
     set_figure_position(x=100, y=100, width=800, height=500)  # Set figure position
-    plt.scatter(TT_MC, M112,s=9, label=r'$\langle M_{112} \rangle$')
-    plt.scatter(TT_MC, M113,s=9, label=r'$\langle M_{113} \rangle$')
-    plt.scatter(TT_MC, M233, s=9,label=r'$\langle M_{233} \rangle$')
-    plt.scatter(TT_MC, M111, s=9,label=r'$\langle M_{111} \rangle$')
+    mask_112 = M112 != 0
+    mask_113 = M113 != 0
+    mask_233 = M233 != 0
+    mask_111 = M111 != 0
+    plt.scatter(TT_MC[mask_112], M112[mask_112],s=9, label=r'$\langle M_{112} \rangle$')
+    plt.scatter(TT_MC[mask_113], M113[mask_113],s=9, label=r'$\langle M_{113} \rangle$')
+    plt.scatter(TT_MC[mask_233], M233[mask_233], s=9,label=r'$\langle M_{233} \rangle$')
+    plt.scatter(TT_MC[mask_111], M111[mask_111], s=9,label=r'$\langle M_{111} \rangle$')
 
     plt.xlabel('Time', fontsize=14)
     plt.ylabel('3rd Order Central Moments', fontsize=14)
@@ -130,11 +152,15 @@ def plot_deviation_subplots(TT_MC, cov_MC, M3_MC_norm,save_path=None):
     fig, axs = plt.subplots(1, 3, figsize=(18, 5))
     set_figure_position(x=100, y=100, width=1800, height=500)  # Set figure position
 
+    tol = 1e-8  # Tolerance for detecting constant lines
+
     # --- Subplot 1: Deviation in variance ---
     for i, color in zip(range(3), ['C0', 'C1', 'C2']):
         dev = (cov_MC[i, i, :] - cov_MC[i, i, -1]) / cov_MC[i, i, -1]
-        axs[0].scatter(TT_MC, dev, s=9, color=color, label=fr'$u_{i+1}$')
-    axs[0].scatter(TT_MC, trace_dev, s=9,color='k', label='trace(R)')  # use plot instead of scatter
+        mask = dev != -1
+        axs[0].scatter(TT_MC[mask], dev[mask], s=9, color=color, label=fr'$u_{i+1}$')
+    mask = trace_dev != -1
+    axs[0].scatter(TT_MC[mask], trace_dev[mask], s=9, color='k', label='trace(R)')
     axs[0].set_xlabel('time')
     axs[0].set_title('deviation in variance')
     axs[0].legend()
@@ -148,8 +174,10 @@ def plot_deviation_subplots(TT_MC, cov_MC, M3_MC_norm,save_path=None):
         denom = np.sqrt(cov_MC[i, i, :] * cov_MC[j, j, :])
         with np.errstate(divide='ignore', invalid='ignore'):
             dev = np.where(denom != 0, num / denom, 0.0)
-        axs[1].scatter(TT_MC, dev, s=9, color=color, label=label)
-    axs[1].scatter(TT_MC, trace_dev, s=9,color='k',label='trace(R)')  # also plot
+            mask = dev != 0
+            axs[1].scatter(TT_MC[mask], dev[mask], s=9, color=color, label=label)
+    mask = trace_dev != -1
+    axs[1].scatter(TT_MC[mask], trace_dev[mask], s=9,color='k',label='trace(R)')  # also plot
     axs[1].set_xlabel('time')
     axs[1].set_title('deviation in cross-covariance')
     axs[1].legend()
@@ -161,6 +189,8 @@ def plot_deviation_subplots(TT_MC, cov_MC, M3_MC_norm,save_path=None):
     colors = ['C0', 'C1', 'C2', 'C3']
     for (i, j, k), label, color in zip(moments, labels, colors):
         dev = M3_MC_norm[i, j, k, :] - M3_MC_norm[i, j, k, -1]
+        # unique_vals = np.unique(np.round(dev, 8))  # round for numerical stability
+        # print(f"{label}: unique y-values = {unique_vals}")
         axs[2].scatter(TT_MC, dev, s=9, color=color, label=label)
     axs[2].set_xlabel('time')
     axs[2].set_title('deviation in 3rd order central moments')

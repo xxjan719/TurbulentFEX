@@ -23,7 +23,7 @@ def g(t,dt):
 
 
 def ODE_solver(zt,x_sample,z_sample,x0_test,
-               ODESOLVER_TIME_STEPS:int=1000):
+               ODESOLVER_TIME_STEPS:int=2000):
     t_vec = torch.linspace(1.0,0.0,ODESOLVER_TIME_STEPS+1)
     log_weight_likelihood = -1.0* torch.sum( (x0_test[:,None,:]-x_sample)**2/2 , axis = 2, keepdims= False)
     weight_likelihood =torch.exp(log_weight_likelihood)
