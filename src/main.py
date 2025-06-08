@@ -527,7 +527,7 @@ else:
     diff_scale = args.DIFF_SCALE
     print(f'the dataset shape is {dataset.shape}')
     
-    batch_size = 4000  # Changed from 4000 to 1000 to match the actual data size
+    batch_size = 6000  # Changed from 4000 to 1000 to match the actual data size
     x_sample = dataset[:,:,:-1].reshape(-1, 3) 
     train_size = int(x_sample.shape[0]/10)
     print(f'train_size is {train_size}')
@@ -602,7 +602,7 @@ else:
         np.save(os.path.join(args.log_save_path, 'DATA_TRAINING_X_TRAIN.npy'), X_TRAIN)
     
 
-    SECOND_STAGE_TRAINING_DATA = np.hstack((X_TRAIN,ZT,))
+    SECOND_STAGE_TRAINING_DATA = np.hstack((ZT,))
     if not os.path.exists(os.path.join(args.log_save_path, 'SECOND_STAGE_TRAINING_DATA.npy')):
         np.save(os.path.join(args.log_save_path, 'SECOND_STAGE_TRAINING_DATA.npy'), SECOND_STAGE_TRAINING_DATA)
     if not os.path.exists(os.path.join(args.log_save_path, 'ODE_REVERSE_SOLUTION.npy')):
@@ -665,12 +665,12 @@ else:
     best_valid_err = 5.0
     for j in range(args.NN_SOLVER_EPOCHS):
         optimizer.zero_grad()
-        pred = FN(SECOND_STAGE_TRAINING_DATA_NORMAL)
-        loss = criterion(pred,ODE_REVERSE_SOLUTION_NORMAL)
+        pred = FN(SECOND_STAGE_TRAINING_DATA_NORMAL[3:])
+        loss = criterion(pred,ODE_REVERSE_SOLUTION_NORMAL[3:])
         loss.backward()
         optimizer.step()
-        pred1 = FN(SECOND_STAGE_TRAINING_DATA_VALID)
-        valid_loss = criterion(pred1,ODE_REVERSE_SOLUTION_VALID)
+        pred1 = FN(SECOND_STAGE_TRAINING_DATA_VALID[3:])
+        valid_loss = criterion(pred1,ODE_REVERSE_SOLUTION_VALID[3:])
         if valid_loss < best_valid_err:
             FN.update_best()
             best_valid_err = valid_loss

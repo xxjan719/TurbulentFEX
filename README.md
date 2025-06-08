@@ -12,11 +12,15 @@ TurbulentFEX/
 │   │   ├── lawtrainingstep.py  # Training step implementations
 │   │   ├── coefficient_extractor.py  # Matrix coefficient extraction utilities
 │   │   ├── visualization.py     # LaTeX and plot generation utilities
+│   │   ├── plotting.py          # Plotting utilities for results
 │   │   └── expression_handler.py # Symbolic expression manipulation
 │   ├── models/
 │   │   ├── __init__.py         # Make models a Python package
 │   │   ├── fex_model.py        # FEX model implementation
 │   │   └── fex_optimizer.py    # Custom optimizers for FEX
+│   ├── Example/
+│   │   ├── MC_triad/           # Example: Monte Carlo triad system
+│   │   └── prediction.ipynb    # Prediction and evaluation notebook
 │   └── examples/
 │       └── turbulent_cases/    # Example turbulent system cases
 │
@@ -35,11 +39,18 @@ TurbulentFEX/
 
 ## Issues
 1. Energy Conservation law might not be working.
+2. I don't understand why we need to focus three moments.
 
 ## Recent Updates
 
-### Need to Update (2025-06-08)
+### Need to Update (2025-06-08 - 2025-06-09)
 - print all the dataset performance in `prediction.py`
+
+### Updates (2025-06-08)
+- Added `MultiDimFEX` class for unified 3D FEX prediction: loads all three FEX models (one per dimension) and returns a 3D result for input data.
+- Improved plotting utilities to filter out nearly-constant lines and only plot meaningful data.
+- Enhanced code structure for easier model loading and prediction.
+
 
 ### Updates (2025-06-06 - 2025-06-07)
 - Complete implementation of `ODEParser.py` with score-based ODE solver and neural network components
