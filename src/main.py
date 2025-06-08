@@ -312,16 +312,29 @@ if SECOND_STAGE_OPEN_BOOL == False:
                             if current_loss < best_loss:
                                 best_loss = current_loss
                                 best_candidates_pool = []  # Clear pool for new best loss
-                            
-                            # If this candidate has the best loss or is close to it (within 10%)
-                            if current_loss <= best_loss:
-                                # Check if we already have this expression    
-                                best_candidates_pool.append(candidate_)
-                                logprint(f"\nAdded to best candidates pool:")
+                                best_candidates_pool.append(candidate_)  # Add the new best candidate
+
+                                logprint(f"\nAdded new best candidate to pool:")
                                 logprint(f"Loss: {current_loss:.6f}")
                                 logprint(f"Expression: {current_expr}")
                                 logprint(f"Operator sequence: {candidate_.action}")
                                 logprint("-" * 80)
+                            # If this candidate has a loss very close to the best loss (within 1e-4)
+                            elif np.abs(current_loss - best_loss) < 1.0e-4:
+                                # Check if this expression is already in the pool
+                                is_duplicate = False
+                                for existing_candidate in best_candidates_pool:
+                                    if current_expr == existing_candidate.expression:
+                                        is_duplicate = True
+                                        break
+                                
+                                if not is_duplicate:
+                                    best_candidates_pool.append(candidate_)
+                                    logprint(f"\nAdded candidate with close loss to pool:")
+                                    logprint(f"Loss: {current_loss:.6f}")
+                                    logprint(f"Expression: {current_expr}")
+                                    logprint(f"Operator sequence: {candidate_.action}")
+                                    logprint("-" * 80)
 
                         # Print current best candidates pool
                         logprint(f'\nCurrent Best Candidates Pool (Size: {len(best_candidates_pool)})'.center(60, '='))
@@ -402,10 +415,10 @@ if SECOND_STAGE_OPEN_BOOL == False:
                 print(f'the dimension is {dim}')
                 # In the ground truth training section, convert the list to tensor:
                 if dim == 1: 
-                    op_seqs = torch.tensor([0, 2, 1, 2, 2, 0, 0, 2, 2, 1, 1, 2], device=DEVICE)
+                    op_seqs = torch.tensor([1, 0, 0, 0, 2, 0, 0, 2, 4, 0, 2, 2], device=DEVICE)
                     
                 elif dim == 2:
-                    op_seqs = torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
+                    op_seqs = torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)#torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
                 elif dim == 3:
                     op_seqs = torch.tensor([0, 0, 2, 2, 2, 2, 2, 2, 5, 0, 7, 0], device=DEVICE)
                 op_seqs_all[dim] = op_seqs
