@@ -602,7 +602,7 @@ else:
         np.save(os.path.join(args.log_save_path, 'DATA_TRAINING_X_TRAIN.npy'), X_TRAIN)
     
 
-    SECOND_STAGE_TRAINING_DATA = np.hstack((ZT,))
+    SECOND_STAGE_TRAINING_DATA = ZT
     if not os.path.exists(os.path.join(args.log_save_path, 'SECOND_STAGE_TRAINING_DATA.npy')):
         np.save(os.path.join(args.log_save_path, 'SECOND_STAGE_TRAINING_DATA.npy'), SECOND_STAGE_TRAINING_DATA)
     if not os.path.exists(os.path.join(args.log_save_path, 'ODE_REVERSE_SOLUTION.npy')):
