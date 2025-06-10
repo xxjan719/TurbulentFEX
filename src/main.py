@@ -33,7 +33,7 @@ if args.TRAIN_GROUND_TRUTH:
     args.SECOND_STAGE_OPEN_BOOL = False
 
 
-base_path = f'src/Example/{args.Model}/Results'
+base_path = f'Example/{args.Model}/Results'
 if args.data_save_path is None:
     args.data_save_path = f'{base_path}/{args.params_name}/simulation_results.npz'
 if args.log_save_path is None:
@@ -527,7 +527,7 @@ else:
     diff_scale = args.DIFF_SCALE
     print(f'the dataset shape is {dataset.shape}')
     
-    batch_size = 6000  # Changed from 4000 to 1000 to match the actual data size
+    batch_size = 5000  # Changed from 4000 to 1000 to match the actual data size
     x_sample = dataset[:,:,:-1].reshape(-1, 3) 
     train_size = int(x_sample.shape[0]/10)
     print(f'train_size is {train_size}')
@@ -539,7 +539,7 @@ else:
     
     # Calculate z_short
     DIFFEREMCE = np.zeros((x_sample.shape[0], dimension))
-    for idx in range(1, dimension+1):
+    for idx in range(1, 2):#dimension+1):
         model_file = os.path.join(args.log_save_path, f'FEX_dim_{idx}.pth')
         if not os.path.exists(model_file):
             raise FileNotFoundError(f"FEX_dim_{idx}.pth not found in {args.log_save_path}, you should run the FEX stage first.")
@@ -573,7 +573,7 @@ else:
     ODE_solution = np.zeros((train_size, dimension))
     
     print('✅'*40)
-    EPOCHS_ODE_BATCH = int(min(train_size, 200000)/batch_size)  # Changed from 400000 to 200000 to be more conservative
+    EPOCHS_ODE_BATCH = int(min(train_size, 1000000)/batch_size)  # Changed from 400000 to 200000 to be more conservative
     print(f'ZT shape is {ZT.shape}; ODE_solution shape is {ODE_solution.shape}, EPOCHS_ODE_BATCH is {EPOCHS_ODE_BATCH}')
     print('✅'*40)
     print('right now, we are going to solve the reverse ODE')
@@ -665,12 +665,12 @@ else:
     best_valid_err = 5.0
     for j in range(args.NN_SOLVER_EPOCHS):
         optimizer.zero_grad()
-        pred = FN(SECOND_STAGE_TRAINING_DATA_NORMAL[3:])
-        loss = criterion(pred,ODE_REVERSE_SOLUTION_NORMAL[3:])
+        pred = FN(SECOND_STAGE_TRAINING_DATA_NORMAL)
+        loss = criterion(pred,ODE_REVERSE_SOLUTION_NORMAL)
         loss.backward()
         optimizer.step()
-        pred1 = FN(SECOND_STAGE_TRAINING_DATA_VALID[3:])
-        valid_loss = criterion(pred1,ODE_REVERSE_SOLUTION_VALID[3:])
+        pred1 = FN(SECOND_STAGE_TRAINING_DATA_VALID)
+        valid_loss = criterion(pred1,ODE_REVERSE_SOLUTION_VALID)
         if valid_loss < best_valid_err:
             FN.update_best()
             best_valid_err = valid_loss

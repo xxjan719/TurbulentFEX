@@ -18,7 +18,7 @@ def get_parser():
     parser.add_argument('--NUM_TREES', type=int, default=100)
     parser.add_argument('--INTEGRATOR_METHOD', type=str, default='integration-based')
     # FEX optimizer settings
-    parser.add_argument('--FEX_STAGE_OPEN_BOOL',type=bool,default = True)
+    parser.add_argument('--FEX_STAGE_OPEN_BOOL',type=bool,default = False)
     parser.add_argument('--FEX_LR', type=float, default=8e-3)
     parser.add_argument('--TRAIN_EPOCHS_FIRST', type=int, default=20)
     parser.add_argument('--TRAIN_EPOCHS_SECOND', type=int, default=2000)
@@ -26,7 +26,7 @@ def get_parser():
     parser.add_argument('--MULTI_FEX_OPEN',type=float,default = False)
     #FEX-DM settings
     parser.add_argument('--SECOND_STAGE_OPEN_BOOL',type=bool,default = True)
-    parser.add_argument('--DIFF_SCALE',type=float,default = 100)
+    parser.add_argument('--DIFF_SCALE',type=float,default = 200)
     parser.add_argument('--ODESLOVER_TIME_STEPS',type=int,default = 2000)
     parser.add_argument('--SHORT_SIZE',type=int,default = 2048)
     parser.add_argument('--NN_SOLVER_LR',type=float,default = 0.01)
