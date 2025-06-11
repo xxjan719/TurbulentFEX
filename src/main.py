@@ -233,7 +233,7 @@ if SECOND_STAGE_OPEN_BOOL == False:
                                     if torch.isnan(loss):
                                         print("Warning: NaN detected in loss, stopping LBFGS optimization")
                                         break
-                                        
+                                
                                     if train_idx % 5 == 0:  # Print more frequently during fine-tuning
                                         print('✅'*40)
                                         print(f'LBFGS Epoch {train_idx}, Loss: {loss.item()}')
@@ -415,12 +415,12 @@ if SECOND_STAGE_OPEN_BOOL == False:
                 print(f'the dimension is {dim}')
                 # In the ground truth training section, convert the list to tensor:
                 if dim == 1: 
-                    op_seqs = torch.tensor([1, 0, 0, 0, 2, 0, 0, 2, 4, 0, 2, 2], device=DEVICE)
+                    op_seqs = torch.tensor([1, 0, 0, 0, 2, 0, 0, 2, 0, 0, 2, 2], device=DEVICE)
                     
                 elif dim == 2:
                     op_seqs = torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)#torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
                 elif dim == 3:
-                    op_seqs = torch.tensor([0, 0, 2, 2, 2, 2, 2, 2, 5, 0, 7, 0], device=DEVICE)
+                    op_seqs = torch.tensor([0, 0, 2, 2, 2, 0, 2, 2, 5, 0, 7, 0], device=DEVICE)
                 op_seqs_all[dim] = op_seqs
 
             print(f'the op_seqs_all is {op_seqs_all}')
@@ -441,56 +441,44 @@ if SECOND_STAGE_OPEN_BOOL == False:
                     model_optim.zero_grad()
                     # Calculate prediction loss for all dimensions
                     total_pred_loss = 0
+                    energy = 0
+                    dE_dt = 0
+                    
+                    # First pass: calculate predictions and energy
+                    u_preds = []
+                    u_targets = []
                     for dim in range(1, dimension+1):
                         model = combined_conservation_law.models[str(dim)]
                         integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
-                        du_pred, du_target = integrator.integrate(integration_args)
-                        total_pred_loss += mse(du_pred, du_target)
-                    
-                    # Get cross-term coefficients and calculate constraint loss
-                    coeffs = combined_conservation_law.get_cross_term_coefficients()
-                    x1x2 = coeffs['x1x2'][0] if len(coeffs['x1x2']) > 0 else torch.zeros(1, device=DEVICE)
-                    x1x3 = coeffs['x1x3'][0] if len(coeffs['x1x3']) > 0 else torch.zeros(1, device=DEVICE)
-                    x2x3 = coeffs['x2x3'][0] if len(coeffs['x2x3']) > 0 else torch.zeros(1, device=DEVICE)
-                
-                    # Calculate squared loss for x2x3 = -(x1x2 + x1x3)
-                    constraint_loss = torch.abs(x1x2+x1x3+x2x3)
-                
-                    # Combine prediction loss and coefficient constraint
-                    constraint_weight = 0.1  # Adjust this weight as needed
-                    total_loss = total_pred_loss + constraint_weight * constraint_loss
-                
-                    # Backpropagate and update
-                    total_loss.backward()
+                        current_state = dataset_tensor[:,:,:-1]
+                        u_current = current_state[:,0,:]
+                        u_current_flat = u_current.reshape(-1, 1)
+                        u_pred, u_target = integrator.integrate(integration_args)
+                        
+                        # Calculate du/dt properly
+                        du_pred = torch.gradient(u_pred, dim=0)[0]  # Get the first element of gradient tuple
+                        
+                        # Calculate dE/dt = 2 * u * du/dt elementwise
+                        dE_dt += torch.sum(u_pred * du_pred, dim=1)  # Sum across dimensions
+                        loss = mse(u_pred, u_target)
+                        if dim == 1:
+                            extra_loss = torch.abs(model.linear_a[0] +0.2)
+                        elif dim == 2:
+                            extra_loss = torch.abs(model.linear_a[1] +0.1)
+                        elif dim == 3:
+                            extra_loss = torch.abs(model.linear_a[2] +0.1)
+                        total_pred_loss += loss+extra_loss
+                    # Energy conservation loss: minimize dE/dt
+                    loss = total_pred_loss# +2*mse(dE_dt, torch.zeros_like(dE_dt))
+                    loss.backward()
                     model_optim.step()
-                
                     if train_idx % 100 == 0:
-                        print('✅'*40)
                         print(f"Training index: {train_idx}")
-                        print(f"Total Prediction Loss: {total_pred_loss.item():.6f}")
-                        print(f"Constraint Loss: {constraint_loss.item():.6f}")
-                        print(f"Total Loss: {total_loss.item():.6f}")
-                        print(f"Cross terms - x1x2: {x1x2.item():.4f}, x1x3: {x1x3.item():.4f}, x2x3: {x2x3.item():.4f}")
-                        print(f"Sum check: x2x3 + (x1x2 + x1x3) = {(x2x3 + x1x2 + x1x3).item():.4f}")
-                        for dim in range(1, dimension+1):
-                            print(f"Dimension {dim} expression: {combined_conservation_law.models[str(dim)].expression_visualize()}")
-                        print('✅'*40)
-            
-                    # Print final expressions and coefficients
-                    print("\nFinal Expressions:")
-                    for dim in range(1, dimension+1):
-                        print(f"\nDimension {dim}:")
-                        print(f"Expression: {combined_conservation_law.models[str(dim)].expression_visualize()}")
-                final_coeffs = combined_conservation_law.get_cross_term_coefficients()
-                print("\nFinal cross-term coefficients:")
-                x1x2 = final_coeffs['x1x2'][0] if len(final_coeffs['x1x2']) > 0 else torch.zeros(1, device=DEVICE)
-                x1x3 = final_coeffs['x1x3'][0] if len(final_coeffs['x1x3']) > 0 else torch.zeros(1, device=DEVICE)
-                x2x3 = final_coeffs['x2x3'][0] if len(final_coeffs['x2x3']) > 0 else torch.zeros(1, device=DEVICE)
-                print(f"x1x2: {x1x2.item():.4f}")
-                print(f"x1x3: {x1x3.item():.4f}")
-                print(f"x2x3: {x2x3.item():.4f}")
-                print(f"Sum check: x2x3 + (x1x2 + x1x3) = {(x2x3 + x1x2 + x1x3).item():.4f}")
-                print(f"Final coefficient dictionary: {combined_conservation_law.B_coeffs_dict}")    
+                        print(f"Loss: {loss.item():.6f}")
+                        print(f"Expression: {combined_conservation_law.expression_visualize()}")
+
+
+                       
             else:
                 for dim in range(1, dimension+1):
                     model = FEX(op_seqs_all[dim], dim=dimension).to(DEVICE)
@@ -509,6 +497,48 @@ if SECOND_STAGE_OPEN_BOOL == False:
                             print(f"Loss: {loss.item():.6f}")
                             print(f"Expression: {model.expression_visualize()}")
                             
+                    lbfgs_optim = torch.optim.LBFGS(model.parameters(),
+                                                        lr=0.1,  # Smaller learning rate for fine-tuning
+                                                        max_iter=20,
+                                                        max_eval=25,
+                                                        tolerance_grad=1e-7,
+                                                        tolerance_change=1e-9,
+                                                        history_size=50)
+
+                    def lbfgs_closure():
+                        lbfgs_optim.zero_grad()
+                        integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor.to(DEVICE), integration_func=model, index=dim)
+                        du_pred, du_target = integrator.integrate(integration_args)
+                        loss = mse(du_pred, du_target)
+                                # Check for NaN in loss
+                        if torch.isnan(loss):
+                            print("Warning: NaN detected in loss during LBFGS closure")
+                            return torch.tensor(1e6, requires_grad=True)  # Return a large value
+                        loss.backward()
+                        return loss
+
+                    # Run LBFGS for fewer epochs since we're just fine-tuning
+                    for train_idx in range(10):  # You can adjust this number
+                        try:
+                            loss = lbfgs_optim.step(lbfgs_closure)
+                            if torch.isnan(loss):
+                                print("Warning: NaN detected in loss, stopping LBFGS optimization")
+                                break
+                                
+                            if train_idx % 5 == 0:  # Print more frequently during fine-tuning
+                                print('✅'*40)
+                                print(f'LBFGS Epoch {train_idx}, Loss: {loss.item()}')
+                                try:
+                                    expr_str = model.expression_visualize()
+                                    print(f"Current expression: {expr_str}")
+
+                                except Exception as e:
+                                    print(f"Could not visualize expression: {e}")
+                                print('✅'*40)
+                        except Exception as e:
+                                print(f"Error in LBFGS step: {e}")
+                                break
+
                     # Save individual model after training
                     save_path = os.path.join(args.log_save_path, f'FEX_dim_{dim}.pth')
                     torch.save(model.state_dict(), save_path)

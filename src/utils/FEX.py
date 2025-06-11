@@ -16,11 +16,11 @@ class FEX(nn.Module):
         self.dim = dim
         # Define the linear element
         self.linear_a = nn.Parameter(torch.ones(dim))
-        self.linear_b = nn.Parameter(torch.zeros(dim))
+        self.linear_b = nn.Parameter(torch.ones(dim))
         
         # Define the non-linear element
         self.nonlinear_a = nn.ParameterList([nn.Parameter(torch.ones(dim)) for _ in range(dim)])
-        self.nonlinear_b = nn.ParameterList([nn.Parameter(torch.zeros(dim)) for _ in range(dim)])
+        self.nonlinear_b = nn.ParameterList([nn.Parameter(torch.ones(dim)) for _ in range(dim)])
         
 
     def unary(self, op_idx: int, x: Tensor):

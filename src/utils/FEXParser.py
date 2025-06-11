@@ -45,41 +45,16 @@ class MultiDimensionFEX(nn.Module):
         return torch.stack(outputs, dim=1)  
     
 
-    def get_cross_term_coefficients(self):
+    def expression_visualize(self) -> Dict[str, str]:
         """
-        Extract cross-term coefficients and maintain gradients for training.
-        Returns a dictionary with cross-term coefficients that maintain gradient information.
+        Visualize the expressions for each dimension.
+        Returns a dictionary with dimension as key and expression as value.
         """
-        coeffs_dict = {}
-        pairs = [(i,j) for i in range(self.dim) for j in range(i+1,self.dim)]
-        keys = [f'x{i+1}x{j+1}' for i, j in pairs]
-        for key in keys:
-            coeffs_dict[key] = []
-        
-        xs = sp.symbols(' '.join([f'x{i+1}' for i in range(self.dim)]))
-        cross_map = {f'x{i+1}x{j+1}': xs[i]*xs[j] for i in range(self.dim) for j in range(i+1, self.dim)}
-        
-        for dim in range(1, self.dim+1):
-            model = self.models[str(dim)]
-            simplified_expr = model.expression_visualize_simplified()
-            
-            # Process each cross term
-            for key, sym in cross_map.items():
-                coeff = simplified_expr.coeff(sym)
-                if coeff != 0:
-                    # Extract indices from key (e.g., 'x1x2' -> 0,1)
-                    i, j = int(key[1])-1, int(key[3])-1
-                    
-                    # Calculate coefficient with gradient tracking
-                    if dim == 1 and key == 'x2x3':  # For dimension 1, look for x2*x3 term
-                        coeffs_dict[key].append(model.nonlinear_a[1][2] * model.nonlinear_a[2][2])
-                    elif dim == 2 and key == 'x1x3':  # For dimension 2, look for x1*x3 term
-                        coeffs_dict[key].append(model.nonlinear_a[0][2] * model.nonlinear_a[2][2])
-                    elif dim == 3 and key == 'x1x2':  # For dimension 3, look for x1*x2 term
-                        coeffs_dict[key].append(model.nonlinear_a[0][2] * model.nonlinear_a[1][2])
-        
-        self.B_coeffs_dict = coeffs_dict
-        return coeffs_dict
+        exprs = {}
+        for idx in range(1, self.dim + 1):
+            model = self.models[str(idx)]
+            exprs[f'Dimension {idx}'] = model.expression_visualize_simplified()
+        return exprs
 
 
 class MultiDimFEXLoader(nn.Module):
@@ -119,6 +94,17 @@ class MultiDimFEXLoader(nn.Module):
             outputs.append(out.squeeze(-1))  # remove last dim
 
         return torch.stack(outputs, dim=1)
+    
+    def expression_visualize(self) -> Dict[str, str]:
+        """
+        Visualize the expressions for each dimension.
+        Returns a dictionary with dimension as key and expression as value.
+        """
+        exprs = {}
+        for idx in range(1, self.dimension + 1):
+            model = self.models[str(idx)]
+            exprs[f'Dimension {idx}'] = model.expression_visualize_simplified()
+        return exprs
 
 
 if __name__ == "__main__":
