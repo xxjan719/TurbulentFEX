@@ -527,7 +527,7 @@ else:
     diff_scale = args.DIFF_SCALE
     print(f'the dataset shape is {dataset.shape}')
     
-    batch_size = 5000  # Changed from 4000 to 1000 to match the actual data size
+    batch_size = 50000  # Changed from 4000 to 1000 to match the actual data size
     x_sample = dataset[:,:,:-1].reshape(-1, 3) 
     train_size = int(x_sample.shape[0]/10)
     print(f'train_size is {train_size}')
@@ -539,7 +539,7 @@ else:
     
     # Calculate z_short
     DIFFEREMCE = np.zeros((x_sample.shape[0], dimension))
-    for idx in range(1, 2):#dimension+1):
+    for idx in range(1, dimension+1):
         model_file = os.path.join(args.log_save_path, f'FEX_dim_{idx}.pth')
         if not os.path.exists(model_file):
             raise FileNotFoundError(f"FEX_dim_{idx}.pth not found in {args.log_save_path}, you should run the FEX stage first.")
@@ -554,7 +554,9 @@ else:
     print(f'DIFFEREMCE shape is {DIFFEREMCE.shape}')
     print(f'First few x_sample values:\n{x_sample[:5]}')
     print(f'First few DIFFEREMCE values:\n{DIFFEREMCE[:5]}')
-    
+    print(DIFFEREMCE)
+    print(np.max(DIFFEREMCE, axis=0))
+    print(np.min(DIFFEREMCE, axis=0))
     it_n_index = int(np.ceil(train_size / batch_size))
     print(f'it_n_index is {it_n_index}')
     TRAIN_INDEX_INITIAL = process_chunk_cpu(
@@ -573,7 +575,7 @@ else:
     ODE_solution = np.zeros((train_size, dimension))
     
     print('✅'*40)
-    EPOCHS_ODE_BATCH = int(min(train_size, 1000000)/batch_size)  # Changed from 400000 to 200000 to be more conservative
+    EPOCHS_ODE_BATCH = int(min(train_size, 50000)/batch_size)  # Changed from 400000 to 200000 to be more conservative
     print(f'ZT shape is {ZT.shape}; ODE_solution shape is {ODE_solution.shape}, EPOCHS_ODE_BATCH is {EPOCHS_ODE_BATCH}')
     print('✅'*40)
     print('right now, we are going to solve the reverse ODE')

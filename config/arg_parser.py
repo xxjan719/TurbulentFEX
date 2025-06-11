@@ -26,7 +26,7 @@ def get_parser():
     parser.add_argument('--MULTI_FEX_OPEN',type=float,default = False)
     #FEX-DM settings
     parser.add_argument('--SECOND_STAGE_OPEN_BOOL',type=bool,default = True)
-    parser.add_argument('--DIFF_SCALE',type=float,default = 200)
+    parser.add_argument('--DIFF_SCALE',type=float,default = 50)
     parser.add_argument('--ODESLOVER_TIME_STEPS',type=int,default = 2000)
     parser.add_argument('--SHORT_SIZE',type=int,default = 2048)
     parser.add_argument('--NN_SOLVER_LR',type=float,default = 0.01)
