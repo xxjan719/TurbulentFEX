@@ -415,18 +415,21 @@ if SECOND_STAGE_OPEN_BOOL == False:
                 print(f'the dimension is {dim}')
                 # In the ground truth training section, convert the list to tensor:
                 if dim == 1: 
-                    op_seqs = torch.tensor([1, 0, 0, 0, 2, 0, 0, 2, 0, 0, 2, 2], device=DEVICE)
+                    op_seqs = torch.tensor([1, 0, 0, 1, 2, 0, 0, 2, 0, 0, 2, 2], device=DEVICE)
                     
                 elif dim == 2:
                     op_seqs = torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)#torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
                 elif dim == 3:
-                    op_seqs = torch.tensor([0, 0, 2, 2, 2, 0, 2, 2, 5, 0, 7, 0], device=DEVICE)
+                    op_seqs = torch.tensor([0, 0, 2, 2, 2, 0, 2, 2, 5, 0, 7, 1], device=DEVICE)
                 op_seqs_all[dim] = op_seqs
 
             print(f'the op_seqs_all is {op_seqs_all}')
             if args.MULTI_FEX_OPEN == True:
                 combined_conservation_law = MultiDimensionFEX(op_seqs_all, dimension).to(DEVICE)
+                print(f'data shape is {dataset_tensor.shape}')
                 # Initialize all models
+
+                
                 for dim in range(1, dimension+1):
                     model = combined_conservation_law.models[str(dim)]
                     model.apply(weights_init)
@@ -439,42 +442,61 @@ if SECOND_STAGE_OPEN_BOOL == False:
                 # Training loop
                 for train_idx in range(TRAIN_EPOCHS_SECOND):
                     model_optim.zero_grad()
-                    # Calculate prediction loss for all dimensions
                     total_pred_loss = 0
-                    energy = 0
-                    dE_dt = 0
-                    
-                    # First pass: calculate predictions and energy
-                    u_preds = []
-                    u_targets = []
+                    E_sum = 0
+                       
+                    # Build L and G matrices
+                    L = torch.zeros(dimension, dimension, device=DEVICE)
+                    G = torch.zeros(dimension, dimension, device=DEVICE)
+                    for i in range(dimension):
+                        coeffs = combined_conservation_law.models[str(i+1)].get_all_linear_nonlinear_coeffs_autograd(dim=i)
+                        # coeffs is a tuple/list: (coeff_x1, coeff_x2, coeff_x3)
+                        for j in range(dimension):
+                            L[i, j] = coeffs[j]
+                    # Diagonal to G, off-diagonal to L
+                    for j in range(dimension):
+                        G[j, j] = L[j, j]
+                        L[j, j] = 0  # Zero out diagonal in L
+
+                    # Prediction and extra loss
                     for dim in range(1, dimension+1):
                         model = combined_conservation_law.models[str(dim)]
+                        coeffs = combined_conservation_law.models[str(i+1)].get_all_linear_nonlinear_coeffs_autograd(dim=i)
                         integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
-                        current_state = dataset_tensor[:,:,:-1]
-                        u_current = current_state[:,0,:]
+                        current_state = dataset_tensor[:, :, :-1]
+                        u_current = current_state[:, 0, :]
                         u_current_flat = u_current.reshape(-1, 1)
                         u_pred, u_target = integrator.integrate(integration_args)
-                        
-                        # Calculate du/dt properly
-                        du_pred = torch.gradient(u_pred, dim=0)[0]  # Get the first element of gradient tuple
-                        
-                        # Calculate dE/dt = 2 * u * du/dt elementwise
-                        dE_dt += torch.sum(u_pred * du_pred, dim=1)  # Sum across dimensions
+                        du_pred = torch.gradient(u_pred, dim=0)[0]
+                        # dE_dt += torch.sum(u_pred * du_pred, dim=1)
                         loss = mse(u_pred, u_target)
                         if dim == 1:
-                            extra_loss = torch.abs(model.linear_a[0] +0.2)
+                            coeffs_3 = coeffs[2]
+                            coeffs_2 = coeffs[1]
+                            extra_loss = torch.abs(model.linear_a[0] + 0.2)**2
+                            
                         elif dim == 2:
-                            extra_loss = torch.abs(model.linear_a[1] +0.1)
+                            extra_loss = torch.abs(model.linear_a[1] + 0.1)**2
                         elif dim == 3:
-                            extra_loss = torch.abs(model.linear_a[2] +0.1)
-                        total_pred_loss += loss+extra_loss
+                            extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
+                        total_pred_loss += loss
+                        E_sum += torch.sum(u_pred**2, dim=1)
+
                     # Energy conservation loss: minimize dE/dt
-                    loss = total_pred_loss# +2*mse(dE_dt, torch.zeros_like(dE_dt))
-                    loss.backward()
+                    derviatve_E_sum = torch.gradient(E_sum, dim=0)[0]
+                    # print(f'derviative_E_sum shape is {derviatve_E_sum.shape}')
+                    # print(f'L shape is {L.shape}')
+                    # print(f'L is {L}')
+                    #skew_loss = mse(L, -L.T)
+                    #neg_diag_loss = torch.relu(G.diag()).sum()
+                    total_loss = total_pred_loss#+skew_loss#+skew_loss #+ neg_diag_loss
+
+                    total_loss.backward()
                     model_optim.step()
+
                     if train_idx % 100 == 0:
                         print(f"Training index: {train_idx}")
-                        print(f"Loss: {loss.item():.6f}")
+                        print(f"Loss: {total_loss.item():.6f},")
                         print(f"Expression: {combined_conservation_law.expression_visualize()}")
 
 

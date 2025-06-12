@@ -21,9 +21,9 @@ def params_init(case_name = None)->dict:
     params = {
         'MC': int(1e3),  # number of Monte Carlo simulations
         'Dt':1e-2, # Time step size
-        'tstep': 10, # output every tstep steps
-        'T':10,  # total simulation time
-        'Nt': int(round(10 / 1e-2)),  # number of time steps
+        'tstep': 50, # output every tstep steps
+        'T':50,  # total simulation time
+        'Nt': int(round(50 / 1e-2)),  # number of time steps
       }
     if case_name=='equipart': # epipartition of energy
         # System matrices

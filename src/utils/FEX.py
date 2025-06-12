@@ -178,6 +178,52 @@ class FEX(nn.Module):
         # print("\nFinal expanded expression:")
         # print(final_expanded)  
         return str(final_expanded)
+    
+
+    def get_all_linear_nonlinear_coeffs_autograd(self, dim,x_point=None):
+        """
+        Returns:
+            linear_coeffs: list of tensors (requires_grad=True)
+            linear_biases: list of tensors (requires_grad=True)
+            nonlinear_grads: list of tensors (requires_grad=True), local gradient at x_point
+            nonlinear_bias: tensor, nonlinear output at x_point
+        """
+        if x_point is None:
+            x_point = torch.zeros(1, self.dim, requires_grad=True)
+        else:
+            x_point = x_point.clone().detach().requires_grad_(True)
+        # Linear
+        linear_coeffs = [self.linear_a[i] for i in range(self.dim)]
+        linear_biases = [self.linear_b[i] for i in range(self.dim)]
+        # Nonlinear
+        nonlinear_output = self.nonlinear(x_point)
+        grads = torch.autograd.grad(nonlinear_output, x_point, retain_graph=True, create_graph=True)[0]
+        nonlinear_grads = [grads[0, i] for i in range(self.dim)]
+        nonlinear_bias = nonlinear_output.item()
+        
+        coeff_x1 = linear_coeffs[0]+nonlinear_grads[0]
+        coeff_x2 = linear_coeffs[1]+nonlinear_grads[1]
+        coeff_x3 = linear_coeffs[2]+nonlinear_grads[2]
+        # print(f'coeff_x1: {coeff_x1}, coeff_x2: {coeff_x2}, coeff_x3: {coeff_x3}')
+        # print('requires_grad: ',coeff_x1.requires_grad,coeff_x2.requires_grad,coeff_x3.requires_grad)
+        return coeff_x1,coeff_x2,coeff_x3
+       
+
+if __name__ == "__main__":
+    import os
+    op_seqs = torch.tensor([1, 0, 0, 0, 2, 0, 0, 2, 0, 0, 2, 2])
+    fex = FEX(op_seqs,3)
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    model_path = os.path.join(base_dir, "Example", "MC_triad", "Results", "equipart", "FEX_dim_1.pth")
+    if os.path.exists(model_path):
+        fex.load_state_dict(torch.load(model_path))
+    print(fex.expression_visualize())
+    print(fex.expression_visualize_simplified())
+    # Create an input tensor with requires_grad=True
+    fex.get_all_linear_nonlinear_coeffs_autograd(dim=1)
+
+    
+
 
 
 
