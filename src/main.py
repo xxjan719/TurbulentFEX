@@ -479,7 +479,7 @@ if SECOND_STAGE_OPEN_BOOL == False:
                             extra_loss = torch.abs(model.linear_a[1] + 0.1)**2
                         elif dim == 3:
                             extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
-                        total_pred_loss += loss
+                        total_pred_loss += loss+extra_loss
                         E_sum += torch.sum(u_pred**2, dim=1)
 
                     # Energy conservation loss: minimize dE/dt
@@ -487,9 +487,9 @@ if SECOND_STAGE_OPEN_BOOL == False:
                     # print(f'derviative_E_sum shape is {derviatve_E_sum.shape}')
                     # print(f'L shape is {L.shape}')
                     # print(f'L is {L}')
-                    #skew_loss = mse(L, -L.T)
+                    # skew_loss = mse(L, -L.T)
                     #neg_diag_loss = torch.relu(G.diag()).sum()
-                    total_loss = total_pred_loss#+skew_loss#+skew_loss #+ neg_diag_loss
+                    total_loss = total_pred_loss#+skew_loss #+ neg_diag_loss
 
                     total_loss.backward()
                     model_optim.step()

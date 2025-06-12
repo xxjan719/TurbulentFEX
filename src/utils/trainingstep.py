@@ -64,7 +64,23 @@ class Body4TrainIntegrator:
             
             # Compute the two k values for RK2
             k1 = derivative_func(u_flat)
-            k2 = derivative_func(u_flat + dt * k1)
+            # print(k1.shape)
+            # print(u_flat)
+            # print(dt*k1)
+            if index ==1:
+                u_i_next = ui_flat + dt* k1
+                u_k2 = torch.cat([u_i_next,u2_flat,u3_flat],dim=1)
+                k2 = derivative_func(u_k2)
+
+            elif index ==2:
+                u_i_next = ui_flat + dt* k1
+                u_k2 = torch.cat([u1_flat,u_i_next,u3_flat],dim=1)
+                k2 = derivative_func(u_k2)
+
+            elif index ==3:
+                u_i_next = ui_flat + dt* k1
+                u_k2 = torch.cat([u1_flat,u2_flat,u_i_next],dim=1)
+                k2 = derivative_func(u_k2)
             
             # Compute the next state using RK2 formula
             expression_pred = ui_flat + (dt/2.0) * (k1 + k2)
