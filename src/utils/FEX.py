@@ -207,6 +207,22 @@ class FEX(nn.Module):
         # print(f'coeff_x1: {coeff_x1}, coeff_x2: {coeff_x2}, coeff_x3: {coeff_x3}')
         # print('requires_grad: ',coeff_x1.requires_grad,coeff_x2.requires_grad,coeff_x3.requires_grad)
         return coeff_x1,coeff_x2,coeff_x3
+    
+    def final_simplied_expression(self,):
+        x1, x2, x3 = sp.symbols('x1 x2 x3')
+        final_expanded = self.expression_visualize_simplified()
+        terms = final_expanded.as_coefficients_dict()
+        # Build a new expression with rounded linear terms
+        rounded_expr = 0
+        for term, coeff in terms.items():
+            # Check if the term is linear in x1, x2, or x3
+            if term == x1 or term == x2 or term == x3:
+                rounded_coeff = round(float(coeff), 3)
+                rounded_expr += rounded_coeff * term
+        else:
+            rounded_expr += coeff * term
+
+        print("Rounded expression:", rounded_expr)
        
 
 if __name__ == "__main__":
