@@ -396,18 +396,18 @@ def plot_latex_formula(params, path):
     ground_truth = (
         r"\textbf{Ground Truth:}\\[0.3em]"
         r"\begin{aligned}"
-        fr"\frac{{du_1}}{{dt}} &= {L2}u_3 - {L3}u_2 - {d1:.4f}u_1 + {B1:.4f}u_2 u_3 + F_1 + \text{{noise}} \\"
-        fr"\frac{{du_2}}{{dt}} &= {L[1,0]}u_1 - {-L[1,2]}u_3 - {d2:.4f}u_2 + {B2:.4f}u_3 u_1 + F_2 + \text{{noise}} \\"
-        fr"\frac{{du_3}}{{dt}} &= {L[2,1]}u_2 - {L[2,0]}u_1 - {d3:.4f}u_3 + {B3:.4f}u_1 u_2 + F_3 + \text{{noise}}"
+        fr"\frac{{du_1}}{{dt}} &= {L2}u_3 - {L3}u_2 - {d1:.3f}u_1 + {B1:.3f}u_2 u_3 + F_1 + \text{{noise}} \\"
+        fr"\frac{{du_2}}{{dt}} &= {L[1,0]}u_1 - {-L[1,2]}u_3 - {d2:.3f}u_2 + {B2:.3f}u_3 u_1 + F_2 + \text{{noise}} \\"
+        fr"\frac{{du_3}}{{dt}} &= {L[2,1]}u_2 - {L[2,0]}u_1 - {d3:.3f}u_3 + {B3:.3f}u_1 u_2 + F_3 + \text{{noise}}"
         r"\end{aligned}"
     )
 
     FEX_expression = (
         r"\textbf{FEX:}\\[0.3em]"
         r"\begin{aligned}"
-        fr"FEX_1 &= {L_learned[0,2]}u_3 - {L_learned[0,1]}u_2 - {d1_learned:.4f}u_1 + {B1_learned:.4f}u_2 u_3 + \text{{residual term}} \\"
-        fr"FEX_2 &= {L_learned[1,0]}u_1 - {-L_learned[1,2]}u_3 - {d2_learned:.4f}u_2 + {B2_learned:.4f}u_3 u_1 + \text{{residual term}} \\"
-        fr"FEX_3 &= {L_learned[2,1]}u_2 - {L_learned[2,0]}u_1 - {d3_learned:.4f}u_3 + {B3_learned:.4f}u_1 u_2+ \text{{residual term}}"
+        fr"FEX_1 &= {L_learned[0,2]}u_3 - {L_learned[0,1]}u_2 - {d1_learned:.3f}u_1 + {B1_learned:.3f}u_2 u_3 + \text{{residual term}} \\"
+        fr"FEX_2 &= {L_learned[1,0]}u_1 - {-L_learned[1,2]}u_3 - {d2_learned:.3f}u_2 + {B2_learned:.3f}u_3 u_1 + \text{{residual term}} \\"
+        fr"FEX_3 &= {L_learned[2,1]}u_2 - {L_learned[2,0]}u_1 - {d3_learned:.3f}u_3 + {B3_learned:.3f}u_1 u_2+ \text{{residual term}}"
         r"\end{aligned}"
     )
 

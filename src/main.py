@@ -428,8 +428,6 @@ if SECOND_STAGE_OPEN_BOOL == False:
                 combined_conservation_law = MultiDimensionFEX(op_seqs_all, dimension).to(DEVICE)
                 print(f'data shape is {dataset_tensor.shape}')
                 # Initialize all models
-
-                
                 for dim in range(1, dimension+1):
                     model = combined_conservation_law.models[str(dim)]
                     model.apply(weights_init)
@@ -457,7 +455,8 @@ if SECOND_STAGE_OPEN_BOOL == False:
                     for j in range(dimension):
                         G[j, j] = L[j, j]
                         L[j, j] = 0  # Zero out diagonal in L
-
+                    u_pred_all = torch.zeros(dataset_tensor.shape[0], dataset_tensor.shape[1],dataset_tensor.shape[2]-1, device=DEVICE)
+                    u_target_all = torch.zeros(dataset_tensor.shape[0], dataset_tensor.shape[1],dataset_tensor.shape[2]-1, device=DEVICE)
                     # Prediction and extra loss
                     for dim in range(1, dimension+1):
                         model = combined_conservation_law.models[str(dim)]
@@ -465,8 +464,10 @@ if SECOND_STAGE_OPEN_BOOL == False:
                         integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
                         current_state = dataset_tensor[:, :, :-1]
                         u_current = current_state[:, 0, :]
-                        u_current_flat = u_current.reshape(-1, 1)
+                        # u_current_flat = u_current.reshape(-1, 1)
+                        # u_current_reshaped = u_current_flat.reshape(u_current.shape)
                         u_pred, u_target = integrator.integrate(integration_args)
+
                         du_pred = torch.gradient(u_pred, dim=0)[0]
                         # dE_dt += torch.sum(u_pred * du_pred, dim=1)
                         loss = mse(u_pred, u_target)
@@ -481,7 +482,37 @@ if SECOND_STAGE_OPEN_BOOL == False:
                             extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
                         total_pred_loss += loss+extra_loss
                         E_sum += torch.sum(u_pred**2, dim=1)
+                        u_pred_all[:,dim-1,:] = u_pred.reshape(u_current.shape)
+                        # print(f'u_pred_all shape is {u_pred_all.shape}')
+                        u_target_all[:,dim-1,:] = u_target.reshape(u_current.shape)
+                    
+                    # print(f'u_pred_all shape is {u_pred_all.shape}')
+                    # print(f'u_target_all shape is {u_target_all.shape}')
+                    N, D, T = u_pred_all.shape  # N=1000, D=3, T=1000
+                    cov_pred = torch.zeros((D, D, T))
+                    cov_target = torch.zeros((D, D, T))
+                    for t in range(T):
+                        # u_pred_all[:, :, t] is shape (N, D), need (D, N)
+                        cov_pred[:, :, t] = torch.cov(u_pred_all[:, :, t].T)
+                        cov_target[:, :, t] = torch.cov(u_target_all[:, :, t].T)
+                    covu1u2_pred = cov_pred[0, 1, :]  # shape (T,)
+                    covu1u3_pred = cov_pred[0, 2, :]  # shape (T,)
+                    covu2u3_pred = cov_pred[1, 2, :]  # shape (T,)
 
+                    covu1u2_target = cov_target[0, 1, :]
+                    covu1u3_target = cov_target[0, 2, :]
+                    covu2u3_target = cov_target[1, 2, :]
+                    cov_pred_stack = torch.stack([covu1u2_pred, covu1u3_pred, covu2u3_pred], dim=1)
+                    cov_target_stack = torch.stack([covu1u2_target, covu1u3_target, covu2u3_target], dim=1)
+                    # cov_loss = mse(cov_pred, cov_target)
+                    # print(f'cov_pred shape is {cov_pred.shape}')
+                    # print(f'cov_target shape is {cov_target.shape}')
+                    # print(f'cov_pred_stack shape is {cov_pred_stack.shape}')
+                    # print(f'cov_target_stack shape is {cov_target_stack.shape}')
+                    cov_loss = mse(cov_pred_stack, cov_target_stack)
+                    # print(f'cov_loss shape is {cov_loss}')
+                    
+                    # total_pred_loss += cov_loss
                     # Energy conservation loss: minimize dE/dt
                     derviatve_E_sum = torch.gradient(E_sum, dim=0)[0]
                     # print(f'derviative_E_sum shape is {derviatve_E_sum.shape}')
@@ -490,7 +521,7 @@ if SECOND_STAGE_OPEN_BOOL == False:
                     # skew_loss = mse(L, -L.T)
                     #neg_diag_loss = torch.relu(G.diag()).sum()
                     total_loss = total_pred_loss#+skew_loss #+ neg_diag_loss
-
+                    print(f'total_loss is {total_loss}, cov_loss is {cov_loss}, total_pred_loss is {total_pred_loss},')
                     total_loss.backward()
                     model_optim.step()
 
@@ -498,9 +529,51 @@ if SECOND_STAGE_OPEN_BOOL == False:
                         print(f"Training index: {train_idx}")
                         print(f"Loss: {total_loss.item():.6f},")
                         print(f"Expression: {combined_conservation_law.expression_visualize()}")
-
-
-                       
+                    
+                # After the main Adam training loop, do LBFGS fine-tuning for each model
+                for dim in range(1, dimension+1):
+                    model = combined_conservation_law.models[str(dim)]
+                    lbfgs_optim = torch.optim.LBFGS(model.parameters(),
+                                                    lr=0.1,  # Smaller learning rate for fine-tuning
+                                                    max_iter=20,
+                                                    max_eval=25,
+                                                    tolerance_grad=1e-7,
+                                                    tolerance_change=1e-9,
+                                                    history_size=50)
+                    def lbfgs_closure():
+                        lbfgs_optim.zero_grad()
+                        integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor.to(DEVICE), integration_func=model, index=dim)
+                        du_pred, du_target = integrator.integrate(integration_args)
+                        loss = mse(du_pred, du_target)
+                        if torch.isnan(loss):
+                            print("Warning: NaN detected in loss during LBFGS closure")
+                            loss = torch.tensor(1e6, requires_grad=True, device=loss.device)
+                        loss.backward()
+                        return loss
+                    for train_idx in range(10):  # You can adjust this number
+                        try:
+                            loss = lbfgs_optim.step(lbfgs_closure)
+                            if torch.isnan(loss):
+                                print("Warning: NaN detected in loss, stopping LBFGS optimization")
+                                break
+                            if train_idx % 5 == 0:
+                                print('✅'*40)
+                                print(f'LBFGS Epoch {train_idx}, Loss: {loss.item()}')
+                                try:
+                                    expr_str = model.expression_visualize()
+                                    print(f"Current expression: {expr_str}")
+                                except Exception as e:
+                                    print(f"Could not visualize expression: {e}")
+                                print('✅'*40)
+                        except Exception as e:
+                            print(f"Error in LBFGS step: {e}")
+                            break
+                    # Save individual model after training
+                    save_path = os.path.join(args.log_save_path, f'FEX_dim_{dim}.pth')
+                    torch.save(model.state_dict(), save_path)
+                    optimal_idx_path = os.path.join(args.log_save_path, f'optimal_idx_{dim}.npy')
+                    np.save(optimal_idx_path,  op_seqs_all[dim] )
+                    print(f"Model for dimension {dim} saved to {save_path}")
             else:
                 for dim in range(1, dimension+1):
                     model = FEX(op_seqs_all[dim], dim=dimension).to(DEVICE)
