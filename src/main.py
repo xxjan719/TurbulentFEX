@@ -129,7 +129,7 @@ if SECOND_STAGE_OPEN_BOOL == False:
         
         # print(dataset.shape)
         if args.TRAIN_GROUND_TRUTH == False:
-            for dim in range(0+1,dimension+1):
+            for dim in range(0+2,3):#dimension+1):
                 model_save_path = os.path.join(args.log_save_path, f"FEX_dim_{dim}.pth")
                 log_file = os.path.join(args.log_save_path, f'log_dimension_{dim}.txt')
                 if os.path.exists(model_save_path) and os.path.exists(log_file): #os.path.exists(model_save_path) and 
@@ -441,23 +441,23 @@ if SECOND_STAGE_OPEN_BOOL == False:
                 for train_idx in range(TRAIN_EPOCHS_SECOND):
                     model_optim.zero_grad()
                     total_pred_loss = 0
-                    E_sum = 0
+                    # E_sum = 0
                        
-                    # Build L and G matrices
-                    L = torch.zeros(dimension, dimension, device=DEVICE)
-                    G = torch.zeros(dimension, dimension, device=DEVICE)
-                    for i in range(dimension):
-                        coeffs = combined_conservation_law.models[str(i+1)].get_all_linear_nonlinear_coeffs_autograd(dim=i)
-                        # coeffs is a tuple/list: (coeff_x1, coeff_x2, coeff_x3)
-                        for j in range(dimension):
-                            L[i, j] = coeffs[j]
-                    # Diagonal to G, off-diagonal to L
-                    for j in range(dimension):
-                        G[j, j] = L[j, j]
-                        L[j, j] = 0  # Zero out diagonal in L
-                    u_pred_all = torch.zeros(dataset_tensor.shape[0], dataset_tensor.shape[1],dataset_tensor.shape[2]-1, device=DEVICE)
-                    u_target_all = torch.zeros(dataset_tensor.shape[0], dataset_tensor.shape[1],dataset_tensor.shape[2]-1, device=DEVICE)
-                    l1_loss = 0
+                    # # Build L and G matrices
+                    # L = torch.zeros(dimension, dimension, device=DEVICE)
+                    # G = torch.zeros(dimension, dimension, device=DEVICE)
+                    # for i in range(dimension):
+                    #     coeffs = combined_conservation_law.models[str(i+1)].get_all_linear_nonlinear_coeffs_autograd(dim=i)
+                    #     # coeffs is a tuple/list: (coeff_x1, coeff_x2, coeff_x3)
+                    #     for j in range(dimension):
+                    #         L[i, j] = coeffs[j]
+                    # # Diagonal to G, off-diagonal to L
+                    # for j in range(dimension):
+                    #     G[j, j] = L[j, j]
+                    #     L[j, j] = 0  # Zero out diagonal in L
+                    # u_pred_all = torch.zeros(dataset_tensor.shape[0], dataset_tensor.shape[1],dataset_tensor.shape[2]-1, device=DEVICE)
+                    # u_target_all = torch.zeros(dataset_tensor.shape[0], dataset_tensor.shape[1],dataset_tensor.shape[2]-1, device=DEVICE)
+                    # l1_loss = 0
                     # Prediction and extra loss
                     for dim in range(1, dimension+1):
                         model = combined_conservation_law.models[str(dim)]
@@ -492,40 +492,40 @@ if SECOND_STAGE_OPEN_BOOL == False:
                             #l1_loss = torch.abs(coeffs_2) + torch.abs(coeffs_1)
                             extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
                         total_pred_loss += loss+extra_loss
-                        E_sum += torch.sum(u_pred**2, dim=1)
-                        u_pred_all[:,dim-1,:] = u_pred.reshape(u_current.shape)
-                        # print(f'u_pred_all shape is {u_pred_all.shape}')
-                        u_target_all[:,dim-1,:] = u_target.reshape(u_current.shape)
-                        #l1_loss += l1_loss
-                    # print(f'u_pred_all shape is {u_pred_all.shape}')
-                    # print(f'u_target_all shape is {u_target_all.shape}')
-                    N, D, T = u_pred_all.shape  # N=1000, D=3, T=1000
-                    cov_pred = torch.zeros((D, D, T))
-                    cov_target = torch.zeros((D, D, T))
-                    for t in range(T):
-                        # u_pred_all[:, :, t] is shape (N, D), need (D, N)
-                        cov_pred[:, :, t] = torch.cov(u_pred_all[:, :, t].T)
-                        cov_target[:, :, t] = torch.cov(u_target_all[:, :, t].T)
-                    covu1u2_pred = cov_pred[0, 1, :]  # shape (T,)
-                    covu1u3_pred = cov_pred[0, 2, :]  # shape (T,)
-                    covu2u3_pred = cov_pred[1, 2, :]  # shape (T,)
+                    #     E_sum += torch.sum(u_pred**2, dim=1)
+                    #     u_pred_all[:,dim-1,:] = u_pred.reshape(u_current.shape)
+                    #     # print(f'u_pred_all shape is {u_pred_all.shape}')
+                    #     u_target_all[:,dim-1,:] = u_target.reshape(u_current.shape)
+                    #     #l1_loss += l1_loss
+                    # # print(f'u_pred_all shape is {u_pred_all.shape}')
+                    # # print(f'u_target_all shape is {u_target_all.shape}')
+                    # N, D, T = u_pred_all.shape  # N=1000, D=3, T=1000
+                    # cov_pred = torch.zeros((D, D, T))
+                    # cov_target = torch.zeros((D, D, T))
+                    # for t in range(T):
+                    #     # u_pred_all[:, :, t] is shape (N, D), need (D, N)
+                    #     cov_pred[:, :, t] = torch.cov(u_pred_all[:, :, t].T)
+                    #     cov_target[:, :, t] = torch.cov(u_target_all[:, :, t].T)
+                    # covu1u2_pred = cov_pred[0, 1, :]  # shape (T,)
+                    # covu1u3_pred = cov_pred[0, 2, :]  # shape (T,)
+                    # covu2u3_pred = cov_pred[1, 2, :]  # shape (T,)
 
-                    covu1u2_target = cov_target[0, 1, :]
-                    covu1u3_target = cov_target[0, 2, :]
-                    covu2u3_target = cov_target[1, 2, :]
-                    cov_pred_stack = torch.stack([covu1u2_pred, covu1u3_pred, covu2u3_pred], dim=1)
-                    cov_target_stack = torch.stack([covu1u2_target, covu1u3_target, covu2u3_target], dim=1)
-                    # cov_loss = mse(cov_pred, cov_target)
-                    # print(f'cov_pred shape is {cov_pred.shape}')
-                    # print(f'cov_target shape is {cov_target.shape}')
-                    # print(f'cov_pred_stack shape is {cov_pred_stack.shape}')
-                    # print(f'cov_target_stack shape is {cov_target_stack.shape}')
-                    cov_loss = mse(cov_pred_stack, cov_target_stack)
-                    # print(f'cov_loss shape is {cov_loss}')
+                    # covu1u2_target = cov_target[0, 1, :]
+                    # covu1u3_target = cov_target[0, 2, :]
+                    # covu2u3_target = cov_target[1, 2, :]
+                    # cov_pred_stack = torch.stack([covu1u2_pred, covu1u3_pred, covu2u3_pred], dim=1)
+                    # cov_target_stack = torch.stack([covu1u2_target, covu1u3_target, covu2u3_target], dim=1)
+                    # # cov_loss = mse(cov_pred, cov_target)
+                    # # print(f'cov_pred shape is {cov_pred.shape}')
+                    # # print(f'cov_target shape is {cov_target.shape}')
+                    # # print(f'cov_pred_stack shape is {cov_pred_stack.shape}')
+                    # # print(f'cov_target_stack shape is {cov_target_stack.shape}')
+                    # cov_loss = mse(cov_pred_stack, cov_target_stack)
+                    # # print(f'cov_loss shape is {cov_loss}')
                     
                     # total_pred_loss += cov_loss
                     # Energy conservation loss: minimize dE/dt
-                    derviatve_E_sum = torch.gradient(E_sum, dim=0)[0]
+                    # derviatve_E_sum = torch.gradient(E_sum, dim=0)[0]
                     # print(f'derviative_E_sum shape is {derviatve_E_sum.shape}')
                     # print(f'L shape is {L.shape}')
                     # print(f'L is {L}')
@@ -574,47 +574,6 @@ if SECOND_STAGE_OPEN_BOOL == False:
                             print(f"Loss: {loss.item():.6f}")
                             print(f"Expression: {model.expression_visualize()}")
                             
-                    lbfgs_optim = torch.optim.LBFGS(model.parameters(),
-                                                        lr=0.1,  # Smaller learning rate for fine-tuning
-                                                        max_iter=20,
-                                                        max_eval=25,
-                                                        tolerance_grad=1e-7,
-                                                        tolerance_change=1e-9,
-                                                        history_size=50)
-
-                    def lbfgs_closure():
-                        lbfgs_optim.zero_grad()
-                        integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor.to(DEVICE), integration_func=model, index=dim)
-                        du_pred, du_target = integrator.integrate(integration_args)
-                        loss = mse(du_pred, du_target)
-                                # Check for NaN in loss
-                        if torch.isnan(loss):
-                            print("Warning: NaN detected in loss during LBFGS closure")
-                            return torch.tensor(1e6, requires_grad=True)  # Return a large value
-                        loss.backward()
-                        return loss
-
-                    # Run LBFGS for fewer epochs since we're just fine-tuning
-                    for train_idx in range(10):  # You can adjust this number
-                        try:
-                            loss = lbfgs_optim.step(lbfgs_closure)
-                            if torch.isnan(loss):
-                                print("Warning: NaN detected in loss, stopping LBFGS optimization")
-                                break
-                                
-                            if train_idx % 5 == 0:  # Print more frequently during fine-tuning
-                                print('✅'*40)
-                                print(f'LBFGS Epoch {train_idx}, Loss: {loss.item()}')
-                                try:
-                                    expr_str = model.expression_visualize()
-                                    print(f"Current expression: {expr_str}")
-
-                                except Exception as e:
-                                    print(f"Could not visualize expression: {e}")
-                                print('✅'*40)
-                        except Exception as e:
-                                print(f"Error in LBFGS step: {e}")
-                                break
 
                     # Save individual model after training
                     save_path = os.path.join(args.log_save_path, f'FEX_dim_{dim}.pth')
