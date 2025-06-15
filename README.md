@@ -38,13 +38,59 @@ TurbulentFEX/
 ```
 
 ## Issues
-1. Energy Conservation law might not be working.
-2. I don't understand why we need to focus three moments.
+
 
 ## Recent Updates
 
-### Need to Update (2025-06-08 - 2025-06-09)
+### Need to Update (2025-06-15 - 2025-06-22)
 - print all the dataset performance in `prediction.py`
+
+### Updates (2025-06-09 - 2025-06-15)
+1. **Coefficient Training and Refinement**
+   - Implemented a two-phase coefficient training process:
+     - Phase 1: Initial FEX training to get approximate coefficients
+     - Phase 2: Coefficient acceleration step to refine values closer to targets
+   - Added coefficient constraints to prevent drift:
+     - Parameters are clamped to be within ±0.1 of target values
+     - Strong L1 and L2 penalties for deviation from targets
+     - Learning rate scheduling for stable convergence
+
+2. **Drift Term Improvements**
+   - Fixed issues with linear, nonlinear, and force terms in drift calculations
+   - Implemented separate handling for different term types:
+     - Linear terms (x1, x2, x3): Direct coefficient optimization
+     - Interaction terms (x1*x2, x1*x3, x2*x3): Special handling for cross-term effects
+     - Constant terms: Preserved original values
+   - Added coefficient verification to ensure physical consistency
+
+3. **Interaction Term Optimization**
+   - Developed new approach for handling interaction terms (cov(u1,u2)):
+     - Interaction terms now depend on linear coefficient performance
+     - Added coefficient acceleration step to improve accuracy
+     - Implemented special handling for terms close to integer values
+   - Results show improved accuracy in cross-term predictions
+
+4. **Energy Conservation and Dissipation**
+   - Implemented new approach for energy conservation:
+     - First train with given dissipation coefficient
+     - Then apply coefficient acceleration
+     - Results show better stability than direct energy conservation enforcement
+   - Added verification of energy conservation properties
+
+5. **Performance Monitoring**
+   - Added comprehensive performance tracking:
+     - Coefficient convergence monitoring
+     - Loss tracking (prediction and coefficient losses)
+     - Final expression accuracy verification
+   - Results available in prediction.ipynb with detailed metrics
+
+6. **Code Improvements**
+   - Enhanced coefficient training process:
+     - Added parameter constraints
+     - Implemented adaptive learning rates
+     - Added early stopping for stable convergence
+   - Improved expression formatting and output
+   - Added detailed logging of training progress
 
 ### Updates (2025-06-08)
 - Added `MultiDimFEX` class for unified 3D FEX prediction: loads all three FEX models (one per dimension) and returns a 3D result for input data.
