@@ -117,6 +117,22 @@ def generate_fex_eval_function(model_path, dimension=3):
     x1, x2, x3 = sp.symbols('x1 x2 x3')
     f_exprs = {}
     change_exprs = {}
+    trainable_terms = {}  # Store terms that need further training
+
+    def get_closest_value(coeff):
+        """Get the closest common value (integer or decimal) to the coefficient"""
+        # Check common decimal values first
+        common_values = [-0.8,-0.6, -0.4,-0.3, -0.2, -0.1, 0.1, 0.2, 0.3, 0.4, 0.6,0.8]
+        closest_val = round(float(coeff))
+        min_diff = abs(float(coeff) - closest_val)
+        
+        for val in common_values:
+            diff = abs(float(coeff) - val)
+            if diff < min_diff:
+                min_diff = diff
+                closest_val = val
+                
+        return closest_val
 
     for dim in range(1, dimension + 1):
         op_file = os.path.join(model_path, f'optimal_idx_{dim}.npy')
@@ -130,28 +146,51 @@ def generate_fex_eval_function(model_path, dimension=3):
 
         rounded_terms = []
         change_terms = []
+        trainable_terms[dim] = []  # List to store trainable terms for this dimension
 
         for term in expr_sympy.as_ordered_terms():
             coeff, rest = term.as_coeff_Mul()
             rounded_coeff = coeff  # default: no change
 
-            # Apply rounding and track change
-            if dim == 1:
-                if (rest.has(x2) and not (rest.has(x1) or rest.has(x3))) or \
-                   (rest.has(x3) and not (rest.has(x1) or rest.has(x2))):
-                    rounded_coeff = int(round(float(coeff)))
-            elif dim == 2:
-                if (rest.has(x1) and not (rest.has(x2) or rest.has(x3))) or \
-                   (rest.has(x3) and not (rest.has(x1) or rest.has(x2))):
-                    rounded_coeff = int(round(float(coeff)))
-            elif dim == 3:
-                if (rest.has(x1) and not (rest.has(x2) or rest.has(x3))) or \
-                   (rest.has(x2) and not (rest.has(x1) or rest.has(x3))):
-                    rounded_coeff = int(round(float(coeff)))
+            # print(f"rest: {rest}")
+            # Check if term is not a constant (has variables)
+            if not (rest == 1):
+                # Get closest value (integer or common decimal)
+                rounded_val = get_closest_value(coeff)
+                diff = abs(float(coeff) - rounded_val)
+                # print(f"diff from {rounded_val}: {diff}")
+                
+                # Special cases for ground truth coefficients
+                if dim == 1 and rest.has(x1):
+                    rounded_coeff = coeff  # Keep original coefficient for x1
+                    # print(f"keeping original coefficient for x1: {rounded_coeff}")
+                elif dim == 2 and rest.has(x2):
+                    rounded_coeff = coeff  # Keep original coefficient for x2
+                    # print(f"keeping original coefficient for x2: {rounded_coeff}")
+                elif dim == 3 and rest.has(x3):
+                    rounded_coeff = coeff  # Keep original coefficient for x3
+                    # print(f"keeping original coefficient for x3: {rounded_coeff}")
+                # For x2*x3 in dim 1 or x1*x2 in dim 2, if diff < 0.01, keep original coefficient
+                elif (dim == 1 and rest.has(x2) and rest.has(x3)) or \
+                     (dim == 2 and rest.has(x1) and rest.has(x2)):
+                    if diff < 0.01:
+                        rounded_coeff = coeff  # Keep original coefficient
+                        # print(f"keeping original coefficient for cross term: {rounded_coeff}")
+                    else:
+                        trainable_terms[dim].append((coeff, rest, rounded_val))
+                        # print(f"Adding trainable term: {coeff}*{rest} (diff from {rounded_val}: {diff})")
+                # For other terms, if diff > 0.01, mark as trainable
+                elif diff > 0.01:
+                    trainable_terms[dim].append((coeff, rest, rounded_val))
+                    # print(f"Adding trainable term: {coeff}*{rest} (diff from {rounded_val}: {diff})")
+                else:
+                    rounded_coeff = coeff  # Keep original coefficient for non-trainable terms
+                    # print(f"keeping original coefficient (non-trainable): {rounded_coeff}*{rest}")
 
-            # Append final expression and correction delta
+            # For rounded expression, use the rounded coefficient
             rounded_terms.append(rounded_coeff * rest)
-            change_terms.append((coeff - rounded_coeff) * rest)
+            # For change expression, use original coefficient for terms that need training
+            change_terms.append(coeff * rest)
 
         rounded_expr = sum(rounded_terms)
         change_expr = sum(change_terms)
@@ -159,9 +198,144 @@ def generate_fex_eval_function(model_path, dimension=3):
 
         print(f"\nFinal rounded expression (dim={dim}):\n{rounded_expr}")
         print(f"Change expression (dim={dim}):\n{change_expr}\n")
+        print(f"Trainable terms (dim={dim}):")
+        for coeff, rest, target in trainable_terms[dim]:
+            print(f"  {coeff}*{rest} -> target: {target}")
 
         f_exprs[dim] = sp.lambdify((x1, x2, x3), rounded_expr, modules='numpy')
         change_exprs[dim] = sp.lambdify((x1, x2, x3), change_expr, modules='numpy')
+
+    def train_coefficients(u_current, learning_rate=0.0001, epochs=200):
+        """
+        Train the coefficients that need further refinement using supervised learning.
+        Args:
+            u_current: Training data tensor
+            learning_rate: Learning rate for optimization
+            epochs: Number of training epochs
+        """
+        # Get target values from rounded expression
+        target_values = eval_expr(u_current)
+        
+        # Store final expressions for each dimension
+        final_exprs = {}
+        
+        for dim in range(1, dimension + 1):
+            if not trainable_terms[dim]:
+                continue
+
+            print(f"\nTraining coefficients for dimension {dim}:")
+            
+            # Get the original expression for this dimension
+            op_file = os.path.join(model_path, f'optimal_idx_{dim}.npy')
+            op_seq = torch.tensor(np.load(op_file, allow_pickle=True), dtype=torch.long)
+            model = FEX(op_seq, dim=dimension)
+            model.load_state_dict(torch.load(os.path.join(model_path, f'FEX_dim_{dim}.pth')))
+            dim_expr = sp.sympify(model.expression_visualize_simplified())
+            
+            # Initialize all parameters for this dimension
+            params = []
+            terms = []
+            targets = []
+            for coeff, rest, target in trainable_terms[dim]:
+                param = torch.tensor(float(coeff), requires_grad=True)
+                params.append(param)
+                terms.append(rest)
+                targets.append(target)
+            
+            # Create optimizer for all parameters with a smaller learning rate
+            optimizer = torch.optim.Adam(params, lr=learning_rate)
+            
+            # Training loop
+            for epoch in range(epochs):
+                optimizer.zero_grad()
+                
+                # Get predictions using current parameter values
+                pred_terms = []
+                for param, rest in zip(params, terms):
+                    # Evaluate the term using PyTorch operations
+                    if rest == x1:
+                        term_pred = param * u_current[:, 0]
+                    elif rest == x2:
+                        term_pred = param * u_current[:, 1]
+                    elif rest == x3:
+                        term_pred = param * u_current[:, 2]
+                    elif rest == x1 * x2:
+                        term_pred = param * (u_current[:, 0] * u_current[:, 1])
+                    elif rest == x1 * x3:
+                        term_pred = param * (u_current[:, 0] * u_current[:, 2])
+                    elif rest == x2 * x3:
+                        term_pred = param * (u_current[:, 1] * u_current[:, 2])
+                    else:
+                        raise ValueError(f"Unknown term: {rest}")
+                    pred_terms.append(term_pred)
+                
+                # Sum all predictions
+                pred = sum(pred_terms)
+                
+                # Calculate two losses:
+                # 1. Prediction loss - how well the expression matches the target values
+                pred_loss = torch.mean((pred - target_values[:, dim-1]) ** 2)
+                
+                # 2. Coefficient loss - how close each parameter is to its target value
+                coeff_loss = torch.tensor(0.0, requires_grad=True)
+                for param, target in zip(params, targets):
+                    # Use a stronger penalty for deviation from target
+                    diff = param - target
+                    coeff_loss = coeff_loss + torch.abs(diff) + 100.0 * (diff ** 2)
+                
+                # Combine losses with much higher weight on coefficient loss
+                loss = pred_loss + 1000.0 * coeff_loss
+                
+                # Compute gradients
+                loss.backward()
+                
+                # Update parameters
+                optimizer.step()
+                
+                # Project parameters to be within 0.1 of their target values
+                with torch.no_grad():
+                    for param, target in zip(params, targets):
+                        param.clamp_(target - 0.1, target + 0.1)
+                
+                if epoch % 20 == 0:
+                    print(f"  Epoch {epoch}:")
+                    for param, rest, target in zip(params, terms, targets):
+                        print(f"    Term {rest}: {param.item():.6f} (target: {target})")
+                    print(f"    Prediction Loss: {pred_loss.item():.6f}")
+                    print(f"    Coefficient Loss: {coeff_loss.item():.6f}")
+                    print(f"    Total Loss: {loss.item():.6f}")
+            
+            print(f"Final parameters:")
+            for param, rest, target in zip(params, terms, targets):
+                print(f"    Term {rest}: {param.item():.6f} (target: {target})")
+            
+            # Build final expression for this dimension
+            final_terms = []
+            for term in dim_expr.as_ordered_terms():
+                coeff, rest = term.as_coeff_Mul()
+                # Check if this term was trainable
+                is_trainable = False
+                for train_param, train_rest, _ in zip(params, terms, targets):
+                    if rest == train_rest:
+                        coeff = train_param.item()
+                        is_trainable = True
+                        break
+                final_terms.append(f"{coeff:.15f}*{rest}")
+            
+            final_expr = " + ".join(final_terms)
+            final_exprs[dim] = final_expr
+        
+        # Print final expressions
+        print('✅'*40)
+        print("\n" + "="*50)
+        print("Final Expressions After Training:")
+        print("="*50)
+        for dim in range(1, dimension + 1):
+            if dim in final_exprs:
+                print(f"\nDimension {dim}:")
+                print(f"  {final_exprs[dim]}")
+        print("="*50)
+        print('✅'*40)
 
     def eval_expr(x_tensor):
         x_np = x_tensor.cpu().numpy()
@@ -179,7 +353,7 @@ def generate_fex_eval_function(model_path, dimension=3):
             change_exprs[3](x_np[:, 0], x_np[:, 1], x_np[:, 2]),
         ], axis=1), dtype=torch.float32)
 
-    return (eval_expr, eval_change_expr, change_exprs)
+    return (eval_expr, eval_change_expr, change_exprs, train_coefficients)
 
 
 if __name__ == "__main__":
@@ -190,9 +364,11 @@ if __name__ == "__main__":
     #     3: [2, 1, 1, 2, 0, 1, 2, 2, 1, 0, 1, 2],
     # }
     # model = MultiDimensionFEX(op_seqs,len(op_seqs)).to(DEVICE)
-    model_path=os.path.join('..','Example','MC_triad','Results','equipart')
-    data = np.load(os.path.join(model_path, 'simulation_results.npz')) 
-    eval_expr, eval_change_expr, change_exprs = generate_fex_eval_function(model_path, dimension=3)
+    model_path = os.path.join('..', 'Example', 'MC_triad', 'Results', 'equipart')
+    data = np.load(os.path.join(model_path, 'simulation_results.npz'))
+    eval_expr, eval_change_expr, change_exprs, train_coefficients = generate_fex_eval_function(model_path, dimension=3)
+    
+    # Prepare data
     u1 = data['dataset'][:,0]
     u2 = data['dataset'][:,1]
     u3 = data['dataset'][:,2]
@@ -206,5 +382,7 @@ if __name__ == "__main__":
     u_next = np.concatenate([u1_next,u2_next,u3_next],axis=1)
     u_current = torch.tensor(u_current, dtype=torch.float32)
     u_next = torch.tensor(u_next, dtype=torch.float32)
-    y_pred = eval_change_expr(u_current)
-    print(f"Output: {y_pred}")
+    
+    # Train coefficients
+    train_coefficients(u_current)
+    #print('✅'*40)
