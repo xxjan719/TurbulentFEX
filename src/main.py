@@ -8,7 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.FEX import FEX#, ThreeDimensionFEX
 from utils.ODEParser import ODE_solver,FN_Net
 from utils.constant import *
-from utils.helper import logprint,adjust_learning_rate,weights_init,process_chunk_cpu
+from utils.helper import logprint,adjust_learning_rate,weights_init,process_chunk_cpu,process_chunk_auto
 from utils.controller import Controller
 from utils.Sampler import Sampler
 from utils.Pool import Pool
@@ -625,7 +625,7 @@ else:
     print(np.min(DIFFEREMCE, axis=0))
     it_n_index = int(np.ceil(train_size / batch_size))
     print(f'it_n_index is {it_n_index}')
-    TRAIN_INDEX_INITIAL = process_chunk_cpu(
+    TRAIN_INDEX_INITIAL = process_chunk_auto(
         it_n_index=it_n_index,
         it_size_x0train=batch_size,
         short_size=SHORT_SIZE,

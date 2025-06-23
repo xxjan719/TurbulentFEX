@@ -3,7 +3,11 @@ import logging
 import math
 import matplotlib.pyplot as plt
 import torch
-import faiss
+from sklearn.neighbors import KDTree
+from scipy.spatial.distance import cdist
+import numba
+from numba import jit, prange
+
 def Buu(B,u,v):
     '''Compute the Buu operator terms for the triad model.'''
     if len(u.shape) == 1:
@@ -69,29 +73,129 @@ def weights_init(m):
         if m.bias is not None:
             torch.nn.init.zeros_(m.bias)
 
+@jit(nopython=True, parallel=True)
+def compute_distances_parallel(x0_train_chunk, x_sample):
+    """Compute distances between training chunk and sample points using Numba for speed."""
+    n_train = x0_train_chunk.shape[0]
+    n_sample = x_sample.shape[0]
+    distances = np.zeros((n_train, n_sample))
+    
+    for i in prange(n_train):
+        for j in range(n_sample):
+            diff = x0_train_chunk[i] - x_sample[j]
+            distances[i, j] = np.sum(diff * diff)
+    
+    return distances
 
-
-
-
+@jit(nopython=True)
+def find_nearest_neighbors(distances, short_size):
+    """Find nearest neighbors using Numba for speed."""
+    n_train = distances.shape[0]
+    indices = np.zeros((n_train, short_size), dtype=np.int32)
+    
+    for i in range(n_train):
+        # Get indices of smallest distances
+        sorted_indices = np.argsort(distances[i])
+        indices[i] = sorted_indices[:short_size]
+    
+    return indices
 
 def process_chunk_cpu(it_n_index, it_size_x0train, short_size, x_sample, x0_train, train_size, x_dim):
     x0_train_index_initial = np.empty((train_size, short_size), dtype=int)
-    # Create CPU index
-    index = faiss.IndexFlatL2(x_dim)  # Create a FAISS index for exact searches
-    index.add(x_sample)  # Add x_sample to the index
-        
+    
+    # Use KDTree for efficient nearest neighbor search
+    tree = KDTree(x_sample, leaf_size=40)  # Optimized leaf size for better performance
+    
     for jj in range(it_n_index):
         start_idx = jj * it_size_x0train
         end_idx = min((jj + 1) * it_size_x0train, train_size)
         x0_train_chunk = x0_train[start_idx:end_idx]
 
-            # Perform the search on CPU
-        _, index_initial = index.search(x0_train_chunk, short_size)
-        x0_train_index_initial[start_idx:end_idx,:] = index_initial 
+        # Perform the search using KDTree
+        distances, index_initial = tree.query(x0_train_chunk, k=short_size)
+        x0_train_index_initial[start_idx:end_idx, :] = index_initial
 
         if jj % 500 == 0:
             print('find index iteration:', jj, it_size_x0train)
-        
-        # Cleanup resources
-    del index
+    
     return x0_train_index_initial
+
+def process_chunk(it_n_index, it_size_x0train, short_size, x_sample, x0_train, train_size, x_dim):
+    x0_train_index_initial = np.empty((train_size, short_size), dtype=int)
+    
+    # For GPU-like performance, use optimized CPU implementation with Numba
+    # First, compute all distances efficiently
+    print("Computing distances...")
+    distances = cdist(x0_train, x_sample, metric='sqeuclidean')  # Use squared Euclidean for speed
+    
+    print("Finding nearest neighbors...")
+    for jj in range(it_n_index):
+        start_idx = jj * it_size_x0train
+        end_idx = min((jj + 1) * it_size_x0train, train_size)
+        
+        # Get distances for this chunk
+        chunk_distances = distances[start_idx:end_idx]
+        
+        # Find nearest neighbors
+        index_initial = np.argsort(chunk_distances, axis=1)[:, :short_size]
+        x0_train_index_initial[start_idx:end_idx, :] = index_initial
+
+        if jj % 500 == 0:
+            print('find index iteration:', jj, it_size_x0train)
+    
+    return x0_train_index_initial
+
+def process_chunk_optimized(it_n_index, it_size_x0train, short_size, x_sample, x0_train, train_size, x_dim):
+    """Optimized version using Numba for maximum speed."""
+    x0_train_index_initial = np.empty((train_size, short_size), dtype=int)
+    
+    for jj in range(it_n_index):
+        start_idx = jj * it_size_x0train
+        end_idx = min((jj + 1) * it_size_x0train, train_size)
+        x0_train_chunk = x0_train[start_idx:end_idx]
+
+        # Use Numba-optimized distance computation
+        distances = compute_distances_parallel(x0_train_chunk, x_sample)
+        index_initial = find_nearest_neighbors(distances, short_size)
+        x0_train_index_initial[start_idx:end_idx, :] = index_initial
+
+        if jj % 500 == 0:
+            print('find index iteration:', jj, it_size_x0train)
+    
+    return x0_train_index_initial
+
+def process_chunk_cpu_chunked(x_sample, x0_train, start_idx, end_idx, short_size, x_dim, batch_size=5000):
+    """
+    CPU version of chunked processing with batching for large datasets.
+    Similar to the GPU version but optimized for CPU.
+    """
+    x0_train_index_initial = np.empty((end_idx - start_idx, short_size), dtype=int)
+    
+    # Use KDTree for efficient nearest neighbor search
+    # Build the tree on the entire x_sample for better performance
+    print(f"Building KDTree for {x_sample.shape[0]} sample points...")
+    tree = KDTree(x_sample, leaf_size=40)
+    
+    print(f"Indexing complete, now performing searches for data from {start_idx} to {end_idx}.")
+
+    # Perform the search for the current chunk in smaller batches
+    for k in range(start_idx, end_idx, batch_size):
+        end_k = min(k + batch_size, end_idx)
+        search_chunk = x0_train[k:end_k]
+        
+        # Perform the search using KDTree
+        distances, index_initial = tree.query(search_chunk, k=short_size)
+        
+        # Store results
+        local_start = k - start_idx
+        local_end = local_start + search_chunk.shape[0]
+        x0_train_index_initial[local_start:local_end, :] = index_initial
+        
+        if (k - start_idx) % (batch_size * 10) == 0:
+            print(f"Processed {k - start_idx} out of {end_idx - start_idx} points")
+
+    return x0_train_index_initial
+
+
+
+
