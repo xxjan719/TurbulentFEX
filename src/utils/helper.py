@@ -8,6 +8,8 @@ from scipy.spatial.distance import cdist
 import numba
 from numba import jit, prange
 
+import os
+
 def Buu(B,u,v):
     '''Compute the Buu operator terms for the triad model.'''
     if len(u.shape) == 1:
@@ -195,7 +197,4 @@ def process_chunk_cpu_chunked(x_sample, x0_train, start_idx, end_idx, short_size
             print(f"Processed {k - start_idx} out of {end_idx - start_idx} points")
 
     return x0_train_index_initial
-
-
-
 
