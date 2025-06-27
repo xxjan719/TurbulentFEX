@@ -2,10 +2,24 @@ import torch
 import torch.nn as nn
 import numpy as np
 import os
+
 import torch.multiprocessing as mp
 from functools import partial
 from pathlib import Path
 import torch.optim as optim
+
+# Set environment variable to handle OpenMP runtime conflicts
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
+# Add FAISS imports for CPU-based nearest neighbor search
+try:
+    import faiss
+    FAISS_AVAILABLE = True
+    print("FAISS successfully imported for CPU-based nearest neighbor search")
+except ImportError:
+    print("Warning: FAISS not available. Install with: pip install faiss-cpu")
+    FAISS_AVAILABLE = False
+
 def cond_alpha(t,dt): # in the training paper: it should be related to  b(\tau) in formula (3.1)
     return 1-t+dt
 
@@ -169,6 +183,52 @@ def generate_rk4_residue(func, data, dt):
 
 
 
+def process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, x_sample, x0_train, train_size, x_dim):
+    """
+    CPU version of process_chunk using FAISS for efficient nearest neighbor search.
+    
+    Args:
+        it_n_index: Number of iterations
+        it_size_x0train: Size of each training chunk
+        short_size: Number of nearest neighbors to find
+        x_sample: Reference points for nearest neighbor search
+        x0_train: Training points to find neighbors for
+        train_size: Total number of training points
+        x_dim: Dimension of the data points
+    
+    Returns:
+        x0_train_index_initial: Array of nearest neighbor indices
+    """
+    if not FAISS_AVAILABLE:
+        raise ImportError("FAISS is required for this function. Install with: pip install faiss-cpu")
+    
+    x0_train_index_initial = np.empty((train_size, short_size), dtype=int)
+    
+    # Create a FAISS index for exact L2 distance searches on CPU
+    index = faiss.IndexFlatL2(x_dim)
+    
+    # Add the reference points to the index
+    index.add(x_sample.astype(np.float32))
+    
+    for jj in range(it_n_index):
+        start_idx = jj * it_size_x0train
+        end_idx = min((jj + 1) * it_size_x0train, train_size)
+        x0_train_chunk = x0_train[start_idx:end_idx]
+
+        # Perform the search on CPU
+        _, index_initial = index.search(x0_train_chunk.astype(np.float32), short_size)
+        x0_train_index_initial[start_idx:end_idx, :] = index_initial 
+
+        if jj % 500 == 0:
+            print('find index iteration:', jj, it_size_x0train)
+    
+    # Cleanup resources
+    del index
+    
+    return x0_train_index_initial
+
+
+
 
 
 def FEX_model1(x):
@@ -204,6 +264,12 @@ def generate_second_step(u_current:np.ndarray,
     size = residuals.shape[0]
     odeslover_time_steps = ODESOLVER_TIME_STEPS
     
+    
+    #short index:
+    short_size = 2048
+    it_size_x0train = 4000 
+    it_n_index = size//it_size_x0train
+
     # Batch processing parameters
     it_size = min(60000, size)
     it_n = int(size / it_size)
@@ -220,9 +286,13 @@ def generate_second_step(u_current:np.ndarray,
         print(f'this is {t} times / overall {time_step} times')
         print(np.std(residuals[:, 0, t].T)/np.sqrt(dt), np.std(residuals[:, 1, t].T)/np.sqrt(dt), np.std(residuals[:, 2, t].T)/np.sqrt(dt))
         print('-'.center(100, '-'))
+        u_sample = u_current[:,:,t]
+        short_indx = process_chunk_faiss_cpu(it_n_index,it_size_x0train,short_size,u_sample,u_sample,size,u_current.shape[1])
+        u_short = u_sample[short_indx]
         
         # Scale residuals for this time step
         scaled_residuals = residuals[:, :, t] * scaler
+        z_short = scaled_residuals[short_indx]
         ZT_Solution[:,:,t] = np.random.randn(size,3)
         # Debug: Show scaled residual std
         print(f"Scaled residual std at t={t}: {np.std(scaled_residuals, axis=0)}")
@@ -241,12 +311,12 @@ def generate_second_step(u_current:np.ndarray,
             
             # Convert to tensors (assuming CPU processing, adjust device as needed)
             it_zt = torch.tensor(z_T, dtype=torch.float32).to(device)
-            it_residuals_tensor = torch.tensor(it_residuals, dtype=torch.float32).to(device)
+            it_x0 = torch.tensor(u_sample[start_idx:end_idx], dtype=torch.float32).to(device)
             
-            x_mini_batch = torch.tensor(u_current[start_idx:end_idx,:,t],dtype =torch.float32).to(device)
-            z_mini_batch = torch.tensor(it_residuals[start_idx:end_idx],dtype = torch.float32).to(device)
+            x_mini_batch = torch.tensor(u_short[start_idx:end_idx],dtype =torch.float32).to(device)
+            z_mini_batch = torch.tensor(z_short[start_idx:end_idx],dtype = torch.float32).to(device)
             # Call ODE solver for this mini-batch
-            y_temp = ODE_solver(it_zt, x_mini_batch, z_mini_batch, it_residuals_tensor, odeslover_time_steps)
+            y_temp = ODE_solver(it_zt, x_mini_batch, z_mini_batch, it_x0, odeslover_time_steps)
             
             # Store results
             ODE_Solution[start_idx:end_idx, :, t] = y_temp.cpu().detach().numpy()
@@ -421,6 +491,7 @@ def train_FN_ensemble(ODE_Solution:np.ndarray,
             if save_dir is not None:
                 norm_params = {'mean': y_mean, 'std': y_std}
                 np.save(os.path.join(save_dir, f'norm_params_dim{x_dim}_t{t}.npy'), norm_params)
+
 
 
 
