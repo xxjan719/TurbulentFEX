@@ -19,7 +19,7 @@ random.seed(SEED)
 def params_init(case_name = None)->dict:
     # initializing the settings
     params = {
-        'MC': int(1e3),  # number of Monte Carlo simulations
+        'MC': int(5e4),  # number of Monte Carlo simulations
         'Dt':1e-2, # Time step size
         'tstep': 10, # output every tstep steps
         'T':10,  # total simulation time
@@ -429,10 +429,23 @@ def plot_latex_formula(params, path):
 
 if __name__ == "__main__":
     
-    model_path = Path(os.path.join(os.path.dirname(__file__), 'Results', 'equipart'))
+    #model_path = Path(os.path.join(os.path.dirname(__file__), 'Results', 'equipart'))
     # Get matrix coefficients for each dimension
     # get_matrix_coefficients_from_FEX(model_path)
-    params = params_init('equipart')
-    plot_latex_formula(params, model_path)
+    #params = params_init('equipart')
+    #plot_latex_formula(params, model_path)
     # #print("Matrix coefficients extraction completed.")
-    
+    m0, var0 = MC_triad_initial_value()
+    params = params_init('equipart')
+    data_save_path = Path(os.path.join(os.path.dirname(__file__), 'Results', 'equipart'))
+    dataset, mean_MC, cov_MC, moment3_MC, moment3_MC_norm,Energy_MC, Energy_dyn = MC_triad_direct(params, m0, var0)
+    np.savez(
+    data_save_path,
+    dataset=dataset,
+    mean_MC=mean_MC,
+    cov_MC=cov_MC,
+    moment3_MC=moment3_MC,
+    moment3_MC_norm=moment3_MC_norm,
+    Energy_MC=Energy_MC,
+    Energy_dyn=Energy_dyn
+    )

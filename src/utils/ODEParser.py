@@ -4,7 +4,8 @@ import numpy as np
 import os
 import torch.multiprocessing as mp
 from functools import partial
-
+from pathlib import Path
+import torch.optim as optim
 def cond_alpha(t,dt): # in the training paper: it should be related to  b(\tau) in formula (3.1)
     return 1-t+dt
 
@@ -59,213 +60,432 @@ class FN_Net(nn.Module):
         self.output_dim = output_dim
         self.hid_size = hid_size
         
-        self.input = nn.Linear(self.input_dim,self.hid_size)
-        self.fc1 = nn.Linear(self.hid_size,self.hid_size)
-        self.output = nn.Linear(self.hid_size,self.output_dim)
+        self.input = nn.Linear(self.input_dim, self.hid_size)
+        self.fc1 = nn.Linear(self.hid_size, self.hid_size)
+        self.fc2 = nn.Linear(self.hid_size, self.hid_size)  # Additional layer
+        self.output = nn.Linear(self.hid_size, self.output_dim)
+        
+        # Initialize weights with better initialization
+        nn.init.xavier_uniform_(self.input.weight)
+        nn.init.xavier_uniform_(self.fc1.weight)
+        nn.init.xavier_uniform_(self.fc2.weight)
+        nn.init.xavier_uniform_(self.output.weight)
 
         self.best_input_weight = torch.clone(self.input.weight.data)
         self.best_input_bias = torch.clone(self.input.bias.data)
         self.best_fc1_weight = torch.clone(self.fc1.weight.data)
         self.best_fc1_bias = torch.clone(self.fc1.bias.data)
+        self.best_fc2_weight = torch.clone(self.fc2.weight.data)
+        self.best_fc2_bias = torch.clone(self.fc2.bias.data)
         self.best_output_weight = torch.clone(self.output.weight.data)
         self.best_output_bias = torch.clone(self.output.bias.data)
     
     def forward(self,x):
         x = torch.tanh(self.input(x))
         x = torch.tanh(self.fc1(x))
+        x = torch.tanh(self.fc2(x))  # Additional activation
         x = self.output(x)
         return x
 
     def update_best(self):
-
         self.best_input_weight = torch.clone(self.input.weight.data)
         self.best_input_bias = torch.clone(self.input.bias.data)
         self.best_fc1_weight = torch.clone(self.fc1.weight.data)
         self.best_fc1_bias = torch.clone(self.fc1.bias.data)
+        self.best_fc2_weight = torch.clone(self.fc2.weight.data)
+        self.best_fc2_bias = torch.clone(self.fc2.bias.data)
         self.best_output_weight = torch.clone(self.output.weight.data)
         self.best_output_bias = torch.clone(self.output.bias.data)
 
     def final_update(self):
-
         self.input.weight.data = self.best_input_weight 
         self.input.bias.data = self.best_input_bias
         self.fc1.weight.data = self.best_fc1_weight
         self.fc1.bias.data = self.best_fc1_bias
+        self.fc2.weight.data = self.best_fc2_weight
+        self.fc2.bias.data = self.best_fc2_bias
         self.output.weight.data = self.best_output_weight
         self.output.bias.data = self.best_output_bias
 
-def process_single_chunk(chunk_idx, u_train, train_size, x_dim, chunk_size, odesolver_time_steps, save_dir, gpu_id):
-    """
-    Process a single chunk on a specific GPU.
-    """
-    # Set device for this process
-    device = torch.device(f'cuda:{gpu_id}')
-    torch.cuda.set_device(device)
+def generate_rk4_residue(func, data, dt):
+    # Extract data dimensions - data shape is (MC_samples, 3, time_steps+1)
+    dataset = data['dataset']  # Shape: (MC_samples, 3, time_steps+1)
+    MC_samples, _, time_steps_plus_1 = dataset.shape
+    time_steps = time_steps_plus_1 - 1
     
-    chunk_start_idx = chunk_idx * chunk_size
-    chunk_end_idx = min((chunk_idx + 1) * chunk_size, train_size)
+    # Extract individual variables and reshape like in small_test.py
+    u1 = dataset[:, 0, :]  # (MC_samples, time_steps+1)
+    u2 = dataset[:, 1, :]  # (MC_samples, time_steps+1)
+    u3 = dataset[:, 2, :]  # (MC_samples, time_steps+1)
     
-    print(f'GPU {gpu_id}: Chunk {chunk_idx + 1}: {chunk_start_idx} to {chunk_end_idx}')
+    # Reshape for RK4 computation
+    u1_next = u1[:, 1:].reshape(-1, 1)  # (MC_samples * time_steps, 1)
+    u2_next = u2[:, 1:].reshape(-1, 1)  # (MC_samples * time_steps, 1)
+    u3_next = u3[:, 1:].reshape(-1, 1)  # (MC_samples * time_steps, 1)
+    u1_current = u1[:, :-1].reshape(-1, 1)  # (MC_samples * time_steps, 1)
+    u2_current = u2[:, :-1].reshape(-1, 1)  # (MC_samples * time_steps, 1)
+    u3_current = u3[:, :-1].reshape(-1, 1)  # (MC_samples * time_steps, 1)
     
-    # Generate ZT for this chunk
-    zT_chunk = np.random.randn(chunk_end_idx - chunk_start_idx, x_dim).astype(np.float32)
-    u_train_chunk = u_train[chunk_start_idx:chunk_end_idx]
+    # Concatenate for function evaluation
+    u_current = np.concatenate([u1_current, u2_current, u3_current], axis=1)  # (MC_samples * time_steps, 3)
+    u_next = np.concatenate([u1_next, u2_next, u3_next], axis=1)  # (MC_samples * time_steps, 3)
     
-    # Load x_short and z_short for this chunk
-    x_short_file = os.path.join(save_dir, 'chunks', f'x_short_{chunk_start_idx}_{chunk_end_idx}.npy')
-    z_short_file = os.path.join(save_dir, 'chunks', f'z_short_{chunk_start_idx}_{chunk_end_idx}.npy')
+    # RK4 steps
+    k1 = func(u_current)
+    k2 = func(u_current + 0.5 * dt * k1)
+    k3 = func(u_current + 0.5 * dt * k2)
+    k4 = func(u_current + dt * k3)
     
-    x_short_chunk = np.load(x_short_file)
-    z_short_chunk = np.load(z_short_file)
+    # RK4 prediction
+    u_rk4_pred = u_current + dt * (k1 / 6 + k2 / 3 + k3 / 3 + k4 / 6)
     
-    # Convert to tensors
-    it_zt = torch.tensor(zT_chunk, device=device, dtype=torch.float32)
-    it_x0 = torch.tensor(u_train_chunk, device=device, dtype=torch.float32)
-    x_mini_batch = torch.tensor(x_short_chunk, device=device, dtype=torch.float32)
-    z_mini_batch = torch.tensor(z_short_chunk, device=device, dtype=torch.float32)
+    # Reshape back to original format for residual calculation
+    u1_next_reshaped = u1_next.reshape(MC_samples, time_steps)
+    u2_next_reshaped = u2_next.reshape(MC_samples, time_steps)
+    u3_next_reshaped = u3_next.reshape(MC_samples, time_steps)
+    u_pred_reshaped = u_rk4_pred.reshape(MC_samples, time_steps, 3)
     
-    # Solve ODE
-    y_temp = ODE_solver(it_zt, x_mini_batch, z_mini_batch, it_x0, odesolver_time_steps)
-    
-    # Save ZT and yTrain for this chunk
-    np.save(os.path.join(save_dir, f'zT_chunk_{chunk_idx}.npy'), zT_chunk)
-    np.save(os.path.join(save_dir, f'yTrain_chunk_{chunk_idx}.npy'), y_temp.to('cpu').detach().numpy())
-    
-    print(f'GPU {gpu_id}: Saved chunk {chunk_idx + 1}')
-    
-    # Clear memory
-    del it_zt, it_x0, x_mini_batch, z_mini_batch, y_temp
-    del zT_chunk, u_train_chunk, x_short_chunk, z_short_chunk
-    torch.cuda.empty_cache()
+    u_current_reshaped = u_current.reshape(MC_samples, 3, time_steps)
 
-def process_ode_training_parallel(u_train, train_size, x_dim, chunk_size=5000, 
-                                 odesolver_time_steps=1000, save_dir=None, num_gpus=3):
-    """
-    Parallel ODE training across multiple GPUs.
-    """
-    num_chunks = int(np.ceil(train_size / chunk_size))
+    # Calculate residuals for each time step
+    residuals = np.zeros((MC_samples, 3, time_steps))
+    for t in range(time_steps):
+        residuals[:, 0, t] = u1_next_reshaped[:, t] - u_pred_reshaped[:, t, 0]
+        residuals[:, 1, t] = u2_next_reshaped[:, t] - u_pred_reshaped[:, t, 1]
+        residuals[:, 2, t] = u3_next_reshaped[:, t] - u_pred_reshaped[:, t, 2]
     
-    print(f"Parallel ODE training: {num_chunks} chunks across {num_gpus} GPUs")
+    residual_cov_time = np.zeros((time_steps, 3))
     
-    # Create list of chunk indices
-    chunk_indices = list(range(num_chunks))
-    
-    # Distribute chunks across GPUs
-    chunks_per_gpu = num_chunks // num_gpus
-    remainder = num_chunks % num_gpus
-    
-    # Create process pool
-    mp.set_start_method('spawn', force=True)
-    pool = mp.Pool(processes=num_gpus)
-    
-    # Distribute work
-    start_idx = 0
-    for gpu_id in range(num_gpus):
-        # Calculate chunks for this GPU
-        if gpu_id < remainder:
-            num_chunks_this_gpu = chunks_per_gpu + 1
-        else:
-            num_chunks_this_gpu = chunks_per_gpu
-        
-        end_idx = start_idx + num_chunks_this_gpu
-        gpu_chunks = chunk_indices[start_idx:end_idx]
-        
-        # Submit work for this GPU
-        for chunk_idx in gpu_chunks:
-            pool.apply_async(process_single_chunk, 
-                           args=(chunk_idx, u_train, train_size, x_dim, chunk_size, 
-                                 odesolver_time_steps, save_dir, gpu_id))
-        
-        start_idx = end_idx
-    
-    # Wait for all processes to complete
-    pool.close()
-    pool.join()
-    
-    print("All chunks processed in parallel!")
+    for t in range(time_steps):
+        residual_cov_time[t,0] = np.std(residuals[:, 0, t].T) / np.sqrt((dt))
+        residual_cov_time[t,1] = np.std(residuals[:, 1, t].T) / np.sqrt((dt))
+        residual_cov_time[t,2] = np.std(residuals[:, 2, t].T) / np.sqrt((dt))
+        if t% 100 == 0:
+            print(residual_cov_time[t,0],residual_cov_time[t,1],residual_cov_time[t,2])
 
-def process_ode_training_simple(u_train, train_size, x_dim, device, chunk_size=5000, 
-                               odesolver_time_steps=1000, save_dir=None):
-    """
-    Simple ODE training: generate ZT for each chunk, process, and save both ZT and yTrain.
-    """
-    num_chunks = int(np.ceil(train_size / chunk_size))
-    
-    print(f"Simple ODE training: {num_chunks} chunks of {chunk_size}")
-    
-    # Fix device type checking
-    if isinstance(device, str):
-        device = torch.device(device)
-    
-    if device.type == 'cuda':
-        torch.cuda.empty_cache()
-    
-    for chunk_idx in range(num_chunks):
-        chunk_start_idx = chunk_idx * chunk_size
-        chunk_end_idx = min((chunk_idx + 1) * chunk_size, train_size)
-        
-        print(f'Chunk {chunk_idx + 1}/{num_chunks}: {chunk_start_idx} to {chunk_end_idx}')
-        
-        # Generate ZT for this chunk
-        zT_chunk = np.random.randn(chunk_end_idx - chunk_start_idx, x_dim).astype(np.float32)
-        u_train_chunk = u_train[chunk_start_idx:chunk_end_idx]
-        
-        # Load x_short and z_short for this chunk
-        x_short_file = os.path.join(save_dir, 'chunks', f'x_short_{chunk_start_idx}_{chunk_end_idx}.npy')
-        z_short_file = os.path.join(save_dir, 'chunks', f'z_short_{chunk_start_idx}_{chunk_end_idx}.npy')
-        
-        x_short_chunk = np.load(x_short_file)
-        z_short_chunk = np.load(z_short_file)
-        
-        # Convert to tensors
-        it_zt = torch.tensor(zT_chunk, device=device, dtype=torch.float32)
-        it_x0 = torch.tensor(u_train_chunk, device=device, dtype=torch.float32)
-        x_mini_batch = torch.tensor(x_short_chunk, device=device, dtype=torch.float32)
-        z_mini_batch = torch.tensor(z_short_chunk, device=device, dtype=torch.float32)
-        
-        # Solve ODE
-        y_temp = ODE_solver(it_zt, x_mini_batch, z_mini_batch, it_x0, odesolver_time_steps)
-        
-        # Save ZT and yTrain for this chunk
-        np.save(os.path.join(save_dir, f'zT_chunk_{chunk_idx}.npy'), zT_chunk)
-        np.save(os.path.join(save_dir, f'yTrain_chunk_{chunk_idx}.npy'), y_temp.to('cpu').detach().numpy())
-        
-        print(f'Saved chunk {chunk_idx + 1}')
-        
-        # Clear memory
-        del it_zt, it_x0, x_mini_batch, z_mini_batch, y_temp
-        del zT_chunk, u_train_chunk, x_short_chunk, z_short_chunk
-        
-        if device.type == 'cuda':
-            torch.cuda.empty_cache()
-    
-    print("All chunks processed!")
+    print("Residual covariance shape:", residual_cov_time.shape)
+    print("First time step covariance:")
+    return residuals,u_current_reshaped
 
-def load_and_combine_chunks(train_size, x_dim, save_dir):
-    """
-    Load and combine all saved chunks into a single yTrain array.
-    """
-    yTrain = np.zeros((train_size, x_dim), dtype=np.float32)
+
+
+
+
+def FEX_model1(x):
+    x1 = x[:, 0:1].squeeze(-1)
+    x2 = x[:, 1:2].squeeze(-1)
+    x3 = x[:, 2:3].squeeze(-1)
+    return -0.2*x1 + 1*x2*x3 + 1*x2 + -2*x3 
+
+def FEX_model2(x):
+    x1 = x[:, 0:1].squeeze(-1)
+    x2 = x[:, 1:2].squeeze(-1)
+    x3 = x[:, 2:3].squeeze(-1)
+    return  -0.6*x1*x3 + -1*x1 + -0.1*x2 + -3*x3 
+
+def FEX_model3(x):
+    x1 = x[:, 0:1].squeeze(-1)
+    x2 = x[:, 1:2].squeeze(-1)
+    x3 = x[:, 2:3].squeeze(-1)
+    return  -0.4*x1*x2 + 2*x1 + 3*x2 + -0.1*x3 
+
+def FEX_model_check(x):
+    return np.stack([FEX_model1(x), FEX_model2(x), FEX_model3(x)], axis=1)
+
+
+def generate_second_step(u_current:np.ndarray,
+                          residuals:np.ndarray,
+                          scaler:np.ndarray,
+                          dt:float,
+                          device:str='cpu',
+                          ODESOLVER_TIME_STEPS:int=2000):
     
-    # Find all chunk files
-    chunk_files = [f for f in os.listdir(save_dir) if f.startswith('yTrain_chunk_') and f.endswith('.npy')]
-    chunk_files.sort()  # Sort to ensure correct order
+    time_step = residuals.shape[2]
+    size = residuals.shape[0]
+    odeslover_time_steps = ODESOLVER_TIME_STEPS
     
-    print(f"Loading {len(chunk_files)} chunks...")
+    # Batch processing parameters
+    it_size = min(60000, size)
+    it_n = int(size / it_size)
     
-    for chunk_file in chunk_files:
-        # Extract indices from filename
-        parts = chunk_file.replace('yTrain_chunk_', '').replace('.npy', '').split('_')
-        start_idx = int(parts[0])
-        end_idx = int(parts[1])
+    # Initialize output array
+    ODE_Solution = np.zeros((size, 3, time_step))
+    ZT_Solution = np.zeros((size, 3, time_step))
+    # Debug: Show scaler values
+    print(f"Scaler values: {scaler}")
+    print(f"Original residual std at t=0: {np.std(residuals[:, :, 0], axis=0)}")
+    
+    for t in range(2):#time_step):
+        print('-'.center(100, '-'))
+        print(f'this is {t} times / overall {time_step} times')
+        print(np.std(residuals[:, 0, t].T)/np.sqrt(dt), np.std(residuals[:, 1, t].T)/np.sqrt(dt), np.std(residuals[:, 2, t].T)/np.sqrt(dt))
+        print('-'.center(100, '-'))
         
-        # Load chunk
-        chunk_path = os.path.join(save_dir, chunk_file)
-        chunk_data = np.load(chunk_path)
+        # Scale residuals for this time step
+        scaled_residuals = residuals[:, :, t] * scaler
+        ZT_Solution[:,:,t] = np.random.randn(size,3)
+        # Debug: Show scaled residual std
+        print(f"Scaled residual std at t={t}: {np.std(scaled_residuals, axis=0)}")
         
-        # Store in yTrain
-        yTrain[start_idx:end_idx] = chunk_data
+        # Process in mini-batches
+        for jj in range(it_n):
+            start_idx = jj * it_size
+            end_idx = min((jj + 1) * it_size, size)
+            print(f'start_idx is {start_idx}; end_idx is {end_idx}')
+            
+            # Extract mini-batch
+            it_residuals = scaled_residuals[start_idx:end_idx]
+            
+            # Generate random noise for this batch
+            z_T = ZT_Solution[start_idx:end_idx,:,t]
+            
+            # Convert to tensors (assuming CPU processing, adjust device as needed)
+            it_zt = torch.tensor(z_T, dtype=torch.float32).to(device)
+            it_residuals_tensor = torch.tensor(it_residuals, dtype=torch.float32).to(device)
+            
+            x_mini_batch = torch.tensor(u_current[start_idx:end_idx,:,t],dtype =torch.float32).to(device)
+            z_mini_batch = torch.tensor(it_residuals[start_idx:end_idx],dtype = torch.float32).to(device)
+            # Call ODE solver for this mini-batch
+            y_temp = ODE_solver(it_zt, x_mini_batch, z_mini_batch, it_residuals_tensor, odeslover_time_steps)
+            
+            # Store results
+            ODE_Solution[start_idx:end_idx, :, t] = y_temp.cpu().detach().numpy()
+            
         
-        print(f"Loaded chunk {start_idx}-{end_idx}: {chunk_data.shape}")
+        print(f'this is {t} times which has already done.')
     
-    return yTrain
+    return ODE_Solution,ZT_Solution
+
+def generate_mean_and_std(ODE_Solution:np.ndarray):
+    mean_value = np.zeros((ODE_Solution.shape[2], ODE_Solution.shape[1]))  
+    std_value = np.zeros((ODE_Solution.shape[2], ODE_Solution.shape[1]))   
+    
+    for t in range(ODE_Solution.shape[2]): 
+        for dim in range(ODE_Solution.shape[1]):  
+            dim_data = ODE_Solution[:, dim, t]  
+            mean_value[t, dim] = np.mean(dim_data)  
+            std_value[t, dim] = np.std(dim_data)   
+    return mean_value, std_value
+
+def train_FN_each_dimension(ODE_Solution:np.ndarray,
+                             ZT_Solution:np.ndarray,
+                             dim:int=3,
+                             device:str='cpu',
+                             learning_rate:float=0.001,  # Reduced learning rate
+                             n_iter:int=5000,  # More iterations
+                             best_valid_err:float=5.0,
+                             save_dir:str=None):
+    time_step = ODE_Solution.shape[2]
+    size = ODE_Solution.shape[0]
+    for t in range(2):#time_step):
+        print(f'this is {t} times / overall {time_step} times')
+        NTrain = int(size* 0.8)
+        for x_dim in range(1,dim+1):
+            print(f'this is {x_dim} dimension / overall {dim} dimensions')
+            FN_dim = FN_Net(1,1,100).to(device)  # Increased hidden size from 50 to 100
+            FN_dim.zero_grad()
+            optimizer = optim.Adam(FN_dim.parameters(),lr = learning_rate,weight_decay = 1e-5)  # Reduced weight decay
+            scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=200, verbose=True)
+            criterion = nn.MSELoss()
+            
+            # Get the mean and std for normalization
+            y_data = ODE_Solution[0:NTrain,x_dim-1,t]
+            y_mean = np.mean(y_data)
+            y_std = np.std(y_data)
+            
+            # Reshape data for neural network (needs to be 2D: [samples, features])
+            xTrain_normal = torch.tensor(ZT_Solution[0:NTrain,x_dim-1,t], dtype=torch.float32).reshape(-1, 1).to(device)
+            yTrain_normal = torch.tensor((y_data - y_mean) / y_std, dtype=torch.float32).reshape(-1, 1).to(device)
+            
+            y_valid_data = ODE_Solution[NTrain:size,x_dim-1,t]
+            xValid_normal = torch.tensor(ZT_Solution[NTrain:size,x_dim-1,t], dtype=torch.float32).reshape(-1, 1).to(device)
+            yValid_normal = torch.tensor((y_valid_data - y_mean) / y_std, dtype=torch.float32).reshape(-1, 1).to(device)
+            
+            best_valid_loss = float('inf')
+            patience_counter = 0
+            patience_limit = 500  # Early stopping patience
+            
+            for it in range(n_iter):
+                optimizer.zero_grad()
+                pred = FN_dim(xTrain_normal)
+                loss = criterion(pred,yTrain_normal)
+                loss.backward()
+                optimizer.step()
+                
+                pred1 = FN_dim(xValid_normal)
+                valid_loss = criterion(pred1,yValid_normal)
+                
+                # Learning rate scheduling
+                scheduler.step(valid_loss)
+                
+                # Early stopping
+                if valid_loss < best_valid_loss:
+                    best_valid_loss = valid_loss
+                    FN_dim.update_best()
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
+                
+                if patience_counter >= patience_limit:
+                    print(f"Early stopping at iteration {it}")
+                    break
+        
+                if it%500 == 0:
+                    print(f'epoch is {it+1}; loss is {loss:.6f}; valid loss is {valid_loss:.6f}')
+
+            FN_dim.final_update()
+            if save_dir is not None:
+                FN_path = os.path.join(save_dir,f'FN_dim{x_dim}_t{t}.pth')
+                torch.save(FN_dim.state_dict(),FN_path)
+                # Save normalization parameters
+                norm_params = {'mean': y_mean, 'std': y_std}
+                np.save(os.path.join(save_dir,f'norm_params_dim{x_dim}_t{t}.npy'), norm_params)
+
+def train_FN_ensemble(ODE_Solution:np.ndarray,
+                      ZT_Solution:np.ndarray,
+                      dim:int=3,
+                      device:str='cpu',
+                      n_models:int=5,  # Number of ensemble models
+                      save_dir:str=None):
+    """Train an ensemble of neural networks to reduce approximation error"""
+    time_step = ODE_Solution.shape[2]
+    size = ODE_Solution.shape[0]
+    
+    for t in range(2):#time_step):
+        print(f'this is {t} times / overall {time_step} times')
+        NTrain = int(size* 0.8)
+        
+        for x_dim in range(1,dim+1):
+            print(f'this is {x_dim} dimension / overall {dim} dimensions')
+            
+            # Get the mean and std for normalization
+            y_data = ODE_Solution[0:NTrain,x_dim-1,t]
+            y_mean = np.mean(y_data)
+            y_std = np.std(y_data)
+            
+            # Prepare data
+            xTrain_normal = torch.tensor(ZT_Solution[0:NTrain,x_dim-1,t], dtype=torch.float32).reshape(-1, 1).to(device)
+            yTrain_normal = torch.tensor((y_data - y_mean) / y_std, dtype=torch.float32).reshape(-1, 1).to(device)
+            
+            y_valid_data = ODE_Solution[NTrain:size,x_dim-1,t]
+            xValid_normal = torch.tensor(ZT_Solution[NTrain:size,x_dim-1,t], dtype=torch.float32).reshape(-1, 1).to(device)
+            yValid_normal = torch.tensor((y_valid_data - y_mean) / y_std, dtype=torch.float32).reshape(-1, 1).to(device)
+            
+            # Train ensemble of models
+            for model_idx in range(n_models):
+                print(f'Training model {model_idx+1}/{n_models}')
+                
+                # Set different random seeds for each model
+                torch.manual_seed(1234 + model_idx)
+                
+                FN_dim = FN_Net(1,1,100).to(device)
+                FN_dim.zero_grad()
+                optimizer = optim.Adam(FN_dim.parameters(), lr=0.001, weight_decay=1e-5)
+                scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=200, verbose=False)
+                criterion = nn.MSELoss()
+                
+                best_valid_loss = float('inf')
+                patience_counter = 0
+                patience_limit = 500
+                
+                for it in range(5000):
+                    optimizer.zero_grad()
+                    pred = FN_dim(xTrain_normal)
+                    loss = criterion(pred, yTrain_normal)
+                    loss.backward()
+                    optimizer.step()
+                    
+                    pred1 = FN_dim(xValid_normal)
+                    valid_loss = criterion(pred1, yValid_normal)
+                    
+                    scheduler.step(valid_loss)
+                    
+                    if valid_loss < best_valid_loss:
+                        best_valid_loss = valid_loss
+                        FN_dim.update_best()
+                        patience_counter = 0
+                    else:
+                        patience_counter += 1
+                    
+                    if patience_counter >= patience_limit:
+                        break
+                
+                FN_dim.final_update()
+                
+                # Save each model in ensemble
+                if save_dir is not None:
+                    FN_path = os.path.join(save_dir, f'FN_dim{x_dim}_t{t}_model{model_idx}.pth')
+                    torch.save(FN_dim.state_dict(), FN_path)
+            
+            # Save normalization parameters (same for all models in ensemble)
+            if save_dir is not None:
+                norm_params = {'mean': y_mean, 'std': y_std}
+                np.save(os.path.join(save_dir, f'norm_params_dim{x_dim}_t{t}.npy'), norm_params)
+
+
+
+
+
+
+if __name__ == "__main__":
+    print(os.getcwd())
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    torch.manual_seed(1234)
+    np.random.seed(1234)
+    model_path = Path(os.path.join(os.getcwd(), 'src','Example','MC_triad','Results', 'equipart'))
+    data = np.load(os.path.join(model_path, 'equipart.npz')) 
+    dt = 0.01
+    save_dir = os.path.join(os.getcwd(), 'src','Example','MC_triad','Results', 'equipart','FN_model')
+    os.makedirs(save_dir,exist_ok=True)
+    
+    residuals,u_current = generate_rk4_residue(FEX_model_check, data, dt)
+    print(residuals.shape,u_current.shape)
+    
+    scaler = np.array([20,20,20])
+    ODE_Solution,ZT_Solution = generate_second_step(u_current,residuals,scaler,dt,device)
+    print(ODE_Solution.shape)
+    
+    mean_value, std_value = generate_mean_and_std(ODE_Solution)
+    print(mean_value.shape, std_value.shape)
+    print(mean_value[0:2,:],std_value[0:2,:])
+    
+    # Train ensemble models for better accuracy
+    train_FN_ensemble(ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir)
+    
+    # Test predictions with ensemble
+    z_test = np.random.randn(1000,3)
+    z_test_tensor = torch.tensor(z_test, dtype=torch.float32).to(device)
+    
+    print("\n=== Ensemble Prediction Results ===")
+    # Load and use ensemble predictions for each dimension
+    for dim in range(1, 4):
+        # Load normalization parameters
+        norm_params = np.load(os.path.join(save_dir,f'norm_params_dim{dim}_t0.npy'), allow_pickle=True).item()
+        y_mean = norm_params['mean']
+        y_std = norm_params['std']
+        
+        # Ensemble prediction
+        ensemble_predictions = []
+        n_models = 5  # Number of models in ensemble
+        
+        for model_idx in range(n_models):
+            FN_dim = FN_Net(1,1,100).to(device)
+            FN_dim.load_state_dict(torch.load(os.path.join(save_dir,f'FN_dim{dim}_t0_model{model_idx}.pth'), weights_only=True))
+            
+            # Make prediction
+            pred = (FN_dim(z_test_tensor[:,dim-1:dim].reshape(-1,1))).cpu().detach().numpy()
+            ensemble_predictions.append(pred)
+        
+        # Average ensemble predictions
+        pred = np.mean(ensemble_predictions, axis=0)
+        
+        # Denormalize: pred * y_std + y_mean
+        pred = pred * y_std + y_mean
+        
+        # Scale back by scaler
+        pred = pred / scaler[dim-1]
+        
+        print(f"Dimension {dim}: {np.std(pred)/np.sqrt(dt):.6f}")
+    
+    print("\nExpected values should be close to original")
+    print("Ensemble method should provide more accurate results!")
