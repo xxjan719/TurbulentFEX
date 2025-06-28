@@ -127,59 +127,47 @@ def generate_rk4_residue(func, data, dt):
     MC_samples, _, time_steps_plus_1 = dataset.shape
     time_steps = time_steps_plus_1 - 1
     
-    # Extract individual variables and reshape like in small_test.py
-    u1 = dataset[:, 0, :]  # (MC_samples, time_steps+1)
-    u2 = dataset[:, 1, :]  # (MC_samples, time_steps+1)
-    u3 = dataset[:, 2, :]  # (MC_samples, time_steps+1)
-    
-    # Reshape for RK4 computation
-    u1_next = u1[:, 1:].reshape(-1, 1)  # (MC_samples * time_steps, 1)
-    u2_next = u2[:, 1:].reshape(-1, 1)  # (MC_samples * time_steps, 1)
-    u3_next = u3[:, 1:].reshape(-1, 1)  # (MC_samples * time_steps, 1)
-    u1_current = u1[:, :-1].reshape(-1, 1)  # (MC_samples * time_steps, 1)
-    u2_current = u2[:, :-1].reshape(-1, 1)  # (MC_samples * time_steps, 1)
-    u3_current = u3[:, :-1].reshape(-1, 1)  # (MC_samples * time_steps, 1)
-    
-    # Concatenate for function evaluation
-    u_current = np.concatenate([u1_current, u2_current, u3_current], axis=1)  # (MC_samples * time_steps, 3)
-    u_next = np.concatenate([u1_next, u2_next, u3_next], axis=1)  # (MC_samples * time_steps, 3)
-    
-    # RK4 steps
-    k1 = func(u_current)
-    k2 = func(u_current + 0.5 * dt * k1)
-    k3 = func(u_current + 0.5 * dt * k2)
-    k4 = func(u_current + dt * k3)
-    
-    # RK4 prediction
-    u_rk4_pred = u_current + dt * (k1 / 6 + k2 / 3 + k3 / 3 + k4 / 6)
-    
-    # Reshape back to original format for residual calculation
-    u1_next_reshaped = u1_next.reshape(MC_samples, time_steps)
-    u2_next_reshaped = u2_next.reshape(MC_samples, time_steps)
-    u3_next_reshaped = u3_next.reshape(MC_samples, time_steps)
-    u_pred_reshaped = u_rk4_pred.reshape(MC_samples, time_steps, 3)
-    
-    u_current_reshaped = u_current.reshape(MC_samples, 3, time_steps)
-
-    # Calculate residuals for each time step
+    # Initialize output arrays
     residuals = np.zeros((MC_samples, 3, time_steps))
-    for t in range(time_steps):
-        residuals[:, 0, t] = u1_next_reshaped[:, t] - u_pred_reshaped[:, t, 0]
-        residuals[:, 1, t] = u2_next_reshaped[:, t] - u_pred_reshaped[:, t, 1]
-        residuals[:, 2, t] = u3_next_reshaped[:, t] - u_pred_reshaped[:, t, 2]
+    u_current_reshaped = np.zeros((MC_samples, 3, time_steps))
     
+    # Process each time step individually to avoid memory issues
+    for t in range(time_steps):
+        if t % 100 == 0:
+            print(f'Processing time step {t}/{time_steps}')
+        
+        # Extract current and next states for this time step
+        u_current = dataset[:, :, t]      # (MC_samples, 3)
+        u_next = dataset[:, :, t + 1]     # (MC_samples, 3)
+        
+        # Store current state for output
+        u_current_reshaped[:, :, t] = u_current
+        
+        # RK4 steps for this time step
+        k1 = func(u_current)
+        k2 = func(u_current + 0.5 * dt * k1)
+        k3 = func(u_current + 0.5 * dt * k2)
+        k4 = func(u_current + dt * k3)
+        
+        # RK4 prediction
+        u_rk4_pred = u_current + dt * (k1 / 6 + k2 / 3 + k3 / 3 + k4 / 6)
+        
+        # Calculate residuals for this time step
+        residuals[:, :, t] = u_next - u_rk4_pred
+    
+    # Calculate residual covariance for each time step
     residual_cov_time = np.zeros((time_steps, 3))
     
     for t in range(time_steps):
-        residual_cov_time[t,0] = np.std(residuals[:, 0, t].T) / np.sqrt((dt))
-        residual_cov_time[t,1] = np.std(residuals[:, 1, t].T) / np.sqrt((dt))
-        residual_cov_time[t,2] = np.std(residuals[:, 2, t].T) / np.sqrt((dt))
-        if t% 100 == 0:
-            print(residual_cov_time[t,0],residual_cov_time[t,1],residual_cov_time[t,2])
+        residual_cov_time[t, 0] = np.std(residuals[:, 0, t]) / np.sqrt(dt)
+        residual_cov_time[t, 1] = np.std(residuals[:, 1, t]) / np.sqrt(dt)
+        residual_cov_time[t, 2] = np.std(residuals[:, 2, t]) / np.sqrt(dt)
+        if t % 100 == 0:
+            print(f"Time {t}: {residual_cov_time[t, 0]:.6f}, {residual_cov_time[t, 1]:.6f}, {residual_cov_time[t, 2]:.6f}")
 
     print("Residual covariance shape:", residual_cov_time.shape)
-    print("First time step covariance:")
-    return residuals,u_current_reshaped
+    print("First time step covariance:", residual_cov_time[0, :])
+    return residuals, u_current_reshaped
 
 
 
@@ -257,6 +245,7 @@ def generate_second_step(u_current:np.ndarray,
                           residuals:np.ndarray,
                           scaler:np.ndarray,
                           dt:float,
+                          train_size:int=10000,
                           device:str='cpu',
                           ODESOLVER_TIME_STEPS:int=2000):
     
@@ -264,11 +253,13 @@ def generate_second_step(u_current:np.ndarray,
     size = residuals.shape[0]
     odeslover_time_steps = ODESOLVER_TIME_STEPS
     
+    # Ensure train_size doesn't exceed the actual size
+    train_size = min(train_size, size)
     
     #short index:
     short_size = 2048
     it_size_x0train = 4000 
-    it_n_index = size//it_size_x0train
+    it_n_index = train_size // it_size_x0train
 
     # Batch processing parameters
     it_size = min(60000, size)
@@ -280,14 +271,16 @@ def generate_second_step(u_current:np.ndarray,
     # Debug: Show scaler values
     print(f"Scaler values: {scaler}")
     print(f"Original residual std at t=0: {np.std(residuals[:, :, 0], axis=0)}")
+    print(f"Using train_size: {train_size} out of total size: {size}")
     
-    for t in range(2):#time_step):
+    for t in range(1):#time_step):
         print('-'.center(100, '-'))
         print(f'this is {t} times / overall {time_step} times')
         print(np.std(residuals[:, 0, t].T)/np.sqrt(dt), np.std(residuals[:, 1, t].T)/np.sqrt(dt), np.std(residuals[:, 2, t].T)/np.sqrt(dt))
         print('-'.center(100, '-'))
         u_sample = u_current[:,:,t]
-        short_indx = process_chunk_faiss_cpu(it_n_index,it_size_x0train,short_size,u_sample,u_sample,size,u_current.shape[1])
+        u_train = u_sample[:train_size]
+        short_indx = process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, u_sample, u_train, train_size, u_current.shape[1])
         u_short = u_sample[short_indx]
         
         # Scale residuals for this time step
@@ -347,7 +340,7 @@ def train_FN_each_dimension(ODE_Solution:np.ndarray,
                              save_dir:str=None):
     time_step = ODE_Solution.shape[2]
     size = ODE_Solution.shape[0]
-    for t in range(2):#time_step):
+    for t in range(1):#time_step):
         print(f'this is {t} times / overall {time_step} times')
         NTrain = int(size* 0.8)
         for x_dim in range(1,dim+1):
@@ -421,7 +414,7 @@ def train_FN_ensemble(ODE_Solution:np.ndarray,
     time_step = ODE_Solution.shape[2]
     size = ODE_Solution.shape[0]
     
-    for t in range(2):#time_step):
+    for t in range(1):#time_step):
         print(f'this is {t} times / overall {time_step} times')
         NTrain = int(size* 0.8)
         
@@ -523,40 +516,42 @@ if __name__ == "__main__":
     # Train ensemble models for better accuracy
     train_FN_ensemble(ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir)
     
-    # Test predictions with ensemble
-    z_test = np.random.randn(1000,3)
-    z_test_tensor = torch.tensor(z_test, dtype=torch.float32).to(device)
+    # # Test predictions with ensemble
+    
     
     print("\n=== Ensemble Prediction Results ===")
     # Load and use ensemble predictions for each dimension
-    for dim in range(1, 4):
-        # Load normalization parameters
-        norm_params = np.load(os.path.join(save_dir,f'norm_params_dim{dim}_t0.npy'), allow_pickle=True).item()
-        y_mean = norm_params['mean']
-        y_std = norm_params['std']
+    for t in range(1):
+        z_test = np.random.randn(1000,3)
+        z_test_tensor = torch.tensor(z_test, dtype=torch.float32).to(device)
+        for dim in range(1, 4):
+            # Load normalization parameters
+            norm_params = np.load(os.path.join(save_dir,f'norm_params_dim{dim}_t{t}.npy'), allow_pickle=True).item()
+            y_mean = norm_params['mean']
+            y_std = norm_params['std']
         
-        # Ensemble prediction
-        ensemble_predictions = []
-        n_models = 5  # Number of models in ensemble
-        
-        for model_idx in range(n_models):
-            FN_dim = FN_Net(1,1,100).to(device)
-            FN_dim.load_state_dict(torch.load(os.path.join(save_dir,f'FN_dim{dim}_t0_model{model_idx}.pth'), weights_only=True))
+            # Ensemble prediction
+            ensemble_predictions = []
+            n_models = 5  # Number of models in ensemble
             
-            # Make prediction
-            pred = (FN_dim(z_test_tensor[:,dim-1:dim].reshape(-1,1))).cpu().detach().numpy()
-            ensemble_predictions.append(pred)
-        
-        # Average ensemble predictions
-        pred = np.mean(ensemble_predictions, axis=0)
-        
-        # Denormalize: pred * y_std + y_mean
-        pred = pred * y_std + y_mean
-        
-        # Scale back by scaler
-        pred = pred / scaler[dim-1]
-        
-        print(f"Dimension {dim}: {np.std(pred)/np.sqrt(dt):.6f}")
+            for model_idx in range(n_models):
+                FN_dim = FN_Net(1,1,100).to(device)
+                FN_dim.load_state_dict(torch.load(os.path.join(save_dir,f'FN_dim{dim}_t0_model{model_idx}.pth'), weights_only=True))
+                
+                # Make prediction
+                pred = (FN_dim(z_test_tensor[:,dim-1:dim].reshape(-1,1))).cpu().detach().numpy()
+                ensemble_predictions.append(pred)
+            
+            # Average ensemble predictions
+            pred = np.mean(ensemble_predictions, axis=0)
+            
+            # Denormalize: pred * y_std + y_mean
+            pred = pred * y_std + y_mean
+            
+            # Scale back by scaler
+            pred = pred / scaler[dim-1]
+            
+            print(f"Dimension {dim}: {np.std(pred)/np.sqrt(dt):.6f}")
     
     print("\nExpected values should be close to original")
     print("Ensemble method should provide more accurate results!")
