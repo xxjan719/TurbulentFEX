@@ -3,3 +3,4 @@ src/Example/MC_triad/Results/*
 **/__pycache__
 **/build
 **/.DS_Store
+**/Test
