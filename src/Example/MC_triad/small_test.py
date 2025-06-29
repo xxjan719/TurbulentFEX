@@ -1,8 +1,34 @@
 import numpy as np
 import os
 import sys
-# Add the project root directory to Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from pathlib import Path
+os.environ['PYTHONHASHSEED'] = '1'
+
+# Add the project root directory to Python path - more robust approach
+current_dir = os.path.dirname(os.path.abspath(__file__))  # MC_triad directory
+parent_dir = os.path.dirname(current_dir)  # src/Example directory
+project_root = os.path.dirname(parent_dir)  # src directory
+sys.path.append(project_root)  # Add src directory to Python path
+
+print(f"Current directory: {current_dir}")
+print(f"Project root added to path: {project_root}")
+print(f"Python path: {sys.path}")
+
+# Import ODEParser from utils
+try:
+    from utils.ODEParser import *
+    print("Successfully imported ODEParser")
+except ImportError as e:
+    print(f"Import error: {e}")
+    # Try alternative import path
+    try:
+        import sys
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        from utils.ODEParser import *
+        print("Successfully imported ODEParser using alternative path")
+    except ImportError as e2:
+        print(f"Alternative import also failed: {e2}")
+        print("Current sys.path:", sys.path)
 
 try:
     model_path = Path(os.path.join(os.getcwd(), 'src','Example','MC_triad','Results', 'equipart'))
