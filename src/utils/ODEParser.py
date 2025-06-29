@@ -304,10 +304,9 @@ def generate_second_step(u_current:np.ndarray,
         print('-'.center(100, '-'))
         u_sample = u_current[:,:,t]
         u_train = u_sample[:train_size]
-        if device == 'cpu':
-            short_indx = process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, u_sample, u_train, train_size, u_current.shape[1])
-        else:
-            short_indx = process_chunk(it_n_index, it_size_x0train, short_size,u_sample, u_train, train_size, u_current.shape[1])
+        
+        short_indx = process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, u_sample, u_train, train_size, u_current.shape[1])
+        print('short indx is',short_indx)
         u_short = u_sample[short_indx]
         
         # Scale residuals for this time step
@@ -367,7 +366,7 @@ def train_FN_each_dimension(ODE_Solution:np.ndarray,
                              save_dir:str=None):
     time_step = ODE_Solution.shape[2]
     size = ODE_Solution.shape[0]
-    for t in range(1):#time_step):
+    for t in range(time_step):
         print(f'this is {t} times / overall {time_step} times')
         NTrain = int(size* 0.8)
         for x_dim in range(1,dim+1):
@@ -441,7 +440,7 @@ def train_FN_ensemble(ODE_Solution:np.ndarray,
     time_step = ODE_Solution.shape[2]
     size = ODE_Solution.shape[0]
     
-    for t in range(1):#time_step):
+    for t in range(time_step):
         print(f'this is {t} times / overall {time_step} times')
         NTrain = int(size* 0.8)
         
