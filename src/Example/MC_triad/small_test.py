@@ -25,14 +25,14 @@ args = parser.parse_args()
 
 
 #===========================Path part==============================================
-model_PATH = Path(os.path.join(os.getcwd(), 'Results', 'equipart'))
+model_PATH = Path(os.path.join('../src/Example/MC_triad', 'Results', 'equipart'))
 if os.path.exists(model_PATH):
     print(model_PATH)
-    save_dir = os.path.join(os.getcwd(), 'Results', 'equipart',f'case_{args.SAMPLE}')
+    save_dir = os.path.join('../src/Example/MC_triad', 'Results', 'equipart',f'case_{args.SAMPLE}')
     print('Right now we use our own workspace path.')
 else:
-    model_PATH = Path(os.path.join(os.getcwd(), 'Results', 'Results', 'equipart'))
-    save_dir = os.path.join(os.getcwd(), 'Results', 'Results','equipart',f'case_{args.SAMPLE}')
+    model_PATH = Path(os.path.join('../src/Example/MC_triad', 'Results', 'Results', 'equipart'))
+    save_dir = os.path.join('../src/Example/MC_triad', 'Results', 'Results','equipart',f'case_{args.SAMPLE}')
     print('Right now we use hipergator workspace path.')
 os.makedirs(save_dir,exist_ok=True)
 FN_SAMPLE_PATH = os.path.join(save_dir,'FN_model')
@@ -83,7 +83,7 @@ train_FN_ensemble(ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save
 #  Test predictions with ensemble
     
 time_step = residuals.shape[2]  
-residual_cov_pred = np.zeros((time_steps, 3))
+residual_cov_pred = np.zeros((time_step, 3))
 print("\n=== Ensemble Prediction Results ===")
 # Load and use ensemble predictions for each dimension
 for t in range(time_step):
@@ -115,9 +115,9 @@ for t in range(time_step):
             
         # Scale back by scaler
         pred = pred / scaler[dim-1]
-        residual_cov_pred[t, dim] = np.std(pred) / np.sqrt(dt)    
+        residual_cov_pred[t, dim-1] = np.std(pred) / np.sqrt(dt)    
         print(f"Dimension {dim}: {np.std(pred)/np.sqrt(dt):.6f}")
-        print(f"Comparison with Ground Truth:",residual_cov_truth[t, dim])
+        print(f"Comparison with Ground Truth:",residual_cov_truth[t, dim-1])
     
     print("\nExpected values should be close to original")
     print("Ensemble method should provide more accurate results!")
