@@ -16,10 +16,11 @@ np.random.seed(SEED)
 random.seed(SEED)
 
 
-def params_init(case_name = None)->dict:
+def params_init(case_name = None,
+               sample:int=5e4)->dict:
     # initializing the settings
     params = {
-        'MC': int(5e4),  # number of Monte Carlo simulations
+        'MC': sample,  # number of Monte Carlo simulations
         'Dt':1e-2, # Time step size
         'tstep': 10, # output every tstep steps
         'T':10,  # total simulation time

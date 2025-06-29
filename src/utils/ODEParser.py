@@ -12,13 +12,12 @@ import torch.optim as optim
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 # Add FAISS imports for CPU-based nearest neighbor search
-try:
-    import faiss
-    FAISS_AVAILABLE = True
-    print("FAISS successfully imported for CPU-based nearest neighbor search")
-except ImportError:
-    print("Warning: FAISS not available. Install with: pip install faiss-cpu")
-    FAISS_AVAILABLE = False
+import faiss
+    # FAISS_AVAILABLE = True
+    # print("FAISS successfully imported for CPU-based nearest neighbor search")
+# except ImportError:
+    # print("Warning: FAISS not available. Install with: pip install faiss-cpu")
+    # FAISS_AVAILABLE = False
 
 def cond_alpha(t,dt): # in the training paper: it should be related to  b(\tau) in formula (3.1)
     return 1-t+dt
@@ -167,7 +166,7 @@ def generate_rk4_residue(func, data, dt):
 
     print("Residual covariance shape:", residual_cov_time.shape)
     print("First time step covariance:", residual_cov_time[0, :])
-    return residuals, u_current_reshaped
+    return residuals, u_current_reshaped,residual_cov_time
 
 
 
@@ -187,8 +186,8 @@ def process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, x_sample, x
     Returns:
         x0_train_index_initial: Array of nearest neighbor indices
     """
-    if not FAISS_AVAILABLE:
-        raise ImportError("FAISS is required for this function. Install with: pip install faiss-cpu")
+    # if not FAISS_AVAILABLE:
+        # raise ImportError("FAISS is required for this function. Install with: pip install faiss-cpu")
     
     x0_train_index_initial = np.empty((train_size, short_size), dtype=int)
     
@@ -240,6 +239,28 @@ def FEX_model3(x):
 def FEX_model_check(x):
     return np.stack([FEX_model1(x), FEX_model2(x), FEX_model3(x)], axis=1)
 
+def process_chunk(it_n_index, it_size_x0train, short_size,x_sample, x0_train, train_size,x_dim):
+    x0_train_index_initial = np.empty((train_size, short_size ), dtype=int)
+    gpu = faiss.StandardGpuResources()  # Initialize GPU resources each time
+    index = faiss.IndexFlatL2(x_dim)  # Create a FAISS index for exact searches
+    gpu_index = faiss.index_cpu_to_gpu(gpu, 0, index)
+    gpu_index.add(x_sample)  # Add the chunk of x_sample to the index
+    for jj in range(it_n_index):
+        start_idx = jj * it_size_x0train
+        end_idx = min((jj + 1) * it_size_x0train, train_size)
+        x0_train_chunk = x0_train[start_idx:end_idx]
+
+        # Perform the search
+        _, index_initial = gpu_index.search(x0_train_chunk, short_size)
+        x0_train_index_initial[start_idx:end_idx,:] = index_initial 
+
+        if jj % 500 == 0:
+            print('find indx iteration:', jj, it_size_x0train)
+    # Cleanup resources
+    del gpu_index
+    del index
+    del gpu
+    return x0_train_index_initial
 
 def generate_second_step(u_current:np.ndarray,
                           residuals:np.ndarray,
@@ -250,7 +271,7 @@ def generate_second_step(u_current:np.ndarray,
                           ODESOLVER_TIME_STEPS:int=2000):
     
     time_step = residuals.shape[2]
-    size = residuals.shape[0]
+    size = int(residuals.shape[0])
     odeslover_time_steps = ODESOLVER_TIME_STEPS
     
     # Ensure train_size doesn't exceed the actual size
@@ -258,7 +279,10 @@ def generate_second_step(u_current:np.ndarray,
     
     #short index:
     short_size = 2048
-    it_size_x0train = 4000 
+    if train_size>=4000:
+        it_size_x0train = 4000
+    else:
+        it_size_x0train = train_size
     it_n_index = train_size // it_size_x0train
 
     # Batch processing parameters
@@ -273,14 +297,17 @@ def generate_second_step(u_current:np.ndarray,
     print(f"Original residual std at t=0: {np.std(residuals[:, :, 0], axis=0)}")
     print(f"Using train_size: {train_size} out of total size: {size}")
     
-    for t in range(1):#time_step):
+    for t in range(time_step):
         print('-'.center(100, '-'))
         print(f'this is {t} times / overall {time_step} times')
         print(np.std(residuals[:, 0, t].T)/np.sqrt(dt), np.std(residuals[:, 1, t].T)/np.sqrt(dt), np.std(residuals[:, 2, t].T)/np.sqrt(dt))
         print('-'.center(100, '-'))
         u_sample = u_current[:,:,t]
         u_train = u_sample[:train_size]
-        short_indx = process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, u_sample, u_train, train_size, u_current.shape[1])
+        if device == 'cpu':
+            short_indx = process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, u_sample, u_train, train_size, u_current.shape[1])
+        else:
+            short_indx = process_chunk(it_n_index, it_size_x0train, short_size,u_sample, u_train, train_size, u_current.shape[1])
         u_short = u_sample[short_indx]
         
         # Scale residuals for this time step
