@@ -15,7 +15,7 @@ torch.manual_seed(1234)
 np.random.seed(1234)
 #===========================Parser part============================================
 parser = argparse.ArgumentParser(description='QIDIFEX')
-parser.add_argument('--SAMPLE',default = 1000,type= int)
+parser.add_argument('--SAMPLE',default = 10000,type= int)
 parser.add_argument('--method',default = 'All',type= str)
 parser.add_argument('--HIDDEN_dim',default = 50,type=int)
 parser.add_argument('--classification',default = False,type=str)
@@ -25,14 +25,14 @@ args = parser.parse_args()
 
 
 #===========================Path part==============================================
-model_PATH = Path(os.path.join('../src/Example/MC_triad', 'Results', 'equipart'))
+model_PATH = Path(os.path.join( 'Results', 'equipart'))
 if os.path.exists(model_PATH):
     print(model_PATH)
-    save_dir = os.path.join('../src/Example/MC_triad', 'Results', 'equipart',f'case_{args.SAMPLE}')
+    save_dir = os.path.join( 'Results', 'equipart',f'case_{args.SAMPLE}')
     print('Right now we use our own workspace path.')
 else:
-    model_PATH = Path(os.path.join('../src/Example/MC_triad', 'Results', 'Results', 'equipart'))
-    save_dir = os.path.join('../src/Example/MC_triad', 'Results', 'Results','equipart',f'case_{args.SAMPLE}')
+    model_PATH = Path(os.path.join( 'Results', 'Results', 'equipart'))
+    save_dir = os.path.join('Results', 'Results','equipart',f'case_{args.SAMPLE}')
     print('Right now we use hipergator workspace path.')
 os.makedirs(save_dir,exist_ok=True)
 FN_SAMPLE_PATH = os.path.join(save_dir,'FN_model')
@@ -87,7 +87,7 @@ residual_cov_pred = np.zeros((time_step, 3))
 print("\n=== Ensemble Prediction Results ===")
 # Load and use ensemble predictions for each dimension
 for t in range(time_step):
-    z_test = np.random.randn(1000,3)
+    z_test = np.random.randn(train_size,3)
     z_test_tensor = torch.tensor(z_test, dtype=torch.float32).to(device)
     for dim in range(1, 4):
         # Load normalization parameters

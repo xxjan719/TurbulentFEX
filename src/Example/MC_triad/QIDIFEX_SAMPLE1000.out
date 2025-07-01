@@ -1,1 +1,1864 @@
 ===== SLURM JOB STARTED =====
+Date      = Tue Jul  1 07:25:18 PM EDT 2025
+Host      = c0602a-s24
+Start Dir = /home/xingjianxu/TurbulentFEX/src/Example/MC_triad
+Right now we use hipergator workspace path.
+SAMPLE size for each time step is 1000
+Time step: 1
+Time step: 2
+Time step: 3
+Time step: 4
+Time step: 5
+Time step: 6
+Time step: 7
+Time step: 8
+Time step: 9
+Time step: 10
+MC iter = 10: E_true = 1.3330, E_dyn = 1.3369
+Time step: 11
+Time step: 12
+Time step: 13
+Time step: 14
+Time step: 15
+Time step: 16
+Time step: 17
+Time step: 18
+Time step: 19
+Time step: 20
+MC iter = 20: E_true = 1.5454, E_dyn = 1.5441
+Time step: 21
+Time step: 22
+Time step: 23
+Time step: 24
+Time step: 25
+Time step: 26
+Time step: 27
+Time step: 28
+Time step: 29
+Time step: 30
+MC iter = 30: E_true = 1.7134, E_dyn = 1.7477
+Time step: 31
+Time step: 32
+Time step: 33
+Time step: 34
+Time step: 35
+Time step: 36
+Time step: 37
+Time step: 38
+Time step: 39
+Time step: 40
+MC iter = 40: E_true = 1.9161, E_dyn = 1.9479
+Time step: 41
+Time step: 42
+Time step: 43
+Time step: 44
+Time step: 45
+Time step: 46
+Time step: 47
+Time step: 48
+Time step: 49
+Time step: 50
+MC iter = 50: E_true = 2.0566, E_dyn = 2.1450
+Time step: 51
+Time step: 52
+Time step: 53
+Time step: 54
+Time step: 55
+Time step: 56
+Time step: 57
+Time step: 58
+Time step: 59
+Time step: 60
+MC iter = 60: E_true = 2.2539, E_dyn = 2.3387
+Time step: 61
+Time step: 62
+Time step: 63
+Time step: 64
+Time step: 65
+Time step: 66
+Time step: 67
+Time step: 68
+Time step: 69
+Time step: 70
+MC iter = 70: E_true = 2.4404, E_dyn = 2.5278
+Time step: 71
+Time step: 72
+Time step: 73
+Time step: 74
+Time step: 75
+Time step: 76
+Time step: 77
+Time step: 78
+Time step: 79
+Time step: 80
+MC iter = 80: E_true = 2.5846, E_dyn = 2.7131
+Time step: 81
+Time step: 82
+Time step: 83
+Time step: 84
+Time step: 85
+Time step: 86
+Time step: 87
+Time step: 88
+Time step: 89
+Time step: 90
+MC iter = 90: E_true = 2.7641, E_dyn = 2.8934
+Time step: 91
+Time step: 92
+Time step: 93
+Time step: 94
+Time step: 95
+Time step: 96
+Time step: 97
+Time step: 98
+Time step: 99
+Time step: 100
+MC iter = 100: E_true = 2.9168, E_dyn = 3.0678
+Time step: 101
+Time step: 102
+Time step: 103
+Time step: 104
+Time step: 105
+Time step: 106
+Time step: 107
+Time step: 108
+Time step: 109
+Time step: 110
+MC iter = 110: E_true = 3.1231, E_dyn = 3.2353
+Time step: 111
+Time step: 112
+Time step: 113
+Time step: 114
+Time step: 115
+Time step: 116
+Time step: 117
+Time step: 118
+Time step: 119
+Time step: 120
+MC iter = 120: E_true = 3.3181, E_dyn = 3.3964
+Time step: 121
+Time step: 122
+Time step: 123
+Time step: 124
+Time step: 125
+Time step: 126
+Time step: 127
+Time step: 128
+Time step: 129
+Time step: 130
+MC iter = 130: E_true = 3.4532, E_dyn = 3.5515
+Time step: 131
+Time step: 132
+Time step: 133
+Time step: 134
+Time step: 135
+Time step: 136
+Time step: 137
+Time step: 138
+Time step: 139
+Time step: 140
+MC iter = 140: E_true = 3.5810, E_dyn = 3.7017
+Time step: 141
+Time step: 142
+Time step: 143
+Time step: 144
+Time step: 145
+Time step: 146
+Time step: 147
+Time step: 148
+Time step: 149
+Time step: 150
+MC iter = 150: E_true = 3.7255, E_dyn = 3.8469
+Time step: 151
+Time step: 152
+Time step: 153
+Time step: 154
+Time step: 155
+Time step: 156
+Time step: 157
+Time step: 158
+Time step: 159
+Time step: 160
+MC iter = 160: E_true = 3.8912, E_dyn = 3.9883
+Time step: 161
+Time step: 162
+Time step: 163
+Time step: 164
+Time step: 165
+Time step: 166
+Time step: 167
+Time step: 168
+Time step: 169
+Time step: 170
+MC iter = 170: E_true = 4.0418, E_dyn = 4.1269
+Time step: 171
+Time step: 172
+Time step: 173
+Time step: 174
+Time step: 175
+Time step: 176
+Time step: 177
+Time step: 178
+Time step: 179
+Time step: 180
+MC iter = 180: E_true = 4.1716, E_dyn = 4.2620
+Time step: 181
+Time step: 182
+Time step: 183
+Time step: 184
+Time step: 185
+Time step: 186
+Time step: 187
+Time step: 188
+Time step: 189
+Time step: 190
+MC iter = 190: E_true = 4.3132, E_dyn = 4.3950
+Time step: 191
+Time step: 192
+Time step: 193
+Time step: 194
+Time step: 195
+Time step: 196
+Time step: 197
+Time step: 198
+Time step: 199
+Time step: 200
+MC iter = 200: E_true = 4.5131, E_dyn = 4.5243
+Time step: 201
+Time step: 202
+Time step: 203
+Time step: 204
+Time step: 205
+Time step: 206
+Time step: 207
+Time step: 208
+Time step: 209
+Time step: 210
+MC iter = 210: E_true = 4.5985, E_dyn = 4.6505
+Time step: 211
+Time step: 212
+Time step: 213
+Time step: 214
+Time step: 215
+Time step: 216
+Time step: 217
+Time step: 218
+Time step: 219
+Time step: 220
+MC iter = 220: E_true = 4.7889, E_dyn = 4.7744
+Time step: 221
+Time step: 222
+Time step: 223
+Time step: 224
+Time step: 225
+Time step: 226
+Time step: 227
+Time step: 228
+Time step: 229
+Time step: 230
+MC iter = 230: E_true = 4.9284, E_dyn = 4.8950
+Time step: 231
+Time step: 232
+Time step: 233
+Time step: 234
+Time step: 235
+Time step: 236
+Time step: 237
+Time step: 238
+Time step: 239
+Time step: 240
+MC iter = 240: E_true = 5.0066, E_dyn = 5.0137
+Time step: 241
+Time step: 242
+Time step: 243
+Time step: 244
+Time step: 245
+Time step: 246
+Time step: 247
+Time step: 248
+Time step: 249
+Time step: 250
+MC iter = 250: E_true = 5.1299, E_dyn = 5.1304
+Time step: 251
+Time step: 252
+Time step: 253
+Time step: 254
+Time step: 255
+Time step: 256
+Time step: 257
+Time step: 258
+Time step: 259
+Time step: 260
+MC iter = 260: E_true = 5.3517, E_dyn = 5.2434
+Time step: 261
+Time step: 262
+Time step: 263
+Time step: 264
+Time step: 265
+Time step: 266
+Time step: 267
+Time step: 268
+Time step: 269
+Time step: 270
+MC iter = 270: E_true = 5.4924, E_dyn = 5.3499
+Time step: 271
+Time step: 272
+Time step: 273
+Time step: 274
+Time step: 275
+Time step: 276
+Time step: 277
+Time step: 278
+Time step: 279
+Time step: 280
+MC iter = 280: E_true = 5.6213, E_dyn = 5.4504
+Time step: 281
+Time step: 282
+Time step: 283
+Time step: 284
+Time step: 285
+Time step: 286
+Time step: 287
+Time step: 288
+Time step: 289
+Time step: 290
+MC iter = 290: E_true = 5.7178, E_dyn = 5.5464
+Time step: 291
+Time step: 292
+Time step: 293
+Time step: 294
+Time step: 295
+Time step: 296
+Time step: 297
+Time step: 298
+Time step: 299
+Time step: 300
+MC iter = 300: E_true = 5.7655, E_dyn = 5.6411
+Time step: 301
+Time step: 302
+Time step: 303
+Time step: 304
+Time step: 305
+Time step: 306
+Time step: 307
+Time step: 308
+Time step: 309
+Time step: 310
+MC iter = 310: E_true = 5.8419, E_dyn = 5.7336
+Time step: 311
+Time step: 312
+Time step: 313
+Time step: 314
+Time step: 315
+Time step: 316
+Time step: 317
+Time step: 318
+Time step: 319
+Time step: 320
+MC iter = 320: E_true = 5.9352, E_dyn = 5.8237
+Time step: 321
+Time step: 322
+Time step: 323
+Time step: 324
+Time step: 325
+Time step: 326
+Time step: 327
+Time step: 328
+Time step: 329
+Time step: 330
+MC iter = 330: E_true = 5.9334, E_dyn = 5.9121
+Time step: 331
+Time step: 332
+Time step: 333
+Time step: 334
+Time step: 335
+Time step: 336
+Time step: 337
+Time step: 338
+Time step: 339
+Time step: 340
+MC iter = 340: E_true = 5.9811, E_dyn = 5.9990
+Time step: 341
+Time step: 342
+Time step: 343
+Time step: 344
+Time step: 345
+Time step: 346
+Time step: 347
+Time step: 348
+Time step: 349
+Time step: 350
+MC iter = 350: E_true = 6.0510, E_dyn = 6.0839
+Time step: 351
+Time step: 352
+Time step: 353
+Time step: 354
+Time step: 355
+Time step: 356
+Time step: 357
+Time step: 358
+Time step: 359
+Time step: 360
+MC iter = 360: E_true = 6.1166, E_dyn = 6.1678
+Time step: 361
+Time step: 362
+Time step: 363
+Time step: 364
+Time step: 365
+Time step: 366
+Time step: 367
+Time step: 368
+Time step: 369
+Time step: 370
+MC iter = 370: E_true = 6.2462, E_dyn = 6.2506
+Time step: 371
+Time step: 372
+Time step: 373
+Time step: 374
+Time step: 375
+Time step: 376
+Time step: 377
+Time step: 378
+Time step: 379
+Time step: 380
+MC iter = 380: E_true = 6.4201, E_dyn = 6.3306
+Time step: 381
+Time step: 382
+Time step: 383
+Time step: 384
+Time step: 385
+Time step: 386
+Time step: 387
+Time step: 388
+Time step: 389
+Time step: 390
+MC iter = 390: E_true = 6.4548, E_dyn = 6.4093
+Time step: 391
+Time step: 392
+Time step: 393
+Time step: 394
+Time step: 395
+Time step: 396
+Time step: 397
+Time step: 398
+Time step: 399
+Time step: 400
+MC iter = 400: E_true = 6.4708, E_dyn = 6.4877
+Time step: 401
+Time step: 402
+Time step: 403
+Time step: 404
+Time step: 405
+Time step: 406
+Time step: 407
+Time step: 408
+Time step: 409
+Time step: 410
+MC iter = 410: E_true = 6.5305, E_dyn = 6.5662
+Time step: 411
+Time step: 412
+Time step: 413
+Time step: 414
+Time step: 415
+Time step: 416
+Time step: 417
+Time step: 418
+Time step: 419
+Time step: 420
+MC iter = 420: E_true = 6.6451, E_dyn = 6.6420
+Time step: 421
+Time step: 422
+Time step: 423
+Time step: 424
+Time step: 425
+Time step: 426
+Time step: 427
+Time step: 428
+Time step: 429
+Time step: 430
+MC iter = 430: E_true = 6.6937, E_dyn = 6.7161
+Time step: 431
+Time step: 432
+Time step: 433
+Time step: 434
+Time step: 435
+Time step: 436
+Time step: 437
+Time step: 438
+Time step: 439
+Time step: 440
+MC iter = 440: E_true = 6.8338, E_dyn = 6.7853
+Time step: 441
+Time step: 442
+Time step: 443
+Time step: 444
+Time step: 445
+Time step: 446
+Time step: 447
+Time step: 448
+Time step: 449
+Time step: 450
+MC iter = 450: E_true = 6.8791, E_dyn = 6.8523
+Time step: 451
+Time step: 452
+Time step: 453
+Time step: 454
+Time step: 455
+Time step: 456
+Time step: 457
+Time step: 458
+Time step: 459
+Time step: 460
+MC iter = 460: E_true = 6.9222, E_dyn = 6.9177
+Time step: 461
+Time step: 462
+Time step: 463
+Time step: 464
+Time step: 465
+Time step: 466
+Time step: 467
+Time step: 468
+Time step: 469
+Time step: 470
+MC iter = 470: E_true = 6.9403, E_dyn = 6.9809
+Time step: 471
+Time step: 472
+Time step: 473
+Time step: 474
+Time step: 475
+Time step: 476
+Time step: 477
+Time step: 478
+Time step: 479
+Time step: 480
+MC iter = 480: E_true = 7.0385, E_dyn = 7.0415
+Time step: 481
+Time step: 482
+Time step: 483
+Time step: 484
+Time step: 485
+Time step: 486
+Time step: 487
+Time step: 488
+Time step: 489
+Time step: 490
+MC iter = 490: E_true = 7.1002, E_dyn = 7.0997
+Time step: 491
+Time step: 492
+Time step: 493
+Time step: 494
+Time step: 495
+Time step: 496
+Time step: 497
+Time step: 498
+Time step: 499
+Time step: 500
+MC iter = 500: E_true = 7.1326, E_dyn = 7.1569
+Time step: 501
+Time step: 502
+Time step: 503
+Time step: 504
+Time step: 505
+Time step: 506
+Time step: 507
+Time step: 508
+Time step: 509
+Time step: 510
+MC iter = 510: E_true = 7.2128, E_dyn = 7.2128
+Time step: 511
+Time step: 512
+Time step: 513
+Time step: 514
+Time step: 515
+Time step: 516
+Time step: 517
+Time step: 518
+Time step: 519
+Time step: 520
+MC iter = 520: E_true = 7.2381, E_dyn = 7.2679
+Time step: 521
+Time step: 522
+Time step: 523
+Time step: 524
+Time step: 525
+Time step: 526
+Time step: 527
+Time step: 528
+Time step: 529
+Time step: 530
+MC iter = 530: E_true = 7.2993, E_dyn = 7.3220
+Time step: 531
+Time step: 532
+Time step: 533
+Time step: 534
+Time step: 535
+Time step: 536
+Time step: 537
+Time step: 538
+Time step: 539
+Time step: 540
+MC iter = 540: E_true = 7.3248, E_dyn = 7.3769
+Time step: 541
+Time step: 542
+Time step: 543
+Time step: 544
+Time step: 545
+Time step: 546
+Time step: 547
+Time step: 548
+Time step: 549
+Time step: 550
+MC iter = 550: E_true = 7.3912, E_dyn = 7.4317
+Time step: 551
+Time step: 552
+Time step: 553
+Time step: 554
+Time step: 555
+Time step: 556
+Time step: 557
+Time step: 558
+Time step: 559
+Time step: 560
+MC iter = 560: E_true = 7.5101, E_dyn = 7.4834
+Time step: 561
+Time step: 562
+Time step: 563
+Time step: 564
+Time step: 565
+Time step: 566
+Time step: 567
+Time step: 568
+Time step: 569
+Time step: 570
+MC iter = 570: E_true = 7.5463, E_dyn = 7.5327
+Time step: 571
+Time step: 572
+Time step: 573
+Time step: 574
+Time step: 575
+Time step: 576
+Time step: 577
+Time step: 578
+Time step: 579
+Time step: 580
+MC iter = 580: E_true = 7.5138, E_dyn = 7.5830
+Time step: 581
+Time step: 582
+Time step: 583
+Time step: 584
+Time step: 585
+Time step: 586
+Time step: 587
+Time step: 588
+Time step: 589
+Time step: 590
+MC iter = 590: E_true = 7.6166, E_dyn = 7.6328
+Time step: 591
+Time step: 592
+Time step: 593
+Time step: 594
+Time step: 595
+Time step: 596
+Time step: 597
+Time step: 598
+Time step: 599
+Time step: 600
+MC iter = 600: E_true = 7.6418, E_dyn = 7.6808
+Time step: 601
+Time step: 602
+Time step: 603
+Time step: 604
+Time step: 605
+Time step: 606
+Time step: 607
+Time step: 608
+Time step: 609
+Time step: 610
+MC iter = 610: E_true = 7.6043, E_dyn = 7.7291
+Time step: 611
+Time step: 612
+Time step: 613
+Time step: 614
+Time step: 615
+Time step: 616
+Time step: 617
+Time step: 618
+Time step: 619
+Time step: 620
+MC iter = 620: E_true = 7.6796, E_dyn = 7.7772
+Time step: 621
+Time step: 622
+Time step: 623
+Time step: 624
+Time step: 625
+Time step: 626
+Time step: 627
+Time step: 628
+Time step: 629
+Time step: 630
+MC iter = 630: E_true = 7.7232, E_dyn = 7.8231
+Time step: 631
+Time step: 632
+Time step: 633
+Time step: 634
+Time step: 635
+Time step: 636
+Time step: 637
+Time step: 638
+Time step: 639
+Time step: 640
+MC iter = 640: E_true = 7.7803, E_dyn = 7.8655
+Time step: 641
+Time step: 642
+Time step: 643
+Time step: 644
+Time step: 645
+Time step: 646
+Time step: 647
+Time step: 648
+Time step: 649
+Time step: 650
+MC iter = 650: E_true = 7.8190, E_dyn = 7.9035
+Time step: 651
+Time step: 652
+Time step: 653
+Time step: 654
+Time step: 655
+Time step: 656
+Time step: 657
+Time step: 658
+Time step: 659
+Time step: 660
+MC iter = 660: E_true = 7.7783, E_dyn = 7.9400
+Time step: 661
+Time step: 662
+Time step: 663
+Time step: 664
+Time step: 665
+Time step: 666
+Time step: 667
+Time step: 668
+Time step: 669
+Time step: 670
+MC iter = 670: E_true = 7.8104, E_dyn = 7.9774
+Time step: 671
+Time step: 672
+Time step: 673
+Time step: 674
+Time step: 675
+Time step: 676
+Time step: 677
+Time step: 678
+Time step: 679
+Time step: 680
+MC iter = 680: E_true = 7.7853, E_dyn = 8.0152
+Time step: 681
+Time step: 682
+Time step: 683
+Time step: 684
+Time step: 685
+Time step: 686
+Time step: 687
+Time step: 688
+Time step: 689
+Time step: 690
+MC iter = 690: E_true = 7.7854, E_dyn = 8.0543
+Time step: 691
+Time step: 692
+Time step: 693
+Time step: 694
+Time step: 695
+Time step: 696
+Time step: 697
+Time step: 698
+Time step: 699
+Time step: 700
+MC iter = 700: E_true = 7.8909, E_dyn = 8.0898
+Time step: 701
+Time step: 702
+Time step: 703
+Time step: 704
+Time step: 705
+Time step: 706
+Time step: 707
+Time step: 708
+Time step: 709
+Time step: 710
+MC iter = 710: E_true = 7.8875, E_dyn = 8.1246
+Time step: 711
+Time step: 712
+Time step: 713
+Time step: 714
+Time step: 715
+Time step: 716
+Time step: 717
+Time step: 718
+Time step: 719
+Time step: 720
+MC iter = 720: E_true = 7.9145, E_dyn = 8.1602
+Time step: 721
+Time step: 722
+Time step: 723
+Time step: 724
+Time step: 725
+Time step: 726
+Time step: 727
+Time step: 728
+Time step: 729
+Time step: 730
+MC iter = 730: E_true = 7.8980, E_dyn = 8.1969
+Time step: 731
+Time step: 732
+Time step: 733
+Time step: 734
+Time step: 735
+Time step: 736
+Time step: 737
+Time step: 738
+Time step: 739
+Time step: 740
+MC iter = 740: E_true = 7.9632, E_dyn = 8.2350
+Time step: 741
+Time step: 742
+Time step: 743
+Time step: 744
+Time step: 745
+Time step: 746
+Time step: 747
+Time step: 748
+Time step: 749
+Time step: 750
+MC iter = 750: E_true = 7.9548, E_dyn = 8.2710
+Time step: 751
+Time step: 752
+Time step: 753
+Time step: 754
+Time step: 755
+Time step: 756
+Time step: 757
+Time step: 758
+Time step: 759
+Time step: 760
+MC iter = 760: E_true = 7.9645, E_dyn = 8.3068
+Time step: 761
+Time step: 762
+Time step: 763
+Time step: 764
+Time step: 765
+Time step: 766
+Time step: 767
+Time step: 768
+Time step: 769
+Time step: 770
+MC iter = 770: E_true = 7.9956, E_dyn = 8.3441
+Time step: 771
+Time step: 772
+Time step: 773
+Time step: 774
+Time step: 775
+Time step: 776
+Time step: 777
+Time step: 778
+Time step: 779
+Time step: 780
+MC iter = 780: E_true = 7.9748, E_dyn = 8.3826
+Time step: 781
+Time step: 782
+Time step: 783
+Time step: 784
+Time step: 785
+Time step: 786
+Time step: 787
+Time step: 788
+Time step: 789
+Time step: 790
+MC iter = 790: E_true = 7.9565, E_dyn = 8.4225
+Time step: 791
+Time step: 792
+Time step: 793
+Time step: 794
+Time step: 795
+Time step: 796
+Time step: 797
+Time step: 798
+Time step: 799
+Time step: 800
+MC iter = 800: E_true = 7.8935, E_dyn = 8.4617
+Time step: 801
+Time step: 802
+Time step: 803
+Time step: 804
+Time step: 805
+Time step: 806
+Time step: 807
+Time step: 808
+Time step: 809
+Time step: 810
+MC iter = 810: E_true = 7.9704, E_dyn = 8.4989
+Time step: 811
+Time step: 812
+Time step: 813
+Time step: 814
+Time step: 815
+Time step: 816
+Time step: 817
+Time step: 818
+Time step: 819
+Time step: 820
+MC iter = 820: E_true = 8.0101, E_dyn = 8.5337
+Time step: 821
+Time step: 822
+Time step: 823
+Time step: 824
+Time step: 825
+Time step: 826
+Time step: 827
+Time step: 828
+Time step: 829
+Time step: 830
+MC iter = 830: E_true = 8.1266, E_dyn = 8.5677
+Time step: 831
+Time step: 832
+Time step: 833
+Time step: 834
+Time step: 835
+Time step: 836
+Time step: 837
+Time step: 838
+Time step: 839
+Time step: 840
+MC iter = 840: E_true = 8.1972, E_dyn = 8.6002
+Time step: 841
+Time step: 842
+Time step: 843
+Time step: 844
+Time step: 845
+Time step: 846
+Time step: 847
+Time step: 848
+Time step: 849
+Time step: 850
+MC iter = 850: E_true = 8.1206, E_dyn = 8.6324
+Time step: 851
+Time step: 852
+Time step: 853
+Time step: 854
+Time step: 855
+Time step: 856
+Time step: 857
+Time step: 858
+Time step: 859
+Time step: 860
+MC iter = 860: E_true = 8.1164, E_dyn = 8.6664
+Time step: 861
+Time step: 862
+Time step: 863
+Time step: 864
+Time step: 865
+Time step: 866
+Time step: 867
+Time step: 868
+Time step: 869
+Time step: 870
+MC iter = 870: E_true = 8.1411, E_dyn = 8.6988
+Time step: 871
+Time step: 872
+Time step: 873
+Time step: 874
+Time step: 875
+Time step: 876
+Time step: 877
+Time step: 878
+Time step: 879
+Time step: 880
+MC iter = 880: E_true = 8.1052, E_dyn = 8.7314
+Time step: 881
+Time step: 882
+Time step: 883
+Time step: 884
+Time step: 885
+Time step: 886
+Time step: 887
+Time step: 888
+Time step: 889
+Time step: 890
+MC iter = 890: E_true = 8.1924, E_dyn = 8.7624
+Time step: 891
+Time step: 892
+Time step: 893
+Time step: 894
+Time step: 895
+Time step: 896
+Time step: 897
+Time step: 898
+Time step: 899
+Time step: 900
+MC iter = 900: E_true = 8.2425, E_dyn = 8.7927
+Time step: 901
+Time step: 902
+Time step: 903
+Time step: 904
+Time step: 905
+Time step: 906
+Time step: 907
+Time step: 908
+Time step: 909
+Time step: 910
+MC iter = 910: E_true = 8.2202, E_dyn = 8.8234
+Time step: 911
+Time step: 912
+Time step: 913
+Time step: 914
+Time step: 915
+Time step: 916
+Time step: 917
+Time step: 918
+Time step: 919
+Time step: 920
+MC iter = 920: E_true = 8.2528, E_dyn = 8.8538
+Time step: 921
+Time step: 922
+Time step: 923
+Time step: 924
+Time step: 925
+Time step: 926
+Time step: 927
+Time step: 928
+Time step: 929
+Time step: 930
+MC iter = 930: E_true = 8.2585, E_dyn = 8.8847
+Time step: 931
+Time step: 932
+Time step: 933
+Time step: 934
+Time step: 935
+Time step: 936
+Time step: 937
+Time step: 938
+Time step: 939
+Time step: 940
+MC iter = 940: E_true = 8.3210, E_dyn = 8.9145
+Time step: 941
+Time step: 942
+Time step: 943
+Time step: 944
+Time step: 945
+Time step: 946
+Time step: 947
+Time step: 948
+Time step: 949
+Time step: 950
+MC iter = 950: E_true = 8.3900, E_dyn = 8.9408
+Time step: 951
+Time step: 952
+Time step: 953
+Time step: 954
+Time step: 955
+Time step: 956
+Time step: 957
+Time step: 958
+Time step: 959
+Time step: 960
+MC iter = 960: E_true = 8.4330, E_dyn = 8.9650
+Time step: 961
+Time step: 962
+Time step: 963
+Time step: 964
+Time step: 965
+Time step: 966
+Time step: 967
+Time step: 968
+Time step: 969
+Time step: 970
+MC iter = 970: E_true = 8.4138, E_dyn = 8.9891
+Time step: 971
+Time step: 972
+Time step: 973
+Time step: 974
+Time step: 975
+Time step: 976
+Time step: 977
+Time step: 978
+Time step: 979
+Time step: 980
+MC iter = 980: E_true = 8.4703, E_dyn = 9.0116
+Time step: 981
+Time step: 982
+Time step: 983
+Time step: 984
+Time step: 985
+Time step: 986
+Time step: 987
+Time step: 988
+Time step: 989
+Time step: 990
+MC iter = 990: E_true = 8.4368, E_dyn = 9.0330
+Time step: 991
+Time step: 992
+Time step: 993
+Time step: 994
+Time step: 995
+Time step: 996
+Time step: 997
+Time step: 998
+Time step: 999
+Time step: 1000
+MC iter = 1000: E_true = 8.4447, E_dyn = 9.0565
+data generation process finished. Now you can train the following.
+Processing time step 0/1000
+Processing time step 100/1000
+Processing time step 200/1000
+Processing time step 300/1000
+Processing time step 400/1000
+Processing time step 500/1000
+Processing time step 600/1000
+Processing time step 700/1000
+Processing time step 800/1000
+Processing time step 900/1000
+Time 0: 1.603168, 1.130116, 1.090258
+Time 100: 1.474273, 1.114401, 1.117666
+Time 200: 1.604334, 1.119792, 1.139581
+Time 300: 1.574924, 1.139708, 1.138745
+Time 400: 1.563233, 1.128618, 1.115101
+Time 500: 1.581572, 1.119815, 1.130889
+Time 600: 1.551758, 1.112204, 1.070793
+Time 700: 1.568596, 1.104931, 1.119159
+Time 800: 1.481558, 1.194427, 1.139807
+Time 900: 1.576095, 1.117067, 1.087557
+Residual covariance shape: (1000, 3)
+First time step covariance: [1.60316824 1.13011567 1.09025844]
+the residual shape is (1000, 3, 1000),the state of dyamics is (1000, 3, 1000)
+Scaler values: [20 20 20]
+Original residual std at t=0: [0.16031682 0.11301157 0.10902584]
+Using train_size: 1000 out of total size: 1000
+----------------------------------------------------------------------------------------------------
+this is 0 times / overall 1000 times
+1.6031682430226848 1.13011566827657 1.0902584394903254
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 188 622 ...  -1  -1  -1]
+ [  1 632 272 ...  -1  -1  -1]
+ [  2 420 853 ...  -1  -1  -1]
+ ...
+ [997 886 979 ...  -1  -1  -1]
+ [998 460  24 ...  -1  -1  -1]
+ [999 121  69 ...  -1  -1  -1]]
+Scaled residual std at t=0: [3.20633649 2.26023134 2.18051688]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 0 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 1 times / overall 1000 times
+1.6264731519583338 1.08287034180473 1.1240624435235353
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 188 191 ...  -1  -1  -1]
+ [  1 508 638 ...  -1  -1  -1]
+ [  2 176 746 ...  -1  -1  -1]
+ ...
+ [997 132 530 ...  -1  -1  -1]
+ [998 136 678 ...  -1  -1  -1]
+ [999 436 665 ...  -1  -1  -1]]
+Scaled residual std at t=1: [3.2529463  2.16574068 2.24812489]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 1 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 2 times / overall 1000 times
+1.59703186562928 1.1186838549981792 1.092862434759091
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0  41 910 ...  -1  -1  -1]
+ [  1 869 638 ...  -1  -1  -1]
+ [  2  35 935 ...  -1  -1  -1]
+ ...
+ [997 898 854 ...  -1  -1  -1]
+ [998 460 136 ...  -1  -1  -1]
+ [999 121 436 ...  -1  -1  -1]]
+Scaled residual std at t=2: [3.19406373 2.23736771 2.18572487]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 2 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 3 times / overall 1000 times
+1.533117540841993 1.1154413649498083 1.1576413511319545
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 417 859 ...  -1  -1  -1]
+ [  1 929 108 ...  -1  -1  -1]
+ [  2 772 679 ...  -1  -1  -1]
+ ...
+ [997 242  30 ...  -1  -1  -1]
+ [998 382 173 ...  -1  -1  -1]
+ [999 121 919 ...  -1  -1  -1]]
+Scaled residual std at t=3: [3.06623508 2.23088273 2.3152827 ]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 3 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 4 times / overall 1000 times
+1.567608286735939 1.0838932030532757 1.1276053284146896
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 186 142 ...  -1  -1  -1]
+ [  1 753 720 ...  -1  -1  -1]
+ [  2 679 235 ...  -1  -1  -1]
+ ...
+ [997 242 313 ...  -1  -1  -1]
+ [998 136 137 ...  -1  -1  -1]
+ [999 121 779 ...  -1  -1  -1]]
+Scaled residual std at t=4: [3.13521657 2.16778641 2.25521066]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 4 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 5 times / overall 1000 times
+1.6267686045150833 1.1193668435237265 1.093762381491519
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 840 429 ...  -1  -1  -1]
+ [  1 511 263 ...  -1  -1  -1]
+ [  2 995 996 ...  -1  -1  -1]
+ ...
+ [997 209 875 ...  -1  -1  -1]
+ [998 598 690 ...  -1  -1  -1]
+ [999 824 779 ...  -1  -1  -1]]
+Scaled residual std at t=5: [3.25353721 2.23873369 2.18752476]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 5 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 6 times / overall 1000 times
+1.5310424174166026 1.1438588757017583 1.1547942746326627
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 167 579 ...  -1  -1  -1]
+ [  1 806 367 ...  -1  -1  -1]
+ [  2  40 203 ...  -1  -1  -1]
+ ...
+ [997 203 854 ...  -1  -1  -1]
+ [998 968 986 ...  -1  -1  -1]
+ [999 192 824 ...  -1  -1  -1]]
+Scaled residual std at t=6: [3.06208483 2.28771775 2.30958855]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 6 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 7 times / overall 1000 times
+1.57312441301558 1.1007984870130478 1.0799189031388547
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 386 579 ...  -1  -1  -1]
+ [  1 511 407 ...  -1  -1  -1]
+ [  2 772 725 ...  -1  -1  -1]
+ ...
+ [997 502 326 ...  -1  -1  -1]
+ [998 501 962 ...  -1  -1  -1]
+ [999 168 969 ...  -1  -1  -1]]
+Scaled residual std at t=7: [3.14624883 2.20159697 2.15983781]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 7 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 8 times / overall 1000 times
+1.5528734668095419 1.0633440554842313 1.136049603826775
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 167 840 ...  -1  -1  -1]
+ [  1 160 815 ...  -1  -1  -1]
+ [  2 179 178 ...  -1  -1  -1]
+ ...
+ [997 772 502 ...  -1  -1  -1]
+ [998 126 901 ...  -1  -1  -1]
+ [999 199 507 ...  -1  -1  -1]]
+Scaled residual std at t=8: [3.10574693 2.12668811 2.27209921]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 8 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 9 times / overall 1000 times
+1.5616523218959617 1.1379127078685296 1.1662839929798439
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0  28 191 ...  -1  -1  -1]
+ [  1 123 569 ...  -1  -1  -1]
+ [  2 675 657 ...  -1  -1  -1]
+ ...
+ [997 244 502 ...  -1  -1  -1]
+ [998 901 126 ...  -1  -1  -1]
+ [999 507 919 ...  -1  -1  -1]]
+Scaled residual std at t=9: [3.12330464 2.27582542 2.33256799]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 9 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 10 times / overall 1000 times
+1.617739822160354 1.123476290172512 1.0994200352498689
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 603 960 ...  -1  -1  -1]
+ [  1 852 564 ...  -1  -1  -1]
+ [  2  66 915 ...  -1  -1  -1]
+ ...
+ [997 232 608 ...  -1  -1  -1]
+ [998 828 288 ...  -1  -1  -1]
+ [999 199 919 ...  -1  -1  -1]]
+Scaled residual std at t=10: [3.23547964 2.24695258 2.19884007]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 10 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 11 times / overall 1000 times
+1.5635220074617677 1.1613703297462856 1.0913692884231143
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 849 960 ...  -1  -1  -1]
+ [  1  90 852 ...  -1  -1  -1]
+ [  2 345 915 ...  -1  -1  -1]
+ ...
+ [997 608 259 ...  -1  -1  -1]
+ [998   5 288 ...  -1  -1  -1]
+ [999 919 168 ...  -1  -1  -1]]
+Scaled residual std at t=11: [3.12704401 2.32274066 2.18273858]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 11 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 12 times / overall 1000 times
+1.5526202330659213 1.171714986552889 1.1424660577639822
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 944 143 ...  -1  -1  -1]
+ [  1 569 364 ...  -1  -1  -1]
+ [  2 453 473 ...  -1  -1  -1]
+ ...
+ [997 142 131 ...  -1  -1  -1]
+ [998 288 931 ...  -1  -1  -1]
+ [999 919 199 ...  -1  -1  -1]]
+Scaled residual std at t=12: [3.10524047 2.34342997 2.28493212]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 12 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 13 times / overall 1000 times
+1.5753437267947983 1.126360745408072 1.1089948568073416
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 571 944 ...  -1  -1  -1]
+ [  1 982 159 ...  -1  -1  -1]
+ [  2 286 365 ...  -1  -1  -1]
+ ...
+ [997 209 142 ...  -1  -1  -1]
+ [998 810 288 ...  -1  -1  -1]
+ [999 199 919 ...  -1  -1  -1]]
+Scaled residual std at t=13: [3.15068745 2.25272149 2.21798971]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 13 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 14 times / overall 1000 times
+1.5605846074599052 1.137483993549983 1.1007774300928213
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 171 944 ...  -1  -1  -1]
+ [  1 982 140 ...  -1  -1  -1]
+ [  2 176 960 ...  -1  -1  -1]
+ ...
+ [997  58 915 ...  -1  -1  -1]
+ [998 810 136 ...  -1  -1  -1]
+ [999 199  16 ...  -1  -1  -1]]
+Scaled residual std at t=14: [3.12116921 2.27496799 2.20155486]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 14 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 15 times / overall 1000 times
+1.6495512777326595 1.1167698467189153 1.1178782355041053
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 160 944 ...  -1  -1  -1]
+ [  1 798 301 ...  -1  -1  -1]
+ [  2 249 740 ...  -1  -1  -1]
+ ...
+ [997   4  58 ...  -1  -1  -1]
+ [998 618 522 ...  -1  -1  -1]
+ [999 199  16 ...  -1  -1  -1]]
+Scaled residual std at t=15: [3.29910256 2.23353969 2.23575647]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 15 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 16 times / overall 1000 times
+1.5554170984635753 1.103597976484741 1.0522235848760069
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 674 944 ...  -1  -1  -1]
+ [  1 125 798 ...  -1  -1  -1]
+ [  2 392 171 ...  -1  -1  -1]
+ ...
+ [997 232  58 ...  -1  -1  -1]
+ [998 618 764 ...  -1  -1  -1]
+ [999 199  16 ...  -1  -1  -1]]
+Scaled residual std at t=16: [3.1108342  2.20719595 2.10444717]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 16 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 17 times / overall 1000 times
+1.597940924594063 1.1104236679433073 1.1114657651439215
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 768 964 ...  -1  -1  -1]
+ [  1 181 826 ...  -1  -1  -1]
+ [  2 864 869 ...  -1  -1  -1]
+ ...
+ [997 370 414 ...  -1  -1  -1]
+ [998 764 596 ...  -1  -1  -1]
+ [999  16 199 ...  -1  -1  -1]]
+Scaled residual std at t=17: [3.19588185 2.22084734 2.22293153]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 17 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 18 times / overall 1000 times
+1.5890001563456058 1.1155943702599562 1.1146528536956581
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0  57 957 ...  -1  -1  -1]
+ [  1 547 798 ...  -1  -1  -1]
+ [  2 287 171 ...  -1  -1  -1]
+ ...
+ [997 517 740 ...  -1  -1  -1]
+ [998 965 126 ...  -1  -1  -1]
+ [999 199  16 ...  -1  -1  -1]]
+Scaled residual std at t=18: [3.17800031 2.23118874 2.22930571]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 18 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 19 times / overall 1000 times
+1.5277786922755991 1.1326856329517423 1.125893364967497
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0  57 641 ...  -1  -1  -1]
+ [  1 208 398 ...  -1  -1  -1]
+ [  2 171 814 ...  -1  -1  -1]
+ ...
+ [997 116 365 ...  -1  -1  -1]
+ [998 965 290 ...  -1  -1  -1]
+ [999 199  16 ...  -1  -1  -1]]
+Scaled residual std at t=19: [3.05555738 2.26537127 2.25178673]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times
+this is 1700 times / overall 2000 times
+this is 1800 times / overall 2000 times
+this is 1900 times / overall 2000 times
+this is 19 times which has already done.
+----------------------------------------------------------------------------------------------------
+this is 20 times / overall 1000 times
+1.5752323542400042 1.180201542405441 1.1617373616786175
+----------------------------------------------------------------------------------------------------
+find index iteration: 0 1000
+short indx is [[  0 756  57 ...  -1  -1  -1]
+ [  1 352 301 ...  -1  -1  -1]
+ [  2 814 462 ...  -1  -1  -1]
+ ...
+ [997 417 116 ...  -1  -1  -1]
+ [998 592 290 ...  -1  -1  -1]
+ [999  16 199 ...  -1  -1  -1]]
+Scaled residual std at t=20: [3.15046471 2.36040308 2.32347472]
+start_idx is 0; end_idx is 1000
+this is 0 times / overall 2000 times
+this is 100 times / overall 2000 times
+this is 200 times / overall 2000 times
+this is 300 times / overall 2000 times
+this is 400 times / overall 2000 times
+this is 500 times / overall 2000 times
+this is 600 times / overall 2000 times
+this is 700 times / overall 2000 times
+this is 800 times / overall 2000 times
+this is 900 times / overall 2000 times
+this is 1000 times / overall 2000 times
+this is 1100 times / overall 2000 times
+this is 1200 times / overall 2000 times
+this is 1300 times / overall 2000 times
+this is 1400 times / overall 2000 times
+this is 1500 times / overall 2000 times
+this is 1600 times / overall 2000 times

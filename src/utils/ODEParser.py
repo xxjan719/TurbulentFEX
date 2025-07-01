@@ -279,10 +279,8 @@ def generate_second_step(u_current:np.ndarray,
     
     #short index:
     short_size = 2048
-    if train_size>=4000:
-        it_size_x0train = 4000
-    else:
-        it_size_x0train = train_size
+    
+    it_size_x0train = train_size
     it_n_index = train_size // it_size_x0train
 
     # Batch processing parameters
@@ -547,7 +545,7 @@ if __name__ == "__main__":
     
     print("\n=== Ensemble Prediction Results ===")
     # Load and use ensemble predictions for each dimension
-    for t in range(1):
+    for t in range(3):
         z_test = np.random.randn(1000,3)
         z_test_tensor = torch.tensor(z_test, dtype=torch.float32).to(device)
         for dim in range(1, 4):
