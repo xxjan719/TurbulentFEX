@@ -13,7 +13,7 @@ from utils.controller import Controller
 from utils.Sampler import Sampler
 from utils.Pool import Pool
 from utils.FEXParser import MultiDimensionFEX
-from utils.trainingstep import Body4TrainIntegrationParams, Body4TrainIntegrationArgs, Body4TrainIntegrator
+from utils.Train_Integrator import Body4TrainIntegrationParams, Body4TrainIntegrationArgs, Body4TrainIntegrator
 from Example.MC_triad.MC_triad import params_init, MC_triad_direct, MC_triad_initial_value
 from config.arg_parser import get_parser
 import torch
