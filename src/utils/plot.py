@@ -199,3 +199,131 @@ def plot_deviation_subplots(TT_MC, cov_MC, M3_MC_norm,save_path=None):
     plt.tight_layout()
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
+
+
+def plot_residual_covariance_comparison(residual_cov_pred, residual_cov_truth, selected_times, save_dir=None):
+    """
+    Plot comparison between predicted and ground truth residual covariance.
+    
+    Args:
+        residual_cov_pred (np.ndarray): Predicted residual covariance
+        residual_cov_truth (np.ndarray): Ground truth residual covariance
+        selected_times (np.ndarray): Time points used for prediction
+        save_dir (str): Directory to save the plot
+    """
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    dimensions = ['x1', 'x2', 'x3']
+    colors = ['blue', 'red', 'green']
+    
+    for dim in range(3):
+        ax = axes[dim]
+        
+        # Plot ground truth (if available)
+        if residual_cov_truth is not None:
+            # Interpolate ground truth to selected time points
+            total_time_steps = residual_cov_truth.shape[0]
+            dt = selected_times[1] - selected_times[0] if len(selected_times) > 1 else 0.01
+            truth_times = np.arange(total_time_steps) * dt
+            
+            # Find indices for selected times in ground truth
+            truth_indices = np.round(selected_times / dt).astype(int)
+            truth_indices = np.clip(truth_indices, 0, total_time_steps - 1)
+            
+            ax.plot(truth_times[truth_indices], residual_cov_truth[truth_indices, dim], 
+                   'o-', color='red', alpha=0.7, label='Ground Truth', linewidth=2)
+        
+        # Plot predictions
+        ax.plot(selected_times, residual_cov_pred[:, dim], 
+               's-', color='blue', alpha=0.8, label='Predicted', linewidth=2)
+        
+        ax.set_xlabel('Time (s)')
+        ax.set_ylabel(f'Residual Covariance - {dimensions[dim]}')
+        ax.set_title(f'Dimension {dim+1} ({dimensions[dim]})')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    if save_dir:
+        plt.savefig(os.path.join(save_dir, 'residual_covariance_comparison.png'), 
+                   dpi=300, bbox_inches='tight')
+        print(f"Plot saved to {os.path.join(save_dir, 'residual_covariance_comparison.png')}")
+    
+    plt.show()
+
+def plot_time_selection_info(total_time_steps, selected_indices, selected_times, dt, save_dir=None):
+    """
+    Plot information about time point selection.
+    
+    Args:
+        total_time_steps (int): Total number of time steps
+        selected_indices (np.ndarray): Selected time indices
+        selected_times (np.ndarray): Selected time points
+        dt (float): Time step size
+        save_dir (str): Directory to save the plot
+    """
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
+    
+    # Plot 1: Time point distribution
+    all_times = np.arange(total_time_steps) * dt
+    ax1.plot(all_times, np.ones_like(all_times), 'k-', alpha=0.3, label='All time points')
+    ax1.plot(selected_times, np.ones_like(selected_times), 'ro', markersize=8, label='Selected time points')
+    ax1.set_xlabel('Time (s)')
+    ax1.set_ylabel('Selection')
+    ax1.set_title(f'Time Point Selection: {len(selected_indices)}/{total_time_steps} points')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    
+    # Plot 2: Time intervals
+    intervals = np.diff(selected_times)
+    ax2.plot(selected_times[1:], intervals, 'bo-')
+    ax2.set_xlabel('Time (s)')
+    ax2.set_ylabel('Time Interval (s)')
+    ax2.set_title('Time Intervals Between Selected Points')
+    ax2.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    if save_dir:
+        plt.savefig(os.path.join(save_dir, 'time_selection_info.png'), 
+                   dpi=300, bbox_inches='tight')
+        print(f"Plot saved to {os.path.join(save_dir, 'time_selection_info.png')}")
+    
+    plt.show()
+
+def load_and_plot_results(save_dir):
+    """
+    Load saved results and create plots.
+    
+    Args:
+        save_dir (str): Directory containing saved results
+    """
+    # Load results
+    results_path = os.path.join(save_dir, 'residual_cov_pred.npy')
+    if os.path.exists(results_path):
+        results = np.load(results_path, allow_pickle=True).item()
+        residual_cov_pred = results['residual_cov_pred']
+        selected_times = results['selected_times']
+        selected_indices = results['selected_indices']
+        
+        print(f"Loaded results: {len(selected_indices)} time points")
+        print(f"Time range: {selected_times[0]:.2f}s to {selected_times[-1]:.2f}s")
+        
+        # Load ground truth if available
+        residual_cov_truth = None
+        truth_path = os.path.join(save_dir, 'residual_cov_truth.npy')
+        if os.path.exists(truth_path):
+            residual_cov_truth = np.load(truth_path)
+            print("Ground truth loaded")
+        
+        # Create plots
+        plot_residual_covariance_comparison(residual_cov_pred, residual_cov_truth, selected_times, save_dir)
+        
+        # Calculate time step info
+        dt = selected_times[1] - selected_times[0] if len(selected_times) > 1 else 0.01
+        total_time_steps = int(selected_times[-1] / dt) + 1
+        
+        plot_time_selection_info(total_time_steps, selected_indices, selected_times, dt, save_dir)
+        
+    else:
+        print(f"Results file not found: {results_path}")

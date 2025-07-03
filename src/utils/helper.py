@@ -102,50 +102,7 @@ def find_nearest_neighbors(distances, short_size):
     
     return indices
 
-def process_chunk_cpu(it_n_index, it_size_x0train, short_size, x_sample, x0_train, train_size, x_dim):
-    x0_train_index_initial = np.empty((train_size, short_size), dtype=int)
-    
-    # Use KDTree for efficient nearest neighbor search
-    tree = KDTree(x_sample, leaf_size=40)  # Optimized leaf size for better performance
-    
-    for jj in range(it_n_index):
-        start_idx = jj * it_size_x0train
-        end_idx = min((jj + 1) * it_size_x0train, train_size)
-        x0_train_chunk = x0_train[start_idx:end_idx]
 
-        # Perform the search using KDTree
-        distances, index_initial = tree.query(x0_train_chunk, k=short_size)
-        x0_train_index_initial[start_idx:end_idx, :] = index_initial
-
-        if jj % 500 == 0:
-            print('find index iteration:', jj, it_size_x0train)
-    
-    return x0_train_index_initial
-
-def process_chunk(it_n_index, it_size_x0train, short_size, x_sample, x0_train, train_size, x_dim):
-    x0_train_index_initial = np.empty((train_size, short_size), dtype=int)
-    
-    # For GPU-like performance, use optimized CPU implementation with Numba
-    # First, compute all distances efficiently
-    print("Computing distances...")
-    distances = cdist(x0_train, x_sample, metric='sqeuclidean')  # Use squared Euclidean for speed
-    
-    print("Finding nearest neighbors...")
-    for jj in range(it_n_index):
-        start_idx = jj * it_size_x0train
-        end_idx = min((jj + 1) * it_size_x0train, train_size)
-        
-        # Get distances for this chunk
-        chunk_distances = distances[start_idx:end_idx]
-        
-        # Find nearest neighbors
-        index_initial = np.argsort(chunk_distances, axis=1)[:, :short_size]
-        x0_train_index_initial[start_idx:end_idx, :] = index_initial
-
-        if jj % 500 == 0:
-            print('find index iteration:', jj, it_size_x0train)
-    
-    return x0_train_index_initial
 
 
 

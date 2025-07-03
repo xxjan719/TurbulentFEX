@@ -268,11 +268,26 @@ def generate_second_step(u_current:np.ndarray,
                           dt:float,
                           train_size:int=10000,
                           device:str='cpu',
-                          ODESOLVER_TIME_STEPS:int=2000):
+                          ODESOLVER_TIME_STEPS:int=2000,
+                          num_time_points:int=None):
     
-    time_step = residuals.shape[2]
+    total_time_steps = residuals.shape[2]
     size = int(residuals.shape[0])
     odeslover_time_steps = ODESOLVER_TIME_STEPS
+    
+    # Select time points to process
+    if num_time_points is not None:
+        selected_indices, selected_times = select_time_points(
+            total_time_steps, dt, num_time_points
+        )
+        print(f"Processing {len(selected_indices)} time points out of {total_time_steps} total")
+        print(f"Time range: {selected_times[0]:.2f}s to {selected_times[-1]:.2f}s")
+        time_indices = selected_indices
+        time_step = len(selected_indices)
+    else:
+        time_indices = range(total_time_steps)
+        selected_times = np.arange(total_time_steps) * dt
+        time_step = total_time_steps
     
     # Ensure train_size doesn't exceed the actual size
     train_size = min(train_size, size)
@@ -295,9 +310,9 @@ def generate_second_step(u_current:np.ndarray,
     print(f"Original residual std at t=0: {np.std(residuals[:, :, 0], axis=0)}")
     print(f"Using train_size: {train_size} out of total size: {size}")
     
-    for t in range(time_step):
+    for t_idx, t in enumerate(time_indices):
         print('-'.center(100, '-'))
-        print(f'this is {t} times / overall {time_step} times')
+        print(f'this is {t_idx+1} times / overall {time_step} times (time step {t}, t={selected_times[t_idx]:.2f}s)')
         print(np.std(residuals[:, 0, t].T)/np.sqrt(dt), np.std(residuals[:, 1, t].T)/np.sqrt(dt), np.std(residuals[:, 2, t].T)/np.sqrt(dt))
         print('-'.center(100, '-'))
         u_sample = u_current[:,:,t]
@@ -310,7 +325,7 @@ def generate_second_step(u_current:np.ndarray,
         # Scale residuals for this time step
         scaled_residuals = residuals[:, :, t] * scaler
         z_short = scaled_residuals[short_indx]
-        ZT_Solution[:,:,t] = np.random.randn(size,3)
+        ZT_Solution[:,:,t_idx] = np.random.randn(size,3)
         # Debug: Show scaled residual std
         print(f"Scaled residual std at t={t}: {np.std(scaled_residuals, axis=0)}")
         
@@ -335,11 +350,11 @@ def generate_second_step(u_current:np.ndarray,
             # Call ODE solver for this mini-batch
             y_temp = ODE_solver(it_zt, x_mini_batch, z_mini_batch, it_x0, odeslover_time_steps)
             
-            # Store results
-            ODE_Solution[start_idx:end_idx, :, t] = y_temp.cpu().detach().numpy()
-            
+                    # Store results
+            ODE_Solution[start_idx:end_idx, :, t_idx] = y_temp.cpu().detach().numpy()
         
-        print(f'this is {t} times which has already done.')
+    
+        print(f'this is {t_idx+1} times which has already done.')
     
     return ODE_Solution,ZT_Solution
 
@@ -361,11 +376,26 @@ def train_FN_each_dimension(ODE_Solution:np.ndarray,
                              learning_rate:float=0.001,  # Reduced learning rate
                              n_iter:int=5000,  # More iterations
                              best_valid_err:float=5.0,
-                             save_dir:str=None):
-    time_step = ODE_Solution.shape[2]
+                             save_dir:str=None,
+                             num_time_points:int=None,
+                             dt:float=0.01):
+    total_time_steps = ODE_Solution.shape[2]
     size = ODE_Solution.shape[0]
-    for t in range(time_step):
-        print(f'this is {t} times / overall {time_step} times')
+    
+    # Select time points to train on
+    if num_time_points is not None:
+        selected_indices, selected_times = select_time_points(
+            total_time_steps, dt, num_time_points
+        )
+        print(f"Training on {len(selected_indices)} time points out of {total_time_steps} total")
+        print(f"Time range: {selected_times[0]:.2f}s to {selected_times[-1]:.2f}s")
+        time_indices = selected_indices
+    else:
+        time_indices = range(total_time_steps)
+        selected_times = np.arange(total_time_steps) * dt
+    
+    for t_idx, t in enumerate(time_indices):
+        print(f'this is {t_idx+1} times / overall {len(time_indices)} times (time step {t}, t={selected_times[t_idx]:.2f}s)')
         NTrain = int(size* 0.8)
         for x_dim in range(1,dim+1):
             print(f'this is {x_dim} dimension / overall {dim} dimensions')
@@ -433,13 +463,27 @@ def train_FN_ensemble(ODE_Solution:np.ndarray,
                       dim:int=3,
                       device:str='cpu',
                       n_models:int=5,  # Number of ensemble models
-                      save_dir:str=None):
+                      save_dir:str=None,
+                      num_time_points:int=None,
+                      dt:float=0.01):
     """Train an ensemble of neural networks to reduce approximation error"""
-    time_step = ODE_Solution.shape[2]
+    total_time_steps = ODE_Solution.shape[2]
     size = ODE_Solution.shape[0]
     
-    for t in range(time_step):
-        print(f'this is {t} times / overall {time_step} times')
+    # Select time points to train on
+    if num_time_points is not None:
+        selected_indices, selected_times = select_time_points(
+            total_time_steps, dt, num_time_points
+        )
+        print(f"Training on {len(selected_indices)} time points out of {total_time_steps} total")
+        print(f"Time range: {selected_times[0]:.2f}s to {selected_times[-1]:.2f}s")
+        time_indices = selected_indices
+    else:
+        time_indices = range(total_time_steps)
+        selected_times = np.arange(total_time_steps) * dt
+    
+    for t_idx, t in enumerate(time_indices):
+        print(f'this is {t_idx+1} times / overall {len(time_indices)} times (time step {t}, t={selected_times[t_idx]:.2f}s)')
         NTrain = int(size* 0.8)
         
         for x_dim in range(1,dim+1):
@@ -511,6 +555,40 @@ def train_FN_ensemble(ODE_Solution:np.ndarray,
 
 
 
+def select_time_points(total_time_steps: int, dt: float, num_points: int = 100):
+    """
+    Select a subset of time points with regular spacing.
+    
+    Args:
+        total_time_steps (int): Total number of time steps available
+        dt (float): Time step size
+        num_points (int): Number of points to select
+        
+    Returns:
+        tuple: (selected_indices, selected_times)
+    """
+    # Calculate total simulation time
+    total_time = total_time_steps * dt
+    
+    # Create regularly spaced time points
+    selected_times = np.linspace(0, total_time, num_points)
+    
+    # Convert times to indices
+    selected_indices = np.round(selected_times / dt).astype(int)
+    
+    # Ensure indices are within bounds
+    selected_indices = np.clip(selected_indices, 0, total_time_steps - 1)
+    
+    # Remove duplicates while preserving order
+    unique_indices = []
+    unique_times = []
+    for idx, time in zip(selected_indices, selected_times):
+        if idx not in unique_indices:
+            unique_indices.append(idx)
+            unique_times.append(time)
+    
+    return np.array(unique_indices), np.array(unique_times)
+
 def predict_ensemble_residual_covariance(residuals: np.ndarray,
                                        save_dir: str,
                                        dt: float,
@@ -518,7 +596,8 @@ def predict_ensemble_residual_covariance(residuals: np.ndarray,
                                        train_size: int = 1000,
                                        n_models: int = 5,
                                        device: str = 'cpu',
-                                       residual_cov_truth: np.ndarray = None):
+                                       residual_cov_truth: np.ndarray = None,
+                                       num_time_points: int = 100):
     """
     Predict residual covariance using ensemble of trained neural networks.
     
@@ -531,17 +610,26 @@ def predict_ensemble_residual_covariance(residuals: np.ndarray,
         n_models (int): Number of models in ensemble
         device (str): Device to run predictions on ('cpu' or 'cuda')
         residual_cov_truth (np.ndarray, optional): Ground truth residual covariance for comparison
+        num_time_points (int): Number of time points to process (regularly spaced)
         
     Returns:
-        np.ndarray: Predicted residual covariance with shape (time_steps, dimensions)
+        tuple: (residual_cov_pred, selected_times) - Predicted covariance and corresponding times
     """
-    time_step = residuals.shape[2]
-    residual_cov_pred = np.zeros((time_step, 3))
+    total_time_steps = residuals.shape[2]
     
-    print("\n=== Ensemble Prediction Results ===")
+    # Select time points to process
+    selected_indices, selected_times = select_time_points(
+        total_time_steps, dt, num_time_points
+    )
     
-    # Load and use ensemble predictions for each dimension
-    for t in range(time_step):
+    print(f"\n=== Ensemble Prediction Results ===")
+    print(f"Processing {len(selected_indices)} time points out of {total_time_steps} total")
+    print(f"Time range: {selected_times[0]:.2f}s to {selected_times[-1]:.2f}s")
+    
+    residual_cov_pred = np.zeros((len(selected_indices), 3))
+    
+    # Load and use ensemble predictions for each selected time point
+    for i, t in enumerate(selected_indices):
         z_test = np.random.randn(train_size, 3)
         z_test_tensor = torch.tensor(z_test, dtype=torch.float32).to(device)
         
@@ -584,9 +672,9 @@ def predict_ensemble_residual_covariance(residuals: np.ndarray,
             
             # Scale back by scaler
             pred = pred / scaler[dim-1]
-            residual_cov_pred[t, dim-1] = np.std(pred) / np.sqrt(dt)
+            residual_cov_pred[i, dim-1] = np.std(pred) / np.sqrt(dt)
             
-            print(f"Dimension {dim}: {np.std(pred)/np.sqrt(dt):.6f}")
+            print(f"Time {selected_times[i]:.2f}s, Dimension {dim}: {np.std(pred)/np.sqrt(dt):.6f}")
             
             if residual_cov_truth is not None:
                 print(f"Comparison with Ground Truth: {residual_cov_truth[t, dim-1]:.6f}")
@@ -594,10 +682,15 @@ def predict_ensemble_residual_covariance(residuals: np.ndarray,
     print("\nExpected values should be close to original")
     print("Ensemble method should provide more accurate results!")
     
-    # Save predictions
-    np.save(os.path.join(save_dir, 'residual_cov_pred.npy'), residual_cov_pred)
+    # Save predictions with time information
+    results = {
+        'residual_cov_pred': residual_cov_pred,
+        'selected_times': selected_times,
+        'selected_indices': selected_indices
+    }
+    np.save(os.path.join(save_dir, 'residual_cov_pred.npy'), results)
     
-    return residual_cov_pred
+    return residual_cov_pred, selected_times
 
 
 
@@ -618,23 +711,31 @@ if __name__ == "__main__":
     print(residuals.shape,u_current.shape)
     
     scaler = np.array([20,20,20])
-    ODE_Solution,ZT_Solution = generate_second_step(u_current,residuals,scaler,dt,device)
+    ODE_Solution,ZT_Solution = generate_second_step(
+        u_current, residuals, scaler, dt, device=device,
+        num_time_points=100  # Only process 100 time points
+    )
     print(ODE_Solution.shape)
     
     mean_value, std_value = generate_mean_and_std(ODE_Solution)
     print(mean_value.shape, std_value.shape)
     print(mean_value[0:2,:],std_value[0:2,:])
     
-    # Train ensemble models for better accuracy
-    train_FN_ensemble(ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir)
+    # Train ensemble models for better accuracy (only on selected time points)
+    train_FN_ensemble(
+        ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir,
+        num_time_points=100,  # Only train on 100 time points
+        dt=dt
+    )
     
     # Test predictions with ensemble
-    residual_cov_pred = predict_ensemble_residual_covariance(
+    residual_cov_pred, selected_times = predict_ensemble_residual_covariance(
         residuals=residuals,
         save_dir=save_dir,
         dt=dt,
         scaler=scaler,
         train_size=1000,
         n_models=5,
-        device=device
+        device=device,
+        num_time_points=100  # Only predict on 100 time points
     )

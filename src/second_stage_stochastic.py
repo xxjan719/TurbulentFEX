@@ -95,16 +95,23 @@ if choice == '1':
     scaler = np.ones(3) * args.DIFF_SCALE
     train_size = args.TRAIN_SIZE
     #===================================================================================
-    ODE_Solution,ZT_Solution = generate_second_step(u_current,residuals,scaler,dt,train_size,device)
+    ODE_Solution,ZT_Solution = generate_second_step(
+        u_current, residuals, scaler, dt, train_size, device,
+        num_time_points=100  # Only process 100 time points
+    )
     print(f'[INFO] the ODE solution shape is: {ODE_Solution.shape}')
     mean_value, std_value = generate_mean_and_std(ODE_Solution)
     print(f'[INFO] this is print for mean and std: {mean_value.shape} {std_value.shape}')
-    # Train ensemble models for better accuracy
-    train_FN_ensemble(ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir)
+    # Train ensemble models for better accuracy (only on selected time points)
+    train_FN_ensemble(
+        ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir,
+        num_time_points=100,  # Only train on 100 time points
+        dt=dt
+    )
     
     print("\n"+ "="*60)
     print("\n[INFO] Testing ensemble predictions...")
-    residual_cov_pred = predict_ensemble_residual_covariance(
+    residual_cov_pred, selected_times = predict_ensemble_residual_covariance(
         residuals=residuals,
         save_dir=save_dir,
         dt=dt,
@@ -112,7 +119,8 @@ if choice == '1':
         train_size=train_size,
         n_models=5,
         device=device,
-        residual_cov_truth=residual_cov_truth
+        residual_cov_truth=residual_cov_truth,
+        num_time_points=100  # Only predict on 100 time points
     )
     print('[SUCCESS] Ensemble prediction completed.')
     print("="*60)
@@ -130,7 +138,7 @@ else:
     scaler = np.ones(3) * args.DIFF_SCALE
     train_size = args.TRAIN_SIZE
     
-    residual_cov_pred = predict_ensemble_residual_covariance(
+    residual_cov_pred, selected_times = predict_ensemble_residual_covariance(
         residuals=residuals,
         save_dir=save_dir,
         dt=dt,
@@ -138,7 +146,8 @@ else:
         train_size=train_size,
         n_models=5,
         device=device,
-        residual_cov_truth=residual_cov_truth
+        residual_cov_truth=residual_cov_truth,
+        num_time_points=100  # Only predict on 100 time points
     )
     print('[SUCCESS] Ensemble prediction completed.')
 
