@@ -2,6 +2,7 @@ import os,sys,warnings
 import argparse
 import pkg_resources
 import subprocess
+
 warnings.filterwarnings('ignore')
 
 class Config:
@@ -31,15 +32,22 @@ class Config:
         self.DIR_EQUIPART = os.path.join(self.DIR_PROJECT, 'Results', 'equipart')
         self.DIR_CASCADE = os.path.join(self.DIR_PROJECT, 'Results', 'cascade')
 
+        # Store file paths instead of loading numpy arrays immediately
         self.TRIAD_MODEL_CONFIG = {
-            'dimension_1':{
-                'name': 'FEX_dim_1'
+            '1':{
+                'name': 'FEX_dim_1',
+                'op_seq_equipart_path': os.path.join(self.DIR_EQUIPART, 'optimal_idx_1.npy'),
+                'op_seq_cascade_path': os.path.join(self.DIR_CASCADE, 'optimal_idx_1.npy')
             },
-            'dimension_2':{
-                'name': 'FEX_dim_2'
+            '2':{
+                'name': 'FEX_dim_2',
+                'op_seq_equipart_path': os.path.join(self.DIR_EQUIPART, 'optimal_idx_2.npy'),
+                'op_seq_cascade_path': os.path.join(self.DIR_CASCADE, 'optimal_idx_2.npy')
             },
-            'dimension_3':{
-                'name': 'FEX_dim_3'
+            '3':{
+                'name': 'FEX_dim_3',
+                'op_seq_equipart_path': os.path.join(self.DIR_EQUIPART, 'optimal_idx_3.npy'),
+                'op_seq_cascade_path': os.path.join(self.DIR_CASCADE, 'optimal_idx_3.npy')
             }
         }
     
@@ -47,18 +55,21 @@ class Config:
         """Setup package management configurations"""
         # Required packages and their versions
         self.REQUIRED_PACKAGES = {
-            'faiss': '1.8.1',
+            'faiss-cpu': '1.8.1',
             'sympy': '1.13.1',
-            'dataclasses': '0.6',
-            'typing': '4.7.1',
             'torch': '2.3.1',
             'torchvision': '0.18.1',
             'numpy': '1.26.4',
             'matplotlib': '3.8.0',
             'scipy': '1.13.0',
             'numba': '0.59.0',
-            'sklearn': '1.3.2',
             'scikit-learn': '1.3.2',
+        }
+        
+        # Built-in modules that don't need installation
+        self.BUILTIN_MODULES = {
+            'typing',  # Built into Python 3.5+
+            'dataclasses',  # Built into Python 3.7+
         }
     
     def _setup_arguments(self):
@@ -73,17 +84,25 @@ class Config:
         missing_packages = []
         outdated_packages = []
 
-        for  package, version in self.REQUIRED_PACKAGES.items():
+        # Check built-in modules first
+        for module in self.BUILTIN_MODULES:
+            try:
+                __import__(module)
+                print(f"[SUCCESS] {module} (built-in) is available")
+            except ImportError:
+                print(f"[WARNING] {module} (built-in) is not available in this Python version")
+
+        # Check external packages
+        for package, version in self.REQUIRED_PACKAGES.items():
             if package not in installed_packages:
                 missing_packages.append(package)
             else:
-                # check if version is subfficient
+                # check if version is sufficient
                 installed_version = pkg_resources.get_distribution(package).version
                 if pkg_resources.parse_version(installed_version) < pkg_resources.parse_version(version):
                     outdated_packages.append((package, version, installed_version))
 
-
-        # If packages are missing, check virtual envitroment first
+        # If packages are missing, check virtual environment first
         if missing_packages or outdated_packages:
             if not self._is_in_virtual_environment():
                 self._prompt_create_environment()
@@ -254,6 +273,62 @@ class Config:
         main_parser = self.create_main_parser()
         return main_parser.parse_args()
 
+    def load_triad_config_data(self, dimension, config_type='equipart'):
+        """
+        Lazy load numpy arrays for triad configuration
+        
+        Args:
+            dimension (str): Dimension number ('1', '2', '3')
+            config_type (str): Either 'equipart' or 'cascade'
+            
+        Returns:
+            numpy.ndarray: Loaded array or None if loading fails
+        """
+        try:
+            import numpy as np
+        except ImportError:
+            print("Warning: numpy is not installed. Cannot load triad configuration data.")
+            return None
+        
+        if dimension not in self.TRIAD_MODEL_CONFIG:
+            print(f"Warning: Dimension {dimension} not found in TRIAD_MODEL_CONFIG")
+            return None
+            
+        if config_type not in ['equipart', 'cascade']:
+            print(f"Warning: Config type {config_type} must be 'equipart' or 'cascade'")
+            return None
+            
+        file_path = self.TRIAD_MODEL_CONFIG[dimension][f'op_seq_{config_type}_path']
+        
+        if not os.path.exists(file_path):
+            print(f"Warning: File {file_path} does not exist")
+            return None
+            
+        try:
+            return np.load(file_path, allow_pickle=True)
+        except Exception as e:
+            print(f"Warning: Failed to load {file_path}: {str(e)}")
+            return None
+    
+    def get_triad_config(self, dimension, config_type='equipart'):
+        """
+        Get triad configuration with loaded data
+        
+        Args:
+            dimension (str): Dimension number ('1', '2', '3')
+            config_type (str): Either 'equipart' or 'cascade'
+            
+        Returns:
+            dict: Configuration with loaded data
+        """
+        config = self.TRIAD_MODEL_CONFIG[dimension].copy()
+        
+        # Load the appropriate data
+        data = self.load_triad_config_data(dimension, config_type)
+        config[f'op_seq_{config_type}'] = data
+        
+        return config
+
 # Create global instance
 config = Config()
 
@@ -262,12 +337,13 @@ DIR_PROJECT = config.DIR_PROJECT
 DIR_TRIAD = config.DIR_TRIAD
 DIR_EQUIPART = config.DIR_EQUIPART
 DIR_CASCADE = config.DIR_CASCADE
-DATASET_CONFIG = config.DATASET_CONFIG
 
 # Export functions
 create_main_parser = config.create_main_parser
 parse_args = config.parse_args
 check_and_install_packages = config.check_and_install_packages
+load_triad_config_data = config.load_triad_config_data
+get_triad_config = config.get_triad_config
 
 
 # Add project directory to sys.path
@@ -290,11 +366,12 @@ __all__ = [
     'create_main_parser',
     'parse_args',
     'check_and_install_packages',
+    'load_triad_config_data',
+    'get_triad_config',
     'DIR_PROJECT',
     'DIR_TRIAD',
     'DIR_EQUIPART',
     'DIR_CASCADE',
-    'DATASET_CONFIG',
 ]
 
 
