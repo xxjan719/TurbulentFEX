@@ -1,7 +1,21 @@
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple
-from .constant import CONTROLLER_INPUT_SIZE, CONTROLLER_HIDDEN_SIZE
+import sys
+import os
+
+# Add the src directory to the path to handle imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from config import parse_args
+    args = parse_args()
+    CONTROLLER_INPUT_SIZE = args.CONTROLLER_INPUT_SIZE
+    CONTROLLER_HIDDEN_SIZE = args.CONTROLLER_HIDDEN_SIZE
+except ImportError:
+    # Fallback values if config is not available
+    CONTROLLER_INPUT_SIZE = 20
+    CONTROLLER_HIDDEN_SIZE = 30
 
 class Controller(nn.Module):
     def __init__(self, pmf_sizes: Tuple[int, ...]):

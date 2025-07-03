@@ -2,37 +2,64 @@ import numpy as np
 import os
 import sys
 from pathlib import Path
-import argparse
+
+# Add the src directory to the path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
-current_dir = os.path.dirname(os.path.abspath(__file__))  # MC_triad directory
-parent_dir = os.path.dirname(current_dir)  # src/Example directory
-project_root = os.path.dirname(parent_dir)  # src directory
-sys.path.append(project_root)  # Add src directory to Python path
+
+import torch
 from utils.ODEParser import *
-from MC_triad import *
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-torch.manual_seed(1234)
-np.random.seed(1234)
-#===========================Parser part============================================
-parser = argparse.ArgumentParser(description='QIDIFEX')
-parser.add_argument('--SAMPLE',default = 10000,type= int)
-parser.add_argument('--method',default = 'All',type= str)
-parser.add_argument('--HIDDEN_dim',default = 50,type=int)
-parser.add_argument('--classification',default = False,type=str)
-parser.add_argument('--epochs',default = 10000,type=int)
-args = parser.parse_args()
-#==================================================================================
+from Example.MC_triad.MC_triad import params_init, MC_triad_direct, MC_triad_initial_value
+import config
+
+# Import specific functions from ODE Parser
+from utils.ODEParser import (
+    generate_rk4_residue, 
+    generate_second_step, 
+    generate_mean_and_std, 
+    train_FN_ensemble,
+    FEX_model_check
+)
+
+args = config.parse_args()
+torch.manual_seed(args.SEED)
+np.random.seed(args.SEED)
+
+# Set device
+if torch.cuda.is_available() and args.DEVICE.startswith('cuda'):
+    device = torch.device(args.DEVICE)
+    print(f"Using {args.DEVICE}")
+else:
+    device = torch.device('cpu')
+    print("CUDA is not available, using CPU instead")
+# Ask user whether to train everything in second stage or skip to calculate the measurements
+print("\n"+ "="*60)
+print("SECOND STAGE: STOCHASTIC OPTIONS")
+print("="*60)
+print("1. Train everything in second stage")
+print("2. Skip to calculate the measurements")
+print("="*60)
+
+while True:
+    choice = input("\nChoose option (1 or 2):").strip()
+    if choice in ['1','2']:
+        break
+    else:
+        print("Please enter '1' or '2'.")
+
+
 
 
 #===========================Path part==============================================
 model_PATH = Path(os.path.join( 'Results', 'equipart'))
 if os.path.exists(model_PATH):
     print(model_PATH)
-    save_dir = os.path.join( 'Results', 'equipart',f'case_{args.SAMPLE}')
+    save_dir = os.path.join( 'Results', 'equipart',f'case_{args.NUM_SAMPLES}')
     print('Right now we use our own workspace path.')
 else:
     model_PATH = Path(os.path.join( 'Results', 'Results', 'equipart'))
-    save_dir = os.path.join('Results', 'Results','equipart',f'case_{args.SAMPLE}')
+    save_dir = os.path.join('Results', 'Results','equipart',f'case_{args.NUM_SAMPLES}')
     print('Right now we use hipergator workspace path.')
 os.makedirs(save_dir,exist_ok=True)
 FN_SAMPLE_PATH = os.path.join(save_dir,'FN_model')
@@ -41,8 +68,8 @@ os.makedirs(save_dir,exist_ok=True)
 
 #=========================data generation part====================================
 m0, var0 = MC_triad_initial_value()
-print(f'SAMPLE size for each time step is {args.SAMPLE}')
-params = params_init('equipart',sample=args.SAMPLE)
+print(f'SAMPLE size for each time step is {args.NUM_SAMPLES}')
+params = params_init('equipart',sample=args.NUM_SAMPLES)
 if os.path.exists(os.path.join(save_dir,'simulation_data.npz')):
     print('data has already been generated in this folder,you just need to train the following.')
     pass

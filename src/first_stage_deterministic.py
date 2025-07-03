@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils import *
 from Example.MC_triad.MC_triad import params_init, MC_triad_direct, MC_triad_initial_value
-from config import get_parser
+from config import create_main_parser
 import torch
 import torch.nn as nn
 import math
@@ -16,7 +16,7 @@ import random
 import logging
 import sympy as sp
 
-parser = get_parser()
+parser = create_main_parser()
 args = parser.parse_args()
 
     # Force SECOND_STAGE_OPEN_BOOL to False if TRAIN_GROUND_TRUTH is True

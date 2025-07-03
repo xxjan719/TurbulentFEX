@@ -5,34 +5,28 @@
 TurbulentFEX/
 │
 ├── src/
-│   ├── __init__.py             # Make src a Python package
-│   ├── main.py                 # Main training and evaluation script
+│   ├── __init__.py                    # Make src a Python package
+│   ├── first_stage_deterministic.py   # First stage: FEX learning drift term
+│   ├── second_stage_stochastic.py     # Second stage: Learning diffusion term
+│   ├── config.py                      # Central configuration management
 │   ├── utils/
-│   │   ├── __init__.py         # Make utils a Python package
-│   │   ├── lawtrainingstep.py  # Training step implementations
-│   │   ├── coefficient_extractor.py  # Matrix coefficient extraction utilities
-│   │   ├── visualization.py     # LaTeX and plot generation utilities
-│   │   ├── plotting.py          # Plotting utilities for results
-│   │   └── expression_handler.py # Symbolic expression manipulation
-│   ├── models/
-│   │   ├── __init__.py         # Make models a Python package
-│   │   ├── fex_model.py        # FEX model implementation
-│   │   └── fex_optimizer.py    # Custom optimizers for FEX
+│   │   ├── __init__.py                # Make utils a Python package
+│   │   ├── FEX.py                     # Functional Expansion implementation
+│   │   ├── ODEParser.py               # ODE solving and integration utilities
+│   │   ├── controller.py              # Neural controller for FEX exploration
+│   │   ├── Train_Integrator.py        # Training integration utilities
+│   │   ├── Pool.py                    # Candidate pool management
+│   │   ├── Sampler.py                 # Sampling utilities
+│   │   ├── constant.py                # Constants and operations
+│   │   └── helper.py                  # Helper functions
 │   ├── Example/
-│   │   ├── MC_triad/           # Example: Monte Carlo triad system
-│   │   └── prediction.ipynb    # Prediction and evaluation notebook
-│   └── examples/
-│       └── turbulent_cases/    # Example turbulent system cases
-│
-├── config/
-│   ├── __init__.py
-│   ├── arg_parser.py           # Command line argument configuration
-│   └── model_config.py         # Model hyperparameters and settings
-│
-├── results/                    # Training results and visualizations
-│   ├── equations/              # Generated LaTeX equations
-│   ├── coefficients/           # Extracted matrix coefficients
-│   └── plots/                  # Performance plots and visualizations
+│   │   └── MC_triad/                  # Example: Monte Carlo triad system
+│   │       ├── MC_triad.py            # Main triad system definition
+│   │       ├── prediction.ipynb       # Prediction and evaluation notebook
+│   │       └── Results/               # Output directories for results
+│   │           ├── equipart/          # Equipartition results
+│   │           └── cascade/           # Cascade results
+│   └── README.md                      # Detailed usage documentation
 │
 └── .gitignore
 ```
@@ -41,6 +35,14 @@ TurbulentFEX/
 
 
 ## Recent Updates
+
+### File Reorganization (2025-01-XX)
+- **Renamed main files for clarity**:
+  - `main.py` → `first_stage_deterministic.py` (FEX learning drift)
+  - `small_test.py` → `second_stage_stochastic.py` (learning diffusion)
+- **Fixed import issues**: Resolved all relative import problems
+- **Improved configuration**: Enhanced config.py with lazy loading and better error handling
+- **Updated documentation**: Added comprehensive README in src/ directory
 
 ### Need to Update (2025-06-15 - 2025-06-22)
 - print all the dataset performance in `prediction.py`
@@ -143,23 +145,47 @@ TurbulentFEX/
 - pandas (1.3.0): Data manipulation
 
 ## Usage
+
+### Two-Stage Training Workflow
+
+1. **First Stage (Drift Learning)**:
+   ```bash
+   cd src
+   python first_stage_deterministic.py --params_name equipart --DEVICE cuda:0
+   ```
+   - Trains FEX models to discover the deterministic part of the dynamics
+   - Uses Functional Expansion to learn the drift term
+   - Outputs trained models and optimal operator sequences
+
+2. **Second Stage (Diffusion Learning)**:
+   ```bash
+   cd src
+   python second_stage_stochastic.py
+   ```
+   - Trains neural networks to model the stochastic noise component
+   - Uses the drift models from first stage
+   - Learns the diffusion term for complete stochastic modeling
+
+### Configuration Options
+
+**First Stage Parameters**:
+- `--params_name`: Choose between 'equipart' or 'cascade'
+- `--DEVICE`: Choose device ('cpu', 'cuda:0', 'auto')
+- `--SEED`: Random seed for reproducibility
+- `--FEX_LR`: Learning rate for FEX training
+- `--TRAIN_EPOCHS_FIRST`: Number of training epochs
+
+**Second Stage Parameters**:
+- `--NUM_SAMPLES`: Number of samples for stochastic training
+- `--DEVICE`: Choose device for training
+
+### Legacy Usage (for reference)
 ```python
 # Training with ground truth
-python src/main.py --TRAIN_GROUND_TRUTH True --SECOND_STAGE_OPEN_BOOL False
+python src/first_stage_deterministic.py --TRAIN_GROUND_TRUTH True --SECOND_STAGE_OPEN_BOOL False
 
 # Two-stage training
-python src/main.py --TRAIN_GROUND_TRUTH False --SECOND_STAGE_OPEN_BOOL True
-
-# Coefficient extraction
-from src.utils.coefficient_extractor import extract_coefficients
-
-coefficients = extract_coefficients(expression)
-L, G, B = coefficients.L, coefficients.G, coefficients.B
-
-# LaTeX visualization
-from src.utils.visualization import plot_latex_formula
-
-plot_latex_formula(ground_truth, predicted, save_path="results/equations/comparison.png")
+python src/first_stage_deterministic.py --TRAIN_GROUND_TRUTH False --SECOND_STAGE_OPEN_BOOL True
 ```
 
 ## Comments

@@ -8,4 +8,5 @@ src/Example/MC_triad/Results/*
 src/Example/MC_triad/*.sh
 src/Example/MC_triad/*.err
 src/Example/MC_triad/*.out
+src/Example/MC_triad/prediction.ipynb
 src/env/*

@@ -193,7 +193,7 @@ class Config:
                                 help='Case to use')
         # Seed
         parser.add_argument('--SEED', type=int, 
-                            default=42,
+                            default=1234,
                             help='Seed for random number generator')
         # Hardware selection
         parser.add_argument('--DEVICE', type=str, 
@@ -266,6 +266,11 @@ class Config:
         parser.add_argument('--NN_SOLVER_EPOCHS',type=int,
                             default = 2000,
                             help='Number of epochs for NN solver')
+        
+        parser.add_argument('--NUM_SAMPLES',type=int,
+                            default = 10000,
+                            help='Number of samples for DM training.')
+        
         return parser
     
     def parse_args(self):
