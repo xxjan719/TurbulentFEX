@@ -130,7 +130,7 @@ def params_init(case_name = None,
 
 
 
-def MC_triad_direct(params, m0, var0, method = 'RK4'):
+def MC_triad_direct(params, m0, var0, method = 'RK4', noise_level = 1.0):
     MC = params['MC']
     Dt = params['Dt'] # time step size
     tstep = params['tstep']
@@ -192,7 +192,7 @@ def MC_triad_direct(params, m0, var0, method = 'RK4'):
         # noise term
         SS = params['SS'] + params['tmS'][i - 1] ** 2 * (params['SSt'] - params['SS'])
         Winc = np.random.randn(MC, 3)  # shape (MC, 3)
-        u = u + np.sqrt(Dt) * (Winc @ SS)  # (MC,3) @ (3,3) → (MC,3)
+        u = u + np.sqrt(Dt) * noise_level * (Winc @ SS)  # (MC,3) @ (3,3) → (MC,3)
         u_all[:, :, i] = u
         # Energy update
         mean_u = np.mean(u, axis=0)           # shape (3,)
