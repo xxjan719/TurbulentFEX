@@ -511,6 +511,94 @@ def train_FN_ensemble(ODE_Solution:np.ndarray,
 
 
 
+def predict_ensemble_residual_covariance(residuals: np.ndarray,
+                                       save_dir: str,
+                                       dt: float,
+                                       scaler: np.ndarray,
+                                       train_size: int = 1000,
+                                       n_models: int = 5,
+                                       device: str = 'cpu',
+                                       residual_cov_truth: np.ndarray = None):
+    """
+    Predict residual covariance using ensemble of trained neural networks.
+    
+    Args:
+        residuals (np.ndarray): Residual data with shape (MC_samples, variables, time_steps)
+        save_dir (str): Directory containing saved ensemble models and normalization parameters
+        dt (float): Time step size
+        scaler (np.ndarray): Scaling factors for each dimension
+        train_size (int): Number of test samples to generate
+        n_models (int): Number of models in ensemble
+        device (str): Device to run predictions on ('cpu' or 'cuda')
+        residual_cov_truth (np.ndarray, optional): Ground truth residual covariance for comparison
+        
+    Returns:
+        np.ndarray: Predicted residual covariance with shape (time_steps, dimensions)
+    """
+    time_step = residuals.shape[2]
+    residual_cov_pred = np.zeros((time_step, 3))
+    
+    print("\n=== Ensemble Prediction Results ===")
+    
+    # Load and use ensemble predictions for each dimension
+    for t in range(time_step):
+        z_test = np.random.randn(train_size, 3)
+        z_test_tensor = torch.tensor(z_test, dtype=torch.float32).to(device)
+        
+        for dim in range(1, 4):
+            # Load normalization parameters
+            norm_params_path = os.path.join(save_dir, f'norm_params_dim{dim}_t{t}.npy')
+            if not os.path.exists(norm_params_path):
+                print(f"Warning: Normalization parameters not found for dim{dim}_t{t}")
+                continue
+                
+            norm_params = np.load(norm_params_path, allow_pickle=True).item()
+            y_mean = norm_params['mean']
+            y_std = norm_params['std']
+            
+            # Ensemble prediction
+            ensemble_predictions = []
+            
+            for model_idx in range(n_models):
+                model_path = os.path.join(save_dir, f'FN_dim{dim}_t{t}_model{model_idx}.pth')
+                if not os.path.exists(model_path):
+                    print(f"Warning: Model not found: {model_path}")
+                    continue
+                    
+                FN_dim = FN_Net(1, 1, 100).to(device)
+                FN_dim.load_state_dict(torch.load(model_path, weights_only=True))
+                
+                # Make prediction
+                pred = (FN_dim(z_test_tensor[:, dim-1:dim].reshape(-1, 1))).cpu().detach().numpy()
+                ensemble_predictions.append(pred)
+            
+            if not ensemble_predictions:
+                print(f"Warning: No valid predictions for dim{dim}_t{t}")
+                continue
+                
+            # Average ensemble predictions
+            pred = np.mean(ensemble_predictions, axis=0)
+            
+            # Denormalize: pred * y_std + y_mean
+            pred = pred * y_std + y_mean
+            
+            # Scale back by scaler
+            pred = pred / scaler[dim-1]
+            residual_cov_pred[t, dim-1] = np.std(pred) / np.sqrt(dt)
+            
+            print(f"Dimension {dim}: {np.std(pred)/np.sqrt(dt):.6f}")
+            
+            if residual_cov_truth is not None:
+                print(f"Comparison with Ground Truth: {residual_cov_truth[t, dim-1]:.6f}")
+    
+    print("\nExpected values should be close to original")
+    print("Ensemble method should provide more accurate results!")
+    
+    # Save predictions
+    np.save(os.path.join(save_dir, 'residual_cov_pred.npy'), residual_cov_pred)
+    
+    return residual_cov_pred
+
 
 
 
@@ -540,42 +628,13 @@ if __name__ == "__main__":
     # Train ensemble models for better accuracy
     train_FN_ensemble(ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir)
     
-    # # Test predictions with ensemble
-    
-    
-    print("\n=== Ensemble Prediction Results ===")
-    # Load and use ensemble predictions for each dimension
-    for t in range(3):
-        z_test = np.random.randn(1000,3)
-        z_test_tensor = torch.tensor(z_test, dtype=torch.float32).to(device)
-        for dim in range(1, 4):
-            # Load normalization parameters
-            norm_params = np.load(os.path.join(save_dir,f'norm_params_dim{dim}_t{t}.npy'), allow_pickle=True).item()
-            y_mean = norm_params['mean']
-            y_std = norm_params['std']
-        
-            # Ensemble prediction
-            ensemble_predictions = []
-            n_models = 5  # Number of models in ensemble
-            
-            for model_idx in range(n_models):
-                FN_dim = FN_Net(1,1,100).to(device)
-                FN_dim.load_state_dict(torch.load(os.path.join(save_dir,f'FN_dim{dim}_t0_model{model_idx}.pth'), weights_only=True))
-                
-                # Make prediction
-                pred = (FN_dim(z_test_tensor[:,dim-1:dim].reshape(-1,1))).cpu().detach().numpy()
-                ensemble_predictions.append(pred)
-            
-            # Average ensemble predictions
-            pred = np.mean(ensemble_predictions, axis=0)
-            
-            # Denormalize: pred * y_std + y_mean
-            pred = pred * y_std + y_mean
-            
-            # Scale back by scaler
-            pred = pred / scaler[dim-1]
-            
-            print(f"Dimension {dim}: {np.std(pred)/np.sqrt(dt):.6f}")
-    
-    print("\nExpected values should be close to original")
-    print("Ensemble method should provide more accurate results!")
+    # Test predictions with ensemble
+    residual_cov_pred = predict_ensemble_residual_covariance(
+        residuals=residuals,
+        save_dir=save_dir,
+        dt=dt,
+        scaler=scaler,
+        train_size=1000,
+        n_models=5,
+        device=device
+    )

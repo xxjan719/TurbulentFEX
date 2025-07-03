@@ -28,9 +28,9 @@ class Config:
         self.DIR_PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
         # Example directory structure
-        self.DIR_TRIAD = os.path.join(self.DIR_PROJECT, 'Example', 'MC_triad')
-        self.DIR_EQUIPART = os.path.join(self.DIR_PROJECT, 'Results', 'equipart')
-        self.DIR_CASCADE = os.path.join(self.DIR_PROJECT, 'Results', 'cascade')
+        self.DIR_TRIAD = os.path.join(self.DIR_PROJECT, 'src','Example', 'MC_triad')
+        self.DIR_EQUIPART = os.path.join(self.DIR_TRIAD, 'Results', 'equipart')
+        self.DIR_CASCADE = os.path.join(self.DIR_TRIAD, 'Results', 'cascade')
 
         # Store file paths instead of loading numpy arrays immediately
         self.TRIAD_MODEL_CONFIG = {
@@ -186,11 +186,10 @@ class Config:
                             default='MC_triad',
                             help = 'Model to use')
         # Case selection
-        if parser.parse_args().Model == 'MC_triad':
-            parser.add_argument('--params_name', type=str, 
-                                choices = ['cascade', 'equipart'],
-                                default='cascade',
-                                help='Case to use')
+        parser.add_argument('--params_name', type=str, 
+                            choices = ['cascade', 'equipart'],
+                            default='equipart',
+                            help='Case to use')
         # Seed
         parser.add_argument('--SEED', type=int, 
                             default=1234,
@@ -271,6 +270,12 @@ class Config:
                             default = 10000,
                             help='Number of samples for DM training.')
         
+        parser.add_argument('--NOISE_LEVEL',type=float,
+                            default = 1.0,
+                            help='Noise level for MC simulation.')
+        parser.add_argument('--TRAIN_SIZE',type=int,
+                            default = 10000,
+                            help='Number of samples for DM training.')
         return parser
     
     def parse_args(self):
