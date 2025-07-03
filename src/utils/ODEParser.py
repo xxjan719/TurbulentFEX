@@ -339,7 +339,7 @@ def generate_second_step(u_current:np.ndarray,
             it_residuals = scaled_residuals[start_idx:end_idx]
             
             # Generate random noise for this batch
-            z_T = ZT_Solution[start_idx:end_idx,:,t]
+            z_T = ZT_Solution[start_idx:end_idx,:,t_idx]
             
             # Convert to tensors (assuming CPU processing, adjust device as needed)
             it_zt = torch.tensor(z_T, dtype=torch.float32).to(device)
@@ -350,7 +350,7 @@ def generate_second_step(u_current:np.ndarray,
             # Call ODE solver for this mini-batch
             y_temp = ODE_solver(it_zt, x_mini_batch, z_mini_batch, it_x0, odeslover_time_steps)
             
-                    # Store results
+            # Store results
             ODE_Solution[start_idx:end_idx, :, t_idx] = y_temp.cpu().detach().numpy()
         
     
@@ -406,16 +406,16 @@ def train_FN_each_dimension(ODE_Solution:np.ndarray,
             criterion = nn.MSELoss()
             
             # Get the mean and std for normalization
-            y_data = ODE_Solution[0:NTrain,x_dim-1,t]
+            y_data = ODE_Solution[0:NTrain,x_dim-1,t_idx]
             y_mean = np.mean(y_data)
             y_std = np.std(y_data)
             
             # Reshape data for neural network (needs to be 2D: [samples, features])
-            xTrain_normal = torch.tensor(ZT_Solution[0:NTrain,x_dim-1,t], dtype=torch.float32).reshape(-1, 1).to(device)
+            xTrain_normal = torch.tensor(ZT_Solution[0:NTrain,x_dim-1,t_idx], dtype=torch.float32).reshape(-1, 1).to(device)
             yTrain_normal = torch.tensor((y_data - y_mean) / y_std, dtype=torch.float32).reshape(-1, 1).to(device)
             
-            y_valid_data = ODE_Solution[NTrain:size,x_dim-1,t]
-            xValid_normal = torch.tensor(ZT_Solution[NTrain:size,x_dim-1,t], dtype=torch.float32).reshape(-1, 1).to(device)
+            y_valid_data = ODE_Solution[NTrain:size,x_dim-1,t_idx]
+            xValid_normal = torch.tensor(ZT_Solution[NTrain:size,x_dim-1,t_idx], dtype=torch.float32).reshape(-1, 1).to(device)
             yValid_normal = torch.tensor((y_valid_data - y_mean) / y_std, dtype=torch.float32).reshape(-1, 1).to(device)
             
             best_valid_loss = float('inf')
@@ -490,16 +490,16 @@ def train_FN_ensemble(ODE_Solution:np.ndarray,
             print(f'this is {x_dim} dimension / overall {dim} dimensions')
             
             # Get the mean and std for normalization
-            y_data = ODE_Solution[0:NTrain,x_dim-1,t]
+            y_data = ODE_Solution[0:NTrain,x_dim-1,t_idx]
             y_mean = np.mean(y_data)
             y_std = np.std(y_data)
             
             # Prepare data
-            xTrain_normal = torch.tensor(ZT_Solution[0:NTrain,x_dim-1,t], dtype=torch.float32).reshape(-1, 1).to(device)
+            xTrain_normal = torch.tensor(ZT_Solution[0:NTrain,x_dim-1,t_idx], dtype=torch.float32).reshape(-1, 1).to(device)
             yTrain_normal = torch.tensor((y_data - y_mean) / y_std, dtype=torch.float32).reshape(-1, 1).to(device)
             
-            y_valid_data = ODE_Solution[NTrain:size,x_dim-1,t]
-            xValid_normal = torch.tensor(ZT_Solution[NTrain:size,x_dim-1,t], dtype=torch.float32).reshape(-1, 1).to(device)
+            y_valid_data = ODE_Solution[NTrain:size,x_dim-1,t_idx]
+            xValid_normal = torch.tensor(ZT_Solution[NTrain:size,x_dim-1,t_idx], dtype=torch.float32).reshape(-1, 1).to(device)
             yValid_normal = torch.tensor((y_valid_data - y_mean) / y_std, dtype=torch.float32).reshape(-1, 1).to(device)
             
             # Train ensemble of models
