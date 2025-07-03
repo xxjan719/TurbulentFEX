@@ -147,54 +147,5 @@ def process_chunk(it_n_index, it_size_x0train, short_size, x_sample, x0_train, t
     
     return x0_train_index_initial
 
-def process_chunk_optimized(it_n_index, it_size_x0train, short_size, x_sample, x0_train, train_size, x_dim):
-    """Optimized version using Numba for maximum speed."""
-    x0_train_index_initial = np.empty((train_size, short_size), dtype=int)
-    
-    for jj in range(it_n_index):
-        start_idx = jj * it_size_x0train
-        end_idx = min((jj + 1) * it_size_x0train, train_size)
-        x0_train_chunk = x0_train[start_idx:end_idx]
 
-        # Use Numba-optimized distance computation
-        distances = compute_distances_parallel(x0_train_chunk, x_sample)
-        index_initial = find_nearest_neighbors(distances, short_size)
-        x0_train_index_initial[start_idx:end_idx, :] = index_initial
-
-        if jj % 500 == 0:
-            print('find index iteration:', jj, it_size_x0train)
-    
-    return x0_train_index_initial
-
-def process_chunk_cpu_chunked(x_sample, x0_train, start_idx, end_idx, short_size, x_dim, batch_size=5000):
-    """
-    CPU version of chunked processing with batching for large datasets.
-    Similar to the GPU version but optimized for CPU.
-    """
-    x0_train_index_initial = np.empty((end_idx - start_idx, short_size), dtype=int)
-    
-    # Use KDTree for efficient nearest neighbor search
-    # Build the tree on the entire x_sample for better performance
-    print(f"Building KDTree for {x_sample.shape[0]} sample points...")
-    tree = KDTree(x_sample, leaf_size=40)
-    
-    print(f"Indexing complete, now performing searches for data from {start_idx} to {end_idx}.")
-
-    # Perform the search for the current chunk in smaller batches
-    for k in range(start_idx, end_idx, batch_size):
-        end_k = min(k + batch_size, end_idx)
-        search_chunk = x0_train[k:end_k]
-        
-        # Perform the search using KDTree
-        distances, index_initial = tree.query(search_chunk, k=short_size)
-        
-        # Store results
-        local_start = k - start_idx
-        local_end = local_start + search_chunk.shape[0]
-        x0_train_index_initial[local_start:local_end, :] = index_initial
-        
-        if (k - start_idx) % (batch_size * 10) == 0:
-            print(f"Processed {k - start_idx} out of {end_idx - start_idx} points")
-
-    return x0_train_index_initial
 

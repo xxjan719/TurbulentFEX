@@ -5,3 +5,6 @@ src/Example/MC_triad/Results/*
 **/.DS_Store
 **/Test
 **/archive
+src/Example/MC_triad/*.sh
+src/Example/MC_triad/*.err
+src/Example/MC_triad/*.out
