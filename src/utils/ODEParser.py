@@ -621,6 +621,7 @@ def predict_ensemble_residual_covariance(residuals: np.ndarray,
     selected_indices, selected_times = select_time_points(
         total_time_steps, dt, num_time_points
     )
+    selected_indices = np.arange(num_time_points)
     
     print(f"\n=== Ensemble Prediction Results ===")
     print(f"Processing {len(selected_indices)} time points out of {total_time_steps} total")
