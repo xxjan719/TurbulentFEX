@@ -67,12 +67,12 @@ print("2. Skip to calculate the measurements")
 print("3. Skip all and plot the results")
 print("="*60)
 
-while True:
-    choice = input("\nChoose option (1 or 2 or 3):").strip()
-    if choice in ['1','2','3']:
-        break
-    else:
-        print("Please enter '1' or '2' or '3'.")
+#while True:
+choice = '1' #input("\nChoose option (1 or 2 or 3):").strip()
+    #if choice in ['1','2','3']:
+    #    break
+    #else:
+    #    print("Please enter '1' or '2' or '3'.")
 
 if choice == '1':
     # Option 1: Train everything in second stage
@@ -102,11 +102,11 @@ if choice == '1':
     np.save(os.path.join(save_dir,'residual_cov_truth.npy'), residual_cov_truth)
     print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
     scaler = np.ones(3) * args.DIFF_SCALE
-    train_size = args.TRAIN_SIZE
+    train_size = args.NUM_SAMPLES
     #===================================================================================
     ODE_Solution,ZT_Solution = generate_second_step(
         u_current, residuals, scaler, dt, train_size, device,
-        num_time_points=100  # Only process 100 time points
+        num_time_points=101  # Only process 100 time points
     )
     print(f'[INFO] the ODE solution shape is: {ODE_Solution.shape}')
     mean_value, std_value = generate_mean_and_std(ODE_Solution)
@@ -114,7 +114,7 @@ if choice == '1':
     # Train ensemble models for better accuracy (only on selected time points)
     train_FN_ensemble(
         ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir,
-        num_time_points=100,  # Only train on 100 time points
+        num_time_points=101,  # Only train on 100 time points
         dt=dt
     )
     
@@ -129,7 +129,7 @@ if choice == '1':
         n_models=5,
         device=device,
         residual_cov_truth=residual_cov_truth,
-        num_time_points=100  # Only predict on 100 time points
+        num_time_points=101  # Only predict on 100 time points
     )
     print('[SUCCESS] Ensemble prediction completed.')
     print("="*60)
@@ -153,7 +153,7 @@ elif choice == '2':
         n_models=5,
         device=device,
         residual_cov_truth=residual_cov_truth,
-        num_time_points=100  # Only predict on 100 time points
+        num_time_points=101  # Only predict on 100 time points
     )
     print('[SUCCESS] Ensemble prediction completed.')
     

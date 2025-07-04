@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --time=12:00:00
 #SBATCH --job-name=QIDIFEX
-#SBATCH --output=QIDIFEX_SAMPLE20000.out
-#SBATCH --error=QIDIFEX_SAMPLE20000.err
+#SBATCH --output=QIDIFEX_SAMPLE15000.out
+#SBATCH --error=QIDIFEX_SAMPLE15000.err
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=xingjianxu@ufl.edu
 #SBATCH --nodes=1
@@ -23,7 +23,7 @@ conda activate xxjan
 
 # ✅ Run your Python script
 cd ..  # Go up to src directory
-python -u second_stage_stochastic.py --NUM_SAMPLES 5000
+python -u second_stage_stochastic.py --NUM_SAMPLES 15000
 
 echo "===== JOB FINISHED ====="
 date
