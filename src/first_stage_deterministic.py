@@ -19,8 +19,16 @@ import sympy as sp
 parser = create_main_parser()
 args = parser.parse_args()
 
+# Check if CUDA is available and set device accordingly
+if torch.cuda.is_available() and args.DEVICE.startswith('cuda'):
+    DEVICE = torch.device(args.DEVICE)
+    print(f"Using {args.DEVICE}")
+    base_path = os.path.join(DIR_EXAMPLE,args.Model,'Results','Results')
+else:
+    DEVICE = torch.device('cpu')
+    print("CUDA is not available, using CPU instead")
+    base_path = os.path.join(DIR_EXAMPLE,args.Model,'Results')
 
-base_path = os.path.join(DIR_EXAMPLE,args.Model,'Results')
 if args.DATA_SAVE_PATH is None:
     args.DATA_SAVE_PATH = f'{base_path}/{args.params_name}/simulation_results_noise_{args.NOISE_LEVEL}.npz'
 if args.LOG_SAVE_PATH is None:
@@ -33,13 +41,7 @@ os.makedirs(os.path.dirname(args.DATA_SAVE_PATH), exist_ok=True)
 os.makedirs(args.LOG_SAVE_PATH, exist_ok=True)
 os.makedirs(args.FIGURE_SAVE_PATH, exist_ok=True)
 
-# Check if CUDA is available and set device accordingly
-if torch.cuda.is_available() and args.DEVICE.startswith('cuda'):
-    DEVICE = torch.device(args.DEVICE)
-    print(f"Using {args.DEVICE}")
-else:
-    DEVICE = torch.device('cpu')
-    print("CUDA is not available, using CPU instead")
+
 
 SEED = args.SEED
 
@@ -103,7 +105,7 @@ integrator = Body4TrainIntegrator(integratorParams,method=INTEGRATOR_METHOD)
 pool = Pool()
 
 
-PMF_SIZES = [len(unary_ops),len(binary_ops),len(unary_ops),len(binary_ops)]*dimension
+PMF_SIZES = tuple([len(unary_ops), len(binary_ops), len(unary_ops), len(binary_ops)] * dimension)
 NUM_NODES = len(PMF_SIZES)
 
 
@@ -264,7 +266,7 @@ if args.TRAIN_GROUND_TRUTH == False:
                 scores_upper_quantile = np.percentile(scores_detached, q=(1 - CONTROLLER_TOP_SAMPLES_FRACTION), method=CONTROLLER_QUANTILE_METHOD)
                 indicator_upper_quantile = (scores_detached >= scores_upper_quantile).astype(int)
                 
-                sum_log_probs = torch.zeros(NUM_TREES)
+                sum_log_probs = torch.zeros(NUM_TREES, device=DEVICE)
                 log_pmfs = [torch.log(pmf) for pmf in pmfs]
                 for tree_idx, ops in enumerate(op_seqs):
                     for pmf_idx, op in enumerate(ops):

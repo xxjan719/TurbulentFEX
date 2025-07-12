@@ -23,7 +23,7 @@ conda activate xxjan
 
 # ✅ Run your Python script
 cd ..  # Go up to src directory
-python -u second_stage_stochastic.py --NUM_SAMPLES 15000
+python -u first_stage_deterministic.py 
 
 echo "===== JOB FINISHED ====="
 date
