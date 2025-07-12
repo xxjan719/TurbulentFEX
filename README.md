@@ -137,14 +137,60 @@ TurbulentFEX/
    - Use unified scoring formula: 1/(1 + loss)
 
 ### Dependencies
-- torch (2.0.0): Deep learning framework
-- sympy (1.12): Symbolic mathematics
-- numpy (1.21.0): Numerical computations
-- matplotlib (3.7.0): Plotting and visualization
-- latex2sympy2 (1.8.3): LaTeX parsing
-- pandas (1.3.0): Data manipulation
+
+All dependencies are specified in `environment.yml` for easy setup. Key dependencies include:
+
+- **torch (2.0.0)**: Deep learning framework
+- **sympy (1.12)**: Symbolic mathematics
+- **numpy (1.21.0)**: Numerical computations
+- **matplotlib (3.7.0)**: Plotting and visualization
+- **latex2sympy2 (1.8.3)**: LaTeX parsing
+- **pandas (1.3.0)**: Data manipulation
+- **scipy**: Scientific computing
+- **scikit-learn**: Machine learning utilities
+- **jupyter**: Interactive notebooks
+- **Additional packages**: tqdm, seaborn, plotly, wandb for enhanced functionality
 
 ## Usage
+
+### Environment Setup
+
+1. **Create and activate the conda environment**:
+   ```bash
+   # Create the environment from the yml file
+   conda env create -f environment.yml
+   
+   # Activate the environment
+   conda activate turbulentfex
+   ```
+
+2. **Alternative: Manual installation** (if conda is not available):
+   ```bash
+   # Create a virtual environment
+   python -m venv turbulentfex_env
+   
+   # Activate the virtual environment
+   # On macOS/Linux:
+   source turbulentfex_env/bin/activate
+   # On Windows:
+   turbulentfex_env\Scripts\activate
+   
+   # Install dependencies
+   pip install torch==2.0.0 torchvision torchaudio
+   pip install numpy==1.21.0 matplotlib==3.7.0 pandas==1.3.0
+   pip install sympy==1.12 scipy scikit-learn
+   pip install latex2sympy2==1.8.3 tqdm seaborn plotly wandb
+   pip install jupyter ipykernel
+   ```
+
+3. **Verify installation**:
+   ```bash
+   # Test that PyTorch is working
+   python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
+   
+   # Test that CUDA is available (if you have a GPU)
+   python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+   ```
 
 ### Two-Stage Training Workflow
 

@@ -1,6 +1,7 @@
 # a decorator takes a function, extends it and returns.
 # a function can return a function
 from dataclasses import dataclass
+from typing import Callable, Tuple
 import torch
 from torch import Tensor
 
@@ -15,7 +16,7 @@ class Body4TrainIntegrationParams:
 
 @dataclass
 class Body4TrainIntegrationArgs:
-    integration_func: callable
+    integration_func: Callable
     y0: Tensor
     index: int
 
@@ -34,7 +35,7 @@ class Body4TrainIntegrator:
         if self.method not in ["derivative-based", "integration-based"]:
             raise ValueError("Method must be either 'derivative-based' or 'integration-based'")
     
-    def integrate(self, integrationArgs: Body4TrainIntegrationArgs) -> Tensor:
+    def integrate(self, integrationArgs: Body4TrainIntegrationArgs) -> Tuple[Tensor, Tensor]:
         trainingset = integrationArgs.y0
         integration_func = integrationArgs.integration_func
         index = integrationArgs.index
@@ -67,19 +68,23 @@ class Body4TrainIntegrator:
             # print(k1.shape)
             # print(u_flat)
             # print(dt*k1)
-            if index ==1:
-                u_i_next = ui_flat + dt* k1
-                u_k2 = torch.cat([u_i_next,u2_flat,u3_flat],dim=1)
+            
+            # Initialize k2 to avoid UnboundLocalError
+            k2 = k1.clone()
+            
+            if index == 1:
+                u_i_next = ui_flat + dt * k1
+                u_k2 = torch.cat([u_i_next, u2_flat, u3_flat], dim=1)
                 k2 = derivative_func(u_k2)
 
-            elif index ==2:
-                u_i_next = ui_flat + dt* k1
-                u_k2 = torch.cat([u1_flat,u_i_next,u3_flat],dim=1)
+            elif index == 2:
+                u_i_next = ui_flat + dt * k1
+                u_k2 = torch.cat([u1_flat, u_i_next, u3_flat], dim=1)
                 k2 = derivative_func(u_k2)
 
-            elif index ==3:
-                u_i_next = ui_flat + dt* k1
-                u_k2 = torch.cat([u1_flat,u2_flat,u_i_next],dim=1)
+            elif index == 3:
+                u_i_next = ui_flat + dt * k1
+                u_k2 = torch.cat([u1_flat, u2_flat, u_i_next], dim=1)
                 k2 = derivative_func(u_k2)
             
             # Compute the next state using RK2 formula
@@ -94,9 +99,9 @@ class Body4TrainIntegrator:
 
 
 if __name__ == "__main__":
-    op_seqs = [2,0,3,2,
+    op_seqs = torch.tensor([2,0,3,2,
             4,2,5,2,
-            6,1,7,2]
+            6,1,7,2])
     model = FEX(op_seqs, dim=3)
     integratorParams = Body4TrainIntegrationParams(
     dt=10**-2,)

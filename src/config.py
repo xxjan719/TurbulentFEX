@@ -26,7 +26,7 @@ class Config:
         """Setup all path configurations"""
         # Project directory structure
         self.DIR_PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
+        self.DIR_EXAMPLE = os.path.join(self.DIR_PROJECT, 'src', 'Example')
         # Example directory structure
         self.DIR_TRIAD = os.path.join(self.DIR_PROJECT, 'src','Example', 'MC_triad')
         self.DIR_EQUIPART = os.path.join(self.DIR_TRIAD, 'Results', 'equipart')
@@ -105,7 +105,7 @@ class Config:
         # If packages are missing, check virtual environment first
         if missing_packages or outdated_packages:
             if not self._is_in_virtual_environment():
-                self._prompt_create_environment()
+                raise ValueError("Please create a virtual environment first.")
         
         # Now install/upgrade packages
         for package, version in self.REQUIRED_PACKAGES.items():
@@ -134,49 +134,7 @@ class Config:
         """Check if the script is running in a virtual environment"""
         return hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)
     
-    def _prompt_create_environment(self):
-        """Prompt user to create a virtual environment"""
-        print("\n" + "="*60)
-        print("[WARNING] You are not in a virtual environment!")
-        print("It's recommended to create a virtual environment before installing packages.")
-        print("="*60)
-
-        while True:
-            response = input("\nWould you like to create a virtual environment? (y/n): ").lower().strip()
-            
-            if response in ['y', 'yes']:
-                env_name = input(f"Enter environment name (default: env): ").strip()
-                if not env_name:
-                    env_name = "env"
-                
-                print(f"\nCreating virtual environment '{env_name}'...")
-                try:
-                    # Create virtual environment
-                    subprocess.check_call([sys.executable, "-m", "venv", env_name])
-                    print(f"[SUCCESS] Virtual environment '{env_name}' created successfully!")
-                    
-                    # Provide activation instructions
-                    print(f"\nTo activate the environment, run:")
-                    if os.name == 'nt':  # Windows
-                        print(f"  {env_name}\\Scripts\\activate")
-                    else:  # Unix/Linux/macOS
-                        print(f"  source {env_name}/bin/activate")
-                    
-                    print(f"\nAfter activation, re-run this script to install packages.")
-                    print("Exiting...")
-                    sys.exit(0)
-                    
-                except Exception as e:
-                    print(f"Error creating virtual environment: {str(e)}")
-                    print("Please create the environment manually and try again.")
-                    sys.exit(1)
-                    
-            elif response in ['n', 'no']:
-                print("\nProceeding without virtual environment...")
-                print("Note: This may install packages globally, which could cause conflicts.")
-                break
-            else:
-                print("Please enter 'y' or 'n'.")
+    
     def create_main_parser(self):
         """Create main argument parser"""
         parser = argparse.ArgumentParser(description='QIDIFEX')
@@ -243,7 +201,7 @@ class Config:
         parser.add_argument('--TRAIN_EPOCHS_SECOND', type=int, 
                             default=2000,
                             help='Number of epochs for second stage training')
-        # parser.add_argument('--TRAIN_GROUND_TRUTH',type=bool,default = True)
+
         # parser.add_argument('--MULTI_FEX_OPEN',type=float,default = True)
         #FEX-DM settings
         #parser.add_argument('--SECOND_STAGE_OPEN_BOOL',type=bool,default = False)
@@ -271,11 +229,25 @@ class Config:
                             help='Number of samples for DM training.')
         
         parser.add_argument('--NOISE_LEVEL',type=float,
-                            default = 1.0,
+                            default = 0.0,
                             help='Noise level for MC simulation.')
         parser.add_argument('--TRAIN_SIZE',type=int,
                             default = 10000,
                             help='Number of samples for DM training.')
+
+
+        parser.add_argument('--DATA_SAVE_PATH',type=str,
+                            default = None,
+                            help='Path to save data.')
+        parser.add_argument('--LOG_SAVE_PATH',type=str,
+                            default = None,
+                            help='Path to save log.')
+        parser.add_argument('--FIGURE_SAVE_PATH',type=str,
+                            default = None,
+                            help='Path to save figure.')
+        parser.add_argument('--TRAIN_GROUND_TRUTH',type=bool,
+                            default = False,
+                            help='Whether to train the FEX with ground truth data.')
         return parser
     
     def parse_args(self):
@@ -344,6 +316,7 @@ config = Config()
 
 # Export commonly used attributes for backward compatibility
 DIR_PROJECT = config.DIR_PROJECT
+DIR_EXAMPLE = config.DIR_EXAMPLE
 DIR_TRIAD = config.DIR_TRIAD
 DIR_EQUIPART = config.DIR_EQUIPART
 DIR_CASCADE = config.DIR_CASCADE
