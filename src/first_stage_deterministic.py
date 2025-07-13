@@ -343,10 +343,14 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
 else:
     print("\n"+"="*60)
     print("[INFO] Loading FEX models from previous stage...")
-    print(f"[INFO] get the picture of how the single dimension FEX model works")
-    coefficients = get_coefficients(load_dir= DIR_TRIAD, DEVICE=args.DEVICE)
-    print(f"the coefficients are {coefficients}")
-    # for dim in range(1, dimension+1):
+    # print(f"[INFO] get the picture of how the single dimension FEX model works")
+    # coefficients = get_coefficients(load_dir= DIR_TRIAD, DEVICE=args.DEVICE)
+    # plot_NOISE_LEVEL_EFFECT(coefficients,save_dir=args.LOG_SAVE_PATH)
+    # print(f"the coefficients are {coefficients}")
+    for dim in range(1, dimension+1):
+        sequence = get_sequence(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'best_candidates_pool_summary_{dim}.txt'))
+        print(f"the sequence is {sequence}")
+    
     #     if not os.path.exists(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'FEX_dim_{dim}_{args.NOISE_LEVEL}.pth')) and not os.path.exists(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'optimal_idx_{dim}_{args.NOISE_LEVEL}.npy')):
     #         raise FileNotFoundError(f"FEX_dim_{dim}_{args.NOISE_LEVEL}.pth or optimal_idx_{dim}_{args.NOISE_LEVEL}.npy not found in {args.LOG_SAVE_PATH}, you should run the FEX stage first.")
     #     else:

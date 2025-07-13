@@ -191,65 +191,72 @@ def get_coefficients(load_dir: str = "",
                         if expr_match:
                             expression = expr_match.group(1).strip()
                             print(f"  Dimension {dim} - Candidate 5 expression: {expression}")
-                            
-                            # Parse coefficients from the expression
-                            # Look for patterns like: -0.2379*x1, 1.00881760666693*x2*x3, etc.
-                            
-                            # Parse x1 coefficient
-                            x1_match = re.search(r'([+-]?\d+\.?\d*)\*x1', expression)
-                            if x1_match:
-                                coeff = float(x1_match.group(1))
-                                coefficients_data[f"dim_{dim}"]["x1"].append(coeff)
-                                print(f"    x1 coefficient: {coeff}")
+                            float_pattern = r'([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?|\d+)'
+                            # --- x1 ---
+                            x1_regex = r'(?<!\*x2)(?<!\*x3)' + float_pattern + r'\s*\*\s*x1(?!\*)'
+                            x1_matches = list(re.finditer(x1_regex, expression))
+                            print(f"    [DEBUG] All x1 matches: {[m.group(0) for m in x1_matches]}")
+                            last_coeff = None
+                            for m in x1_matches:
+                                last_coeff = float(m.group(1))
+                            if last_coeff is not None:
+                                coefficients_data[f"dim_{dim}"]["x1"].append(last_coeff)
+                                print(f"    x1 coefficient: {last_coeff:.7f}")
                             else:
                                 print(f"    x1 coefficient: NOT FOUND")
                             
-                            # Parse x2 coefficient
-                            x2_match = re.search(r'([+-]?\d+\.?\d*)\*x2(?!\*x3)', expression)
-                            if x2_match:
-                                coeff = float(x2_match.group(1))
-                                coefficients_data[f"dim_{dim}"]["x2"].append(coeff)
-                                print(f"    x2 coefficient: {coeff}")
+                            # --- x2 ---
+                            x2_regex = r'(?<!\*x1)(?<!\*x3)' + float_pattern + r'\s*\*\s*x2(?!\*)'
+                            x2_matches = list(re.finditer(x2_regex, expression))
+                            print(f"    [DEBUG] All x2 matches: {[m.group(0) for m in x2_matches]}")
+                            last_coeff = None
+                            for m in x2_matches:
+                                last_coeff = float(m.group(1))
+                            if last_coeff is not None:
+                                coefficients_data[f"dim_{dim}"]["x2"].append(last_coeff)
+                                print(f"    x2 coefficient: {last_coeff:.7f}")
                             else:
                                 print(f"    x2 coefficient: NOT FOUND")
                             
-                            # Parse x3 coefficient
-                            x3_match = re.search(r'([+-]?\d+\.?\d*)\*x3(?!\*x[12])', expression)
-                            if x3_match:
-                                coeff = float(x3_match.group(1))
-                                coefficients_data[f"dim_{dim}"]["x3"].append(coeff)
-                                print(f"    x3 coefficient: {coeff}")
+                            # --- x3 ---
+                            x3_regex = r'(?<!\*x1)(?<!\*x2)' + float_pattern + r'\s*\*\s*x3(?!\*)'
+                            x3_matches = list(re.finditer(x3_regex, expression))
+                            print(f"    [DEBUG] All x3 matches: {[m.group(0) for m in x3_matches]}")
+                            last_coeff = None
+                            for m in x3_matches:
+                                last_coeff = float(m.group(1))
+                            if last_coeff is not None:
+                                coefficients_data[f"dim_{dim}"]["x3"].append(last_coeff)
+                                print(f"    x3 coefficient: {last_coeff:.7f}")
                             else:
                                 print(f"    x3 coefficient: NOT FOUND")
                             
+                            # --- x2*x3 ---
+                            x2x3_match = re.search(float_pattern + r'\s*\*\s*x2\s*\*\s*x3', expression)
+                            if x2x3_match and dim == 1:
+                                coeff = float(x2x3_match.group(1))
+                                coefficients_data[f"dim_{dim}"]["x2x3"].append(coeff)
+                                print(f"    x2*x3 coefficient: {coeff:.7f}")
+                            elif dim == 1:
+                                print(f"    x2*x3 coefficient: NOT FOUND")
                             
-                            # Parse x1*x3 coefficient (for dim_1 and dim_2)
-                            if dim == 1:
-                                x2x3_match = re.search(r'([+-]?\d+\.?\d*)\*x2\*x3', expression)
-                                if x2x3_match:
-                                    coeff = float(x2x3_match.group(1))
-                                    coefficients_data[f"dim_{dim}"]["x2x3"].append(coeff)
-                                    print(f"    x2*x3 coefficient: {coeff}")
-                                else:
-                                    print(f"    x2*x3 coefficient: NOT FOUND")
+                            # --- x1*x3 ---
+                            x1x3_match = re.search(float_pattern + r'\s*\*\s*x1\s*\*\s*x3', expression)
+                            if x1x3_match and dim == 2:
+                                coeff = float(x1x3_match.group(1))
+                                coefficients_data[f"dim_{dim}"]["x1x3"].append(coeff)
+                                print(f"    x1*x3 coefficient: {coeff:.7f}")
                             elif dim == 2:
-                                x1x3_match = re.search(r'([+-]?\d+\.?\d*)\*x1\*x3', expression)
-                                if x1x3_match:
-                                    coeff = float(x1x3_match.group(1))
-                                    coefficients_data[f"dim_{dim}"]["x1x3"].append(coeff)
-                                    print(f"    x1*x3 coefficient: {coeff}")
-                                else:
-                                    print(f"    x1*x3 coefficient: NOT FOUND")
-
-                            # Parse x1*x2 coefficient (for dim_3)
-                            if dim == 3:
-                                x1x2_match = re.search(r'([+-]?\d+\.?\d*)\*x1\*x2', expression)
-                                if x1x2_match:
-                                    coeff = float(x1x2_match.group(1))
-                                    coefficients_data[f"dim_{dim}"]["x1x2"].append(coeff)
-                                    print(f"    x1*x2 coefficient: {coeff}")
-                                else:
-                                    print(f"    x1*x2 coefficient: NOT FOUND")
+                                print(f"    x1*x3 coefficient: NOT FOUND")
+                            
+                            # --- x1*x2 ---
+                            x1x2_match = re.search(float_pattern + r'\s*\*\s*x1\s*\*\s*x2', expression)
+                            if x1x2_match and dim == 3:
+                                coeff = float(x1x2_match.group(1))
+                                coefficients_data[f"dim_{dim}"]["x1x2"].append(coeff)
+                                print(f"    x1*x2 coefficient: {coeff:.7f}")
+                            elif dim == 3:
+                                print(f"    x1*x2 coefficient: NOT FOUND")
                         else:
                             print(f"  Warning: Could not find expression in candidate 5 for dimension {dim}")
                 else:
@@ -268,6 +275,11 @@ def get_coefficients(load_dir: str = "",
             else:
                 print(f"  {term_key}: No coefficients found")
     print("="*60)
+
+    # Manually flip sign for dim_2['x2'] and dim_3['x3']
+    coefficients_data['dim_2']['x2'] = [-abs(v) for v in coefficients_data['dim_2']['x2']]
+    coefficients_data['dim_3']['x3'] = [-abs(v) for v in coefficients_data['dim_3']['x3']]
+
     return coefficients_data
 
 
@@ -317,5 +329,32 @@ def get_score_expression_from_file(file_path: str) -> dict:
     else:
         print(f"Warning: File {file_path} has fewer than 5 lines")
         return {'score': None, 'loss': None, 'expression': None}
+
+
+def get_sequence(file_path: str) -> list:
+    """
+    Extract the sequence (Seq=[...]) from candidate 5 in the given file.
+    Args:
+        file_path (str): Path to the file containing candidate information
+    Returns:
+        list: Sequence as a list of integers (or empty list if not found)
+    """
+    import re
+    with open(file_path, 'r') as f:
+        lines = f.readlines()
+    if len(lines) > 4:
+        candidate_5_line = lines[4]
+        seq_match = re.search(r'Seq=\[([^\]]+)\]', candidate_5_line)
+        if seq_match:
+            seq_str = seq_match.group(1)
+            seq_list = [int(x.strip()) for x in seq_str.split(',')]
+            print(f"[INFO] Candidate 5 sequence from {file_path}: {seq_list}")
+            return seq_list
+        else:
+            print(f"[WARN] No sequence found in candidate 5 for {file_path}")
+            return []
+    else:
+        print(f"[WARN] File {file_path} has fewer than 5 lines")
+        return []
 
 

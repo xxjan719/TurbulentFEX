@@ -14,7 +14,8 @@ from .helper import (Buu, compute_third_order_moments,
                      double_check_energy, logprint,
                      adjust_learning_rate, weights_init,
                      get_coefficients, get_score_expression_from_file,
-                     check_allowed_terms)
+                     check_allowed_terms,get_sequence)
+from .plot import plot_NOISE_LEVEL_EFFECT
 
 __all__ = [
     "FEX", "Buu",'compute_third_order_moments',
@@ -24,5 +25,6 @@ __all__ = [
     "Pool", "Sampler", "Body4TrainIntegrationParams",
     "Body4TrainIntegrationArgs", "Body4TrainIntegrator", "Controller", 
     "binary_ops", "unary_ops", "POOL_LIMIT", "MultiDimensionFEX", "get_coefficients", 
-    "get_score_expression_from_file", "check_allowed_terms"
+    "get_score_expression_from_file", "check_allowed_terms", "plot_NOISE_LEVEL_EFFECT",
+    "get_sequence"
 ]

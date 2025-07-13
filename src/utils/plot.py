@@ -1,3 +1,4 @@
+from ast import Dict
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
@@ -518,4 +519,76 @@ def plot_multiple_log10_error(data_list, selected_times_list, save_dir=None, lab
     plt.show()
 
 
-
+def plot_NOISE_LEVEL_EFFECT(coeff: dict, noise_levels: list = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0], save_dir: str = ""):
+    """
+    Plot the effect of noise level on coefficients across dimensions.
+    
+    Args:
+        coeff (dict): Dictionary containing coefficients for each dimension
+        noise_levels (list): List of noise levels corresponding to the data
+        save_dir (str): Directory to save the plot
+    """
+    # Define the terms to plot for each dimension
+    terms_config = {
+        'dim_1': ['x1', 'x2', 'x3', 'x2x3'],
+        'dim_2': ['x1', 'x2', 'x3', 'x1x3'], 
+        'dim_3': ['x1', 'x2', 'x3', 'x1x2']
+    }
+    
+    # Define row labels for the 4 rows
+    row_labels = ['x1', 'x2', 'x3', 'Cross-term']
+    
+    # Create figure with 3 columns (dimensions) and 4 rows (terms), make it tall
+    fig, axes = plt.subplots(4, 3, figsize=(20, 10), constrained_layout=True)
+    fig.suptitle("Coefficient vs Noise Level for Each Dimension", fontsize=20)
+    set_figure_position(x=100, y=100, width=1500, height=1600)
+    
+    # Color palette for different terms
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+    
+    # Plot each dimension in columns
+    for col, (dim_key, terms) in enumerate(terms_config.items()):
+        dim_data = coeff[dim_key]
+        # Plot each term in rows
+        for row, term in enumerate(terms):
+            ax = axes[row, col]
+            # Get the cross-term name for this dimension
+            cross_term_name = {
+                'dim_1': 'x2x3',
+                'dim_2': 'x1x3', 
+                'dim_3': 'x1x2'
+            }[dim_key]
+            # Check if we have data for this term
+            has_data = term in dim_data and dim_data[term] and len(dim_data[term]) > 0
+            if has_data:
+                coeff_values = dim_data[term]
+                plot_noise_levels = noise_levels[:len(coeff_values)]
+                ax.plot(plot_noise_levels, coeff_values, 'o-', 
+                        color=colors[row], linewidth=2, markersize=6, 
+                        label=f'{term}')
+                ax.grid(True, alpha=0.3)
+                ax.set_xlabel('Noise Level')
+                ax.set_ylabel('Coefficient Value')
+                # Use only the term as the subplot title
+                if row < 3:
+                    ax.set_title(f'{term}')
+                else:
+                    ax.set_title(f'{cross_term_name}')
+                for i, (x, y) in enumerate(zip(plot_noise_levels, coeff_values)):
+                    ax.annotate(f'{y:.6f}', (x, y), textcoords="offset points", 
+                                xytext=(0,10), ha='center', fontsize=8)
+            else:
+                ax.text(0.5, 0.5, f'No data for {term}', 
+                        ha='center', va='center', transform=ax.transAxes)
+                if row < 3:
+                    ax.set_title(f'{term}')
+                else:
+                    ax.set_title(f'{cross_term_name}')
+    # Remove tight_layout (constrained_layout handles it)
+    if save_dir:
+        plt.savefig(os.path.join(save_dir, 'noise_level_effect.pdf'), 
+                    dpi=300, bbox_inches='tight')
+        print(f"Noise level effect plot saved to {os.path.join(save_dir, 'noise_level_effect.pdf')}")
+    plt.show()
+    
+    
