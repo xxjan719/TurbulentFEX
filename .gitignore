@@ -13,3 +13,4 @@ src/Example/MC_triad/Results/*
 src/env/*
 slurm/*
 turbulentfex_env/*
+src/slurm/*
