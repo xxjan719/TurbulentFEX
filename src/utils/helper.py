@@ -358,3 +358,45 @@ def get_sequence(file_path: str) -> list:
         return []
 
 
+def extract_coefficients_from_expr(expr: str, dim: int) -> dict:
+    """
+    Extracts the correct coefficients for the given dimension from the expression string.
+    Returns a dict with keys for the relevant terms.
+    """
+    import re
+    float_pattern = r'([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?|\d+)'
+    result = {}
+
+    # x1
+    x1_regex = r'(?<!\*x2)(?<!\*x3)' + float_pattern + r'\s*\*\s*x1(?!\*)'
+    x1_matches = list(re.finditer(x1_regex, expr))
+    result['x1'] = float(x1_matches[-1].group(1)) if x1_matches else None
+
+    # x2
+    x2_regex = r'(?<!\*x1)(?<!\*x3)' + float_pattern + r'\s*\*\s*x2(?!\*)'
+    x2_matches = list(re.finditer(x2_regex, expr))
+    result['x2'] = float(x2_matches[-1].group(1)) if x2_matches else None
+
+    # x3
+    x3_regex = r'(?<!\*x1)(?<!\*x2)' + float_pattern + r'\s*\*\s*x3(?!\*)'
+    x3_matches = list(re.finditer(x3_regex, expr))
+    result['x3'] = float(x3_matches[-1].group(1)) if x3_matches else None
+
+    # Cross-term
+    if dim == 1:
+        x2x3_regex = float_pattern + r'\s*\*\s*x2\s*\*\s*x3'
+        x2x3_match = re.search(x2x3_regex, expr)
+        result['x2x3'] = float(x2x3_match.group(1)) if x2x3_match else None
+    elif dim == 2:
+        x1x3_regex = float_pattern + r'\s*\*\s*x1\s*\*\s*x3'
+        x1x3_match = re.search(x1x3_regex, expr)
+        result['x1x3'] = float(x1x3_match.group(1)) if x1x3_match else None
+    elif dim == 3:
+        x1x2_regex = float_pattern + r'\s*\*\s*x1\s*\*\s*x2'
+        x1x2_match = re.search(x1x2_regex, expr)
+        result['x1x2'] = float(x1x2_match.group(1)) if x1x2_match else None
+
+    return result
+
+
+

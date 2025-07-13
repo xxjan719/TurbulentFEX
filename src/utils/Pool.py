@@ -14,7 +14,7 @@ class Candidate:
 
     @property
     def expression(self):
-        return self.model.expression_visualize()
+        return self.model.expression_visualize_simplified()
     
 
 class Pool:

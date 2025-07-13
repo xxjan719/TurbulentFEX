@@ -592,3 +592,67 @@ def plot_NOISE_LEVEL_EFFECT(coeff: dict, noise_levels: list = [0.0, 0.2, 0.4, 0.
     plt.show()
     
     
+
+def to_latex(expr):
+    expr = str(expr)
+    expr = expr.replace('**', '^')
+    expr = expr.replace('*', r'\cdot ')
+    return expr
+
+def plot_training_progress_grid(loss_history, coeff_history, final_expr, noise_level,
+                                 save_dir=None):
+    """
+    Plots a 3x5 grid: 3 rows (dimensions), 5 columns (loss, x1, x2, x3, cross-term).
+    Each subplot: y=quantity, x=epoch. Title includes noise_level.
+    Final expression is printed as LaTeX on the leftmost plot of each row.
+    Uses a color palette for each term.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    dims = [1, 2, 3]
+    terms = {
+        1: ['loss', 'x1', 'x2', 'x3', 'x2x3'],
+        2: ['loss', 'x1', 'x2', 'x3', 'x1x3'],
+        3: ['loss', 'x1', 'x2', 'x3', 'x1x2'],
+    }
+    ground_truth_coeffs = {
+        1: {'x1': -0.2, 'x2': 1.0, 'x3': 2.0, 'x2x3': 1.0},
+        2: {'x1': 1.0, 'x2': 0.1, 'x3': 3.0, 'x1x3': -0.6},
+        3: {'x1': 2.0, 'x2': 3.0, 'x3': 0.1, 'x1x2': -0.4},
+    }
+    colors = ['C0', 'C1', 'C2', 'C3', 'C4']  # You can change these to any matplotlib color names
+    fig, axes = plt.subplots(3, 5, figsize=(22, 12), constrained_layout=True)
+    epochs = np.arange(len(next(iter(loss_history.values()))))
+    for i, dim in enumerate(dims):
+        for j, term in enumerate(terms[dim]):
+            ax = axes[i, j]
+            color = colors[j % len(colors)]
+            if term == 'loss':
+                ax.plot(epochs, loss_history[dim], label='Loss', color=color)
+                ax.set_ylabel(f'Dim {dim}')
+                ax.set_title(f'Loss (Noise={noise_level})')
+            else:
+                # Calculate log10 of absolute error from ground truth
+                epsilon = 1e-12  # Small value to avoid log(0)
+                coeff_values = np.array(coeff_history[dim][term])
+                ground_truth_value = ground_truth_coeffs[dim][term]
+                error = np.abs(coeff_values - ground_truth_value)
+                log10_error = np.log10(error + epsilon)
+                ax.plot(epochs, log10_error, label=f'log10(|{term}-gt|)', color=color)
+                ax.set_title(f'log10(|{term}-gt|) (Noise={noise_level})')
+            ax.set_xlabel('Epoch')
+            ax.grid(True, alpha=0.3)
+        # Print final expression as LaTeX on the leftmost plot of each row
+        expr = final_expr[dim]
+        if not isinstance(expr, str):
+            expr = str(expr)
+        axes[i, 0].text(0.05, 0.95, f'${to_latex(expr)}$', transform=axes[i, 0].transAxes,
+                        fontsize=10, va='top', ha='left', color='purple', bbox=dict(facecolor='white', alpha=0.7))
+    plt.suptitle(f'Training Progress (Noise Level: {noise_level})', fontsize=18)
+    if save_dir:
+        plt.savefig(os.path.join(save_dir, 'training_progress_grid.pdf'), 
+                    dpi=300, bbox_inches='tight')
+        print(f"Training progress grid plot saved to {os.path.join(save_dir, 'training_progress_grid.pdf')}")
+    plt.show()
+    
+    

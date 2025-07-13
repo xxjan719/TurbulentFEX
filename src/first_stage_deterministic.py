@@ -347,105 +347,99 @@ else:
     # coefficients = get_coefficients(load_dir= DIR_TRIAD, DEVICE=args.DEVICE)
     # plot_NOISE_LEVEL_EFFECT(coefficients,save_dir=args.LOG_SAVE_PATH)
     # print(f"the coefficients are {coefficients}")
+    op_seqs_all = {}
+    models = {}
+    symbols = [sp.symbols(f'x{i+1}') for i in range(dimension)]
     for dim in range(1, dimension+1):
+        print(f'the dimension is {dim}')
         sequence = get_sequence(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'best_candidates_pool_summary_{dim}.txt'))
-        print(f"the sequence is {sequence}")
-    
-    #     if not os.path.exists(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'FEX_dim_{dim}_{args.NOISE_LEVEL}.pth')) and not os.path.exists(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'optimal_idx_{dim}_{args.NOISE_LEVEL}.npy')):
-    #         raise FileNotFoundError(f"FEX_dim_{dim}_{args.NOISE_LEVEL}.pth or optimal_idx_{dim}_{args.NOISE_LEVEL}.npy not found in {args.LOG_SAVE_PATH}, you should run the FEX stage first.")
-    #     else:
-    #         print(f"[INFO] {dim} dimensiondata found. Now let us train inetgerated FEX model")        
-    # print("="*60)
-    # # Replace the hardcoded symbols with a dimension-variable approach
-    # symbols = [sp.symbols(f'x{i+1}') for i in range(dimension)]
-    # op_seqs_all = {}
-            
-    # for dim in range(0+1,dimension+1):
-    #     print("\n"+"="*60)
-    #     print(f'the dimension is {dim}')
-    #     # In the ground truth training section, convert the list to tensor:
-    #     op_seqs = np.load(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'optimal_idx_{dim}_{args.NOISE_LEVEL}.npy'), allow_pickle=True)
-    #     op_seqs = torch.tensor(op_seqs, device=DEVICE)
-    #     #if dim == 1: # torch.tensor([1, 0, 0, 1, 2, 0, 0, 2, 0, 0, 2, 2], device=DEVICE)
-    #     #elif dim == 2: # torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
-    #     #elif dim == 3:#torch.tensor([0, 0, 2, 2, 2, 0, 2, 2, 5, 0, 7, 1], device=DEVICE)
-    #     op_seqs_all[dim] = op_seqs
-
-    #     model = FEX(op_seqs, dim=dimension).to(DEVICE)
-    #     if torch.cuda.is_available():
-    #         model.load_state_dict(torch.load(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'FEX_dim_{dim}_{args.NOISE_LEVEL}.pth'), 
-    #                                          map_location=DEVICE, weights_only=True))
-    #     else:
-    #         model.load_state_dict(torch.load(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'FEX_dim_{dim}_{args.NOISE_LEVEL}.pth'), 
-    #                                          map_location='cpu', weights_only=True))
-    #     print(f'the model expression is {model.expression_visualize()}')
-    #     print(f'the model expression simplified is {model.expression_visualize_simplified()}')
-    #     print("="*60)
-       
-
-    # models = {}
-    # for dim in range(1, dimension+1):
-    #     models[str(dim)] = FEX(op_seqs_all[dim], dim=dimension).to(DEVICE)
-    #     models[str(dim)].load_state_dict(torch.load(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'FEX_dim_{dim}_{args.NOISE_LEVEL}.pth'), 
-    #                                        map_location=DEVICE, weights_only=True))
-    #     models[str(dim)].apply(weights_init)
-
-    # # Create optimizer for all parameters
-    # all_params = []
-    # for model in models.values():
-    #     all_params.extend(model.parameters())
-    # model_optim = torch.optim.Adam(all_params, lr=FEX_LR)
-
-    # # Training loop
-    # for train_idx in range(TRAIN_EPOCHS_SECOND):
-    #     model_optim.zero_grad()
-    #     total_pred_loss = 0
-
-    #     # Prediction and extra loss
-    #     for dim in range(1, dimension+1):
-    #         model = models[str(dim)]
-    #         # Step 1: Get coefficients with autograd enabled
-    #         coeff_x1, coeff_x2, coeff_x3 = model.get_all_linear_nonlinear_coeffs_autograd(dim=dim-1)
-    #         # Step 2: Compute rounded values
-
-    #         integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
-    #         current_state = dataset_tensor[:, :, :-1]
-    #         u_current = current_state[:, 0, :]
-    #         u_pred, u_target = integrator.integrate(integration_args)
-
-    #         du_pred = torch.gradient(u_pred, dim=0)[0]
-    #         loss = mse(u_pred, u_target)
-    #         if dim == 1:
-    #             coeffs_3 = round(float(coeff_x3))
-    #             coeffs_2 = round(float(coeff_x2))
-    #             extra_loss = torch.abs(model.linear_a[0] + 0.2)**2
-                        
-    #         elif dim == 2:
-    #             coeffs_3 = round(float(coeff_x3))
-    #             coeffs_1 = round(float(coeff_x1))
-    #             extra_loss = torch.abs(model.linear_a[1] + 0.1)**2
-    #         elif dim == 3:
-    #             coeffs_2 = round(float(coeff_x2))
-    #             coeffs_1 = round(float(coeff_x1))
-    #             extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
-    #         total_pred_loss += loss + extra_loss
+        op_seqs = torch.tensor(sequence, device=DEVICE)
+        op_seqs_all[dim] = op_seqs
+        print(f"[INFO] {dim} dimensiondata found. Now let us train inetgerated FEX model")
+        print("\n")
+        model = FEX(op_seqs, dim=dimension).to(DEVICE)
+        model.apply(weights_init)
+        models[str(dim)] = model
         
-    #     # Call backward only once after all dimensions are processed
-    #     total_pred_loss.backward(retain_graph=True)
-    #     model_optim.step()
 
-    #     with torch.no_grad():
-    #         if train_idx % 100 == 0:
-    #             print("\n"+"="*60)
-    #             print(f"Training index: {train_idx}")
-    #             print(f"Loss: {total_pred_loss.item():.6f}")
-    #             # Print expressions for each dimension
-    #             expressions = {}
-    #             for dim in range(1, dimension+1):
-    #                 expressions[f'Dimension {dim}'] = models[str(dim)].expression_visualize_simplified()
-    #             print(f"Expression: {expressions}")
-    #             print("="*60)
+    print("="*60)
+    # # Replace the hardcoded symbols with a dimension-variable approach
+              
+    #if dim == 1: # torch.tensor([1, 0, 0, 1, 2, 0, 0, 2, 0, 0, 2, 2], device=DEVICE)
+    #elif dim == 2: # torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
+    #elif dim == 3:#torch.tensor([0, 0, 2, 2, 2, 0, 2, 2, 5, 0, 7, 1], device=DEVICE)
+    # print(f"the coefficents_history is {coefficents_history}")
+    loss_history = []
+    # # Create optimizer for all parameters
+    all_params = []
+    for model in models.values():
+        all_params.extend(model.parameters())
+    model_optim = torch.optim.Adam(all_params, lr=FEX_LR)
+    
+    # # Training loop
+    for train_idx in range(TRAIN_EPOCHS_SECOND):
+        model_optim.zero_grad()
+        total_pred_loss = 0
 
+        # Prediction and extra loss
+        for dim in range(1, dimension+1):
+            model = models[str(dim)]
+            # Step 1: Get coefficients with autograd enabled
+            coeff_x1, coeff_x2, coeff_x3 = model.get_all_linear_nonlinear_coeffs_autograd(dim=dim-1)
+            # Step 2: Compute rounded values
+
+            integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+            current_state = dataset_tensor[:, :, :-1]
+            u_current = current_state[:, 0, :]
+            u_pred, u_target = integrator.integrate(integration_args)
+
+            du_pred = torch.gradient(u_pred, dim=0)[0]
+            loss = mse(u_pred, u_target)
+            if dim == 1:
+                coeffs_3 = round(float(coeff_x3))
+                coeffs_2 = round(float(coeff_x2))
+                extra_loss = torch.abs(model.linear_a[0] + 0.2)**2
+                        
+            elif dim == 2:
+                coeffs_3 = round(float(coeff_x3))
+                coeffs_1 = round(float(coeff_x1))
+                extra_loss = torch.abs(model.linear_a[1] + 0.1)**2
+            elif dim == 3:
+                coeffs_2 = round(float(coeff_x2))
+                coeffs_1 = round(float(coeff_x1))
+                extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
+            total_pred_loss += loss + extra_loss
+        
+        # Call backward only once after all dimensions are processed
+        total_pred_loss.backward(retain_graph=True)
+        model_optim.step()
+
+        with torch.no_grad():
+            if train_idx % 50 == 0:
+                loss_history.append(total_pred_loss.item())
+                for dim in range(1, dimension+1):
+                    model = models[str(dim)]
+                    expr = model.expression_visualize_simplified()
+                    coeffs = extract_coefficients_from_expr(expr, dim)
+                    for term, value in coeffs.items():
+                        coefficents_history[dim][term].append(value)
+                #print(f"the coefficents_history is {coefficents_history}")
+            if train_idx % 100 == 0:
+                print("\n"+"="*60)
+                print(f"Training index: {train_idx}")
+                print(f"Loss: {total_pred_loss.item():.6f}")
+                # Print expressions for each dimension
+                expressions = {}
+                for dim in range(1, dimension+1):
+                    expressions[f'Dimension {dim}'] = models[str(dim)].expression_visualize_simplified()
+                print(f"Expression: {expressions}")
+                print("="*60)
+
+        if train_idx == TRAIN_EPOCHS_SECOND-1:
+            for dim in range(1, dimension+1):
+                final_expr = models[str(dim)].expression_visualize_simplified()
+            loss_history_dict = {1: loss_history, 2: loss_history, 3: loss_history}
+            plot_training_progress_grid(loss_history_dict, coefficents_history, final_expr, args.NOISE_LEVEL,save_dir=args.LOG_SAVE_PATH)
 
 
 

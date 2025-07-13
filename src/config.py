@@ -199,7 +199,7 @@ class Config:
                             default=20,
                             help='Number of epochs for first stage training')
         parser.add_argument('--TRAIN_EPOCHS_SECOND', type=int, 
-                            default=2000,
+                            default=5000,
                             help='Number of epochs for second stage training')
 
         # parser.add_argument('--MULTI_FEX_OPEN',type=float,default = True)
@@ -229,7 +229,7 @@ class Config:
                             help='Number of samples for DM training.')
         
         parser.add_argument('--NOISE_LEVEL',type=float,
-                            default = 0.0,
+                            default = 1.0,
                             help='Noise level for MC simulation.')
         parser.add_argument('--TRAIN_SIZE',type=int,
                             default = 10000,
@@ -309,6 +309,10 @@ create_main_parser = config.create_main_parser
 parse_args = config.parse_args
 check_and_install_packages = config.check_and_install_packages
 load_triad_config_data = config.load_triad_config_data
+
+
+
+
 
 
 # Add project directory to sys.path
