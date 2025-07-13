@@ -6,8 +6,8 @@ def set_figure_position(x=100, y=100, width=800, height=600):
     """Set the position and size of the current figure window (only if supported)."""
     try:
         manager = plt.get_current_fig_manager()
-        if hasattr(manager, 'window'):
-            manager.window.setGeometry(x, y, width, height)
+        if manager is not None and hasattr(manager, 'window'):
+            manager.window.setGeometry(x, y, width, height)  # type: ignore
     except Exception as e:
         print(f"Figure positioning skipped: {e}")
 
@@ -516,3 +516,6 @@ def plot_multiple_log10_error(data_list, selected_times_list, save_dir=None, lab
         print(f"Multiple log10 error plot saved to {os.path.join(save_dir, 'multiple_log10_error.pdf')}")
     
     plt.show()
+
+
+

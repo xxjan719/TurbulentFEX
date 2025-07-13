@@ -3,6 +3,7 @@
 # Import specific utility functions for easy access
 # . before helper functions indicates that they are part of the same package where this file is located
 from .FEX import FEX
+from .FEXParser import MultiDimensionFEX
 from .controller import Controller
 from .ODEParser import (ODE_solver, FN_Net,process_chunk_faiss_cpu)
 from .Pool import Pool
@@ -12,7 +13,8 @@ from .Train_Integrator import Body4TrainIntegrationParams, Body4TrainIntegration
 from .helper import (Buu, compute_third_order_moments,
                      double_check_energy, logprint,
                      adjust_learning_rate, weights_init,
-                     )
+                     get_coefficients, get_score_expression_from_file,
+                     check_allowed_terms)
 
 __all__ = [
     "FEX", "Buu",'compute_third_order_moments',
@@ -20,5 +22,7 @@ __all__ = [
     "adjust_learning_rate", "weights_init",
     "process_chunk_faiss_cpu", "ODE_solver", "FN_Net",
     "Pool", "Sampler", "Body4TrainIntegrationParams",
-    "Body4TrainIntegrationArgs", "Body4TrainIntegrator", "Controller", "binary_ops", "unary_ops", "POOL_LIMIT"
+    "Body4TrainIntegrationArgs", "Body4TrainIntegrator", "Controller", 
+    "binary_ops", "unary_ops", "POOL_LIMIT", "MultiDimensionFEX", "get_coefficients", 
+    "get_score_expression_from_file", "check_allowed_terms"
 ]

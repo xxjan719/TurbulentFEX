@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils import *
 from Example.MC_triad.MC_triad import params_init, MC_triad_direct, MC_triad_initial_value
-from config import DIR_EXAMPLE, create_main_parser
+from config import DIR_EXAMPLE, DIR_TRIAD,create_main_parser
 import torch
 import torch.nn as nn
 import math
@@ -118,26 +118,21 @@ print(f'the PMF_SIZES is {PMF_SIZES}')
 print(f'the NUM_NODES is {NUM_NODES}')
 print("="*60)
 
-if args.TRAIN_GROUND_TRUTH == False:
+if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
     print("\n"+"="*60)
     print('[INFO] Start to train the FEX')
-    for dim in range(1,2):#dimension+1):
-        print(f'the dimension is {dim}')
-        print('[INFO] DETECTING THE EXISTENCE OF THE MODEL AND LOG FILE')
-        model_save_path = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}",f"FEX_dim_{dim}_{args.NOISE_LEVEL}.pth")
+    print("[INFO] The idea is first train the FEX for each dimension, and then train the integrated FEX model")
+    print("And in this example, we always can get  ground truth operator sequence for each dimension")
+    for dim in range(1, dimension+1):
+        print("\n"+"="*60)
+        print(f"The dimension is {dim}")
+        model_save_path = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}",f"best_candidates_pool_summary_{dim}.txt")
         log_file = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}",f'log_dimension_{dim}_{args.NOISE_LEVEL}.txt')
         if os.path.exists(model_save_path) and os.path.exists(log_file): #os.path.exists(model_save_path) and 
             print(f'[INFO] Model for dimension {dim} has already generated, just using for the second stage training:FEX'.center(60, '='))
-            print("\n Loading the model and log file")
-            print('[INFO] Print the model expression')
-            optimal_idx = np.load(os.path.join(args.LOG_SAVE_PATH, f'optimal_idx_{dim}_{args.NOISE_LEVEL}.npy'))  
-            model = FEX(torch.tensor(optimal_idx, device=DEVICE), dim=dimension).to(DEVICE)  # Initialize with dummy sequence
-            model.load_state_dict(torch.load(model_save_path))
-            print("\n"+"="*60)
-            print(f'dimension:{dim}, operator indx is {optimal_idx}')
-            print(f"Model expression: {model.expression_visualize()}")
-            print(f"Model expression simplified: {model.expression_visualize_simplified()}")
-            print("="*60)
+            print("\n Loading the initial training model and log file")
+            print('[INFO] Print the initial training model expression')          
+            get_score_expression_from_file(model_save_path)          
         else:
             print(f'[INFO]No MODEL FOR DIMENSION {dim} SAVED IN THIS PATH, it will be generated automatically')        
             os.makedirs(os.path.dirname(log_file), exist_ok=True)
@@ -184,7 +179,8 @@ if args.TRAIN_GROUND_TRUTH == False:
                     if ("x1" not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" not in nonlinear_expr) or \
                        ("x1" in nonlinear_expr and "x2" not in nonlinear_expr and "x3" not in nonlinear_expr and "**" not in nonlinear_expr and "sin" not in nonlinear_expr and "cos" not in nonlinear_expr and "exp" not in nonlinear_expr) or \
                        ("x1" not in nonlinear_expr and "x2" in nonlinear_expr and "x3" not in nonlinear_expr and "**" not in nonlinear_expr and "sin" not in nonlinear_expr and "cos" not in nonlinear_expr and "exp" not in nonlinear_expr) or \
-                       ("x1" not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" in nonlinear_expr and "**" not in nonlinear_expr and "sin" not in nonlinear_expr and "cos" not in nonlinear_expr and "exp" not in nonlinear_expr):
+                       ("x1" not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" in nonlinear_expr and "**" not in nonlinear_expr and "sin" not in nonlinear_expr and "cos" not in nonlinear_expr and "exp" not in nonlinear_expr) or \
+                       ("x1" in nonlinear_expr and "x2" in nonlinear_expr and "x3" in nonlinear_expr and "**" not in nonlinear_expr and "sin" not in nonlinear_expr and "cos" not in nonlinear_expr and "exp" not in nonlinear_expr):
                         print(f"[INFO] Skipping model with trivial nonlinear expression: {expression}")
                         logprint(f"[INFO] Skipping model with trivial nonlinear expression: {expression}")
                         continue
@@ -232,7 +228,10 @@ if args.TRAIN_GROUND_TRUTH == False:
                     # Apply noise level penalty if needed
                     if args.NOISE_LEVEL == 0:
                         loss = 1e6 * loss
-                    
+                    elif args.NOISE_LEVEL == 0.2:
+                        loss = 2e3 * loss
+                    elif args.NOISE_LEVEL == 1:
+                        loss = 80*loss
                     # Calculate score and add to pool
                     if not math.isnan(loss.item()):
                         scores[tree_idx] = 1 / (1 + torch.sqrt(loss))
@@ -285,24 +284,33 @@ if args.TRAIN_GROUND_TRUTH == False:
                 logprint(f"Best loss in pool: {min([c.error for c in pool]):.6f}")
                 print(f"Trained {trained_count}/{NUM_TREES} sequences")
                 print(f"Best loss in pool: {min([c.error for c in pool]):.6f}")
+                
+
+                
                 # Update best candidates pool
                 for candidate_ in pool:
                     current_loss = candidate_.error
-                    current_expr = candidate_.expression
-                    
-                    if current_loss < best_loss:
-                        best_loss = current_loss
-                        best_candidates_pool = [candidate_]
-                    elif np.abs(current_loss - best_loss) < 1.0e-4:
-                        # Check for duplicates
-                        is_duplicate = any(current_expr == existing_candidate.expression for existing_candidate in best_candidates_pool)
-                        if not is_duplicate:
-                            best_candidates_pool.append(candidate_)
+                    current_expr = candidate_.expression  # This is now already simplified
+                    current_score = candidate_.score  # assuming .score exists
+                                        
+                    # Check if expression follows the allowed terms for this dimension
+                    if not check_allowed_terms(current_expr, dim):
+                        continue
+                    else:
+                        best_candidates_pool.append(candidate_)
                  # Print current pool status
                 print("\n"+"="*60)
                 print(f"\n[INFO] Current Pool Status ({len(pool)} candidates):")
-                for idx, candidate_ in enumerate(best_candidates_pool):
-                    print(f"  {idx + 1}. Loss: {candidate_.error:.6f}, Seq: {candidate_.action[:5]}...")
+                print("Pool Selection:")
+                pool_list = sorted(list(pool), key=lambda c: c.score, reverse=True)
+                # Print top 50
+                for idx, candidate_ in enumerate(pool_list[:50]):
+                    print(f"  {idx + 1}. Score: {candidate_.score:.6f}, Loss: {candidate_.error:.6f}, Seq: {candidate_.action}, Expression={candidate_.expression}")
+                
+                print("\n")
+                print("Best Candidate Pool Selection:")
+                for idx,  candidate_ in enumerate(best_candidates_pool):
+                    print(f"  {idx + 1}. Loss: {candidate_.error:.6f}, Seq: {candidate_.action}, Expression={candidate_.expression}")
                 print("=" * 60)
             
             # Select best candidate
@@ -312,388 +320,129 @@ if args.TRAIN_GROUND_TRUTH == False:
                 logprint(f"Candidate {idx + 1}: Loss={candidate_.error:.6f}, Seq={candidate_.action}")
                 print(f"Candidate {idx + 1}: Loss={candidate_.error:.6f}, Seq={candidate_.action}")
             
+            # Create save directory if it doesn't exist
+            save_dir = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}")
+            os.makedirs(save_dir, exist_ok=True)
+            summary_path = os.path.join(save_dir, f"best_candidates_pool_summary_{dim}.txt")
+            # Write summary
+            with open(summary_path, "w") as f:
+                for idx, candidate_ in enumerate(best_candidates_pool):
+                    f.write(f"Candidate {idx + 1}: Score={candidate_.score:.6f}, Loss={candidate_.error:.6f}, Seq={candidate_.action}, Expr={candidate_.expression}\n")
+
+            print(f"[INFO] best_candidates_pool_summary saved to {summary_path}")
+            logprint(f"[INFO] best_candidates_pool_summary saved to {summary_path}")
             # Use best candidate by default (or add user selection if needed)
             best_candidate = min(best_candidates_pool, key=lambda c: c.error)
             optimal_idx = best_candidate.action
             logprint(f"Selected: Loss={best_candidate.error:.6f}, Expression={best_candidate.expression}")
             print(f"Selected: Loss={best_candidate.error:.6f}, Expression={best_candidate.expression}")
 
-            # Train and save the model
-            model = FEX(torch.tensor(optimal_idx, device=DEVICE), dim=dimension).to(DEVICE)
-            model.apply(weights_init)
-            model_optim = torch.optim.Adam(model.parameters(), lr=FEX_LR)
-            for train_idx in range(TRAIN_EPOCHS_SECOND):
-                adjust_learning_rate(model_optim,train_idx,FEX_LR,TRAIN_EPOCHS_SECOND)
-                model_optim.zero_grad()
-                integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
-                du_pred, du_target = integrator.integrate(integration_args)
-                loss = mse(du_pred, du_target)
-                loss.backward()
-                model_optim.step()
-                if train_idx % 100 == 0:
-                    logprint('✅'*40)
-                    logprint(f"Training index: {train_idx}")
-                    logprint(f"Loss: {loss.item():.6f}")
-                    logprint(f"Expression: {model.expression_visualize()}")
-                    logprint("\n"+"="*40)
-                    print(f"Training index: {train_idx}")
-                    print(f"Loss: {loss.item():.6f}")
-                    print(f"Expression: {model.expression_visualize()}")
-                    print(f"Expression simplified: {model.expression_visualize_simplified()}")
-                    print("\n"+"="*40)
-            # Save both the model and its operator sequence
-            save_path = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'FEX_dim_{dim}_{args.NOISE_LEVEL}.pth')
-            optimal_idx_path = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'optimal_idx_{dim}_{args.NOISE_LEVEL}.npy')
-            torch.save(model.state_dict(), save_path)
-            np.save(optimal_idx_path, optimal_idx)
-            logprint(f"Model for dimension {dim} saved to {save_path}")
-            logprint(f"Optimal operator sequence saved to {optimal_idx_path}")
-            print(f"[INFO] Model for dimension {dim} saved to {save_path}")
-            print(f"[INFO] Optimal operator sequence saved to {optimal_idx_path}")
-#         else:
-#             # Replace the hardcoded symbols with a dimension-variable approach
-#             symbols = [sp.symbols(f'x{i+1}') for i in range(dimension)]
-#             op_seqs_all = {}
             
-#             for dim in range(0+1,dimension+1):
-#                 print(f'the dimension is {dim}')
-#                 # In the ground truth training section, convert the list to tensor:
-#                 if dim == 1: 
-#                     op_seqs = torch.tensor([1, 0, 0, 1, 2, 0, 0, 2, 0, 0, 2, 2], device=DEVICE)
-                    
-#                 elif dim == 2:
-#                     op_seqs = torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)#torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
-#                 elif dim == 3:
-#                     op_seqs = torch.tensor([0, 0, 2, 2, 2, 0, 2, 2, 5, 0, 7, 1], device=DEVICE)
-#                 op_seqs_all[dim] = op_seqs
+            logprint(f"[INFO] Now we need to train the integrated FEX model")
+            print(f"[INFO] Now we need to train the integrated FEX model")
+else:
+    print("\n"+"="*60)
+    print("[INFO] Loading FEX models from previous stage...")
+    print(f"[INFO] get the picture of how the single dimension FEX model works")
+    coefficients = get_coefficients(load_dir= DIR_TRIAD, DEVICE=args.DEVICE)
+    print(f"the coefficients are {coefficients}")
+    # for dim in range(1, dimension+1):
+    #     if not os.path.exists(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'FEX_dim_{dim}_{args.NOISE_LEVEL}.pth')) and not os.path.exists(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'optimal_idx_{dim}_{args.NOISE_LEVEL}.npy')):
+    #         raise FileNotFoundError(f"FEX_dim_{dim}_{args.NOISE_LEVEL}.pth or optimal_idx_{dim}_{args.NOISE_LEVEL}.npy not found in {args.LOG_SAVE_PATH}, you should run the FEX stage first.")
+    #     else:
+    #         print(f"[INFO] {dim} dimensiondata found. Now let us train inetgerated FEX model")        
+    # print("="*60)
+    # # Replace the hardcoded symbols with a dimension-variable approach
+    # symbols = [sp.symbols(f'x{i+1}') for i in range(dimension)]
+    # op_seqs_all = {}
+            
+    # for dim in range(0+1,dimension+1):
+    #     print("\n"+"="*60)
+    #     print(f'the dimension is {dim}')
+    #     # In the ground truth training section, convert the list to tensor:
+    #     op_seqs = np.load(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'optimal_idx_{dim}_{args.NOISE_LEVEL}.npy'), allow_pickle=True)
+    #     op_seqs = torch.tensor(op_seqs, device=DEVICE)
+    #     #if dim == 1: # torch.tensor([1, 0, 0, 1, 2, 0, 0, 2, 0, 0, 2, 2], device=DEVICE)
+    #     #elif dim == 2: # torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
+    #     #elif dim == 3:#torch.tensor([0, 0, 2, 2, 2, 0, 2, 2, 5, 0, 7, 1], device=DEVICE)
+    #     op_seqs_all[dim] = op_seqs
 
-#             print(f'the op_seqs_all is {op_seqs_all}')
-#             if args.MULTI_FEX_OPEN == True:
-#                 combined_conservation_law = MultiDimensionFEX(op_seqs_all, dimension).to(DEVICE)
-#                 print(f'data shape is {dataset_tensor.shape}')
-#                 # Initialize all models
-#                 for dim in range(1, dimension+1):
-#                     model = combined_conservation_law.models[str(dim)]
-#                     model.apply(weights_init)
-                
-#                 # Create optimizer for all parameters
-#                 all_params = []
-#                 for model in combined_conservation_law.models.values():
-#                     all_params.extend(model.parameters())
-#                 model_optim = torch.optim.Adam(all_params, lr=FEX_LR)
-#                 # Training loop
-#                 for train_idx in range(TRAIN_EPOCHS_SECOND):
-#                     model_optim.zero_grad()
-#                     total_pred_loss = 0
-#                     # E_sum = 0
-                       
-#                     # # Build L and G matrices
-#                     # L = torch.zeros(dimension, dimension, device=DEVICE)
-#                     # G = torch.zeros(dimension, dimension, device=DEVICE)
-#                     # for i in range(dimension):
-#                     #     coeffs = combined_conservation_law.models[str(i+1)].get_all_linear_nonlinear_coeffs_autograd(dim=i)
-#                     #     # coeffs is a tuple/list: (coeff_x1, coeff_x2, coeff_x3)
-#                     #     for j in range(dimension):
-#                     #         L[i, j] = coeffs[j]
-#                     # # Diagonal to G, off-diagonal to L
-#                     # for j in range(dimension):
-#                     #     G[j, j] = L[j, j]
-#                     #     L[j, j] = 0  # Zero out diagonal in L
-#                     # u_pred_all = torch.zeros(dataset_tensor.shape[0], dataset_tensor.shape[1],dataset_tensor.shape[2]-1, device=DEVICE)
-#                     # u_target_all = torch.zeros(dataset_tensor.shape[0], dataset_tensor.shape[1],dataset_tensor.shape[2]-1, device=DEVICE)
-#                     # l1_loss = 0
-#                     # Prediction and extra loss
-#                     for dim in range(1, dimension+1):
-#                         model = combined_conservation_law.models[str(dim)]
-#                         # Step 1: Get coefficients with autograd enabled
-#                         coeffs = model.get_all_linear_nonlinear_coeffs_autograd(dim=dim-1)
-#                         # Step 2: Compute rounded values
+    #     model = FEX(op_seqs, dim=dimension).to(DEVICE)
+    #     if torch.cuda.is_available():
+    #         model.load_state_dict(torch.load(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'FEX_dim_{dim}_{args.NOISE_LEVEL}.pth'), 
+    #                                          map_location=DEVICE, weights_only=True))
+    #     else:
+    #         model.load_state_dict(torch.load(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'FEX_dim_{dim}_{args.NOISE_LEVEL}.pth'), 
+    #                                          map_location='cpu', weights_only=True))
+    #     print(f'the model expression is {model.expression_visualize()}')
+    #     print(f'the model expression simplified is {model.expression_visualize_simplified()}')
+    #     print("="*60)
+       
 
-#                         integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
-#                         current_state = dataset_tensor[:, :, :-1]
-#                         u_current = current_state[:, 0, :]
-#                         # u_current_flat = u_current.reshape(-1, 1)
-#                         # u_current_reshaped = u_current_flat.reshape(u_current.shape)
-#                         u_pred, u_target = integrator.integrate(integration_args)
+    # models = {}
+    # for dim in range(1, dimension+1):
+    #     models[str(dim)] = FEX(op_seqs_all[dim], dim=dimension).to(DEVICE)
+    #     models[str(dim)].load_state_dict(torch.load(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'FEX_dim_{dim}_{args.NOISE_LEVEL}.pth'), 
+    #                                        map_location=DEVICE, weights_only=True))
+    #     models[str(dim)].apply(weights_init)
 
-#                         du_pred = torch.gradient(u_pred, dim=0)[0]
-#                         # dE_dt += torch.sum(u_pred * du_pred, dim=1)
-#                         loss = mse(u_pred, u_target)
-#                         if dim == 1:
-#                             coeffs_3 = round(float(coeffs[2]))
-#                             coeffs_2 = round(float(coeffs[1]))
-#                             #l1_loss = torch.abs(coeffs_3) + torch.abs(coeffs_2)
-#                             extra_loss = torch.abs(model.linear_a[0] + 0.2)**2
-                            
-#                         elif dim == 2:
-#                             coeffs_3 = round(float(coeffs[2]))
-#                             coeffs_1 = round(float(coeffs[0]))
-#                             #l1_loss = torch.abs(coeffs_3) + torch.abs(coeffs_1)
-#                             extra_loss = torch.abs(model.linear_a[1] + 0.1)**2
-#                         elif dim == 3:
-#                             coeffs_2 = round(float(coeffs[1]))
-#                             coeffs_1 = round(float(coeffs[0]))
-#                             #l1_loss = torch.abs(coeffs_2) + torch.abs(coeffs_1)
-#                             extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
-#                         total_pred_loss += loss+extra_loss
-#                     #     E_sum += torch.sum(u_pred**2, dim=1)
-#                     #     u_pred_all[:,dim-1,:] = u_pred.reshape(u_current.shape)
-#                     #     # print(f'u_pred_all shape is {u_pred_all.shape}')
-#                     #     u_target_all[:,dim-1,:] = u_target.reshape(u_current.shape)
-#                     #     #l1_loss += l1_loss
-#                     # # print(f'u_pred_all shape is {u_pred_all.shape}')
-#                     # # print(f'u_target_all shape is {u_target_all.shape}')
-#                     # N, D, T = u_pred_all.shape  # N=1000, D=3, T=1000
-#                     # cov_pred = torch.zeros((D, D, T))
-#                     # cov_target = torch.zeros((D, D, T))
-#                     # for t in range(T):
-#                     #     # u_pred_all[:, :, t] is shape (N, D), need (D, N)
-#                     #     cov_pred[:, :, t] = torch.cov(u_pred_all[:, :, t].T)
-#                     #     cov_target[:, :, t] = torch.cov(u_target_all[:, :, t].T)
-#                     # covu1u2_pred = cov_pred[0, 1, :]  # shape (T,)
-#                     # covu1u3_pred = cov_pred[0, 2, :]  # shape (T,)
-#                     # covu2u3_pred = cov_pred[1, 2, :]  # shape (T,)
+    # # Create optimizer for all parameters
+    # all_params = []
+    # for model in models.values():
+    #     all_params.extend(model.parameters())
+    # model_optim = torch.optim.Adam(all_params, lr=FEX_LR)
 
-#                     # covu1u2_target = cov_target[0, 1, :]
-#                     # covu1u3_target = cov_target[0, 2, :]
-#                     # covu2u3_target = cov_target[1, 2, :]
-#                     # cov_pred_stack = torch.stack([covu1u2_pred, covu1u3_pred, covu2u3_pred], dim=1)
-#                     # cov_target_stack = torch.stack([covu1u2_target, covu1u3_target, covu2u3_target], dim=1)
-#                     # # cov_loss = mse(cov_pred, cov_target)
-#                     # # print(f'cov_pred shape is {cov_pred.shape}')
-#                     # # print(f'cov_target shape is {cov_target.shape}')
-#                     # # print(f'cov_pred_stack shape is {cov_pred_stack.shape}')
-#                     # # print(f'cov_target_stack shape is {cov_target_stack.shape}')
-#                     # cov_loss = mse(cov_pred_stack, cov_target_stack)
-#                     # # print(f'cov_loss shape is {cov_loss}')
-                    
-#                     # total_pred_loss += cov_loss
-#                     # Energy conservation loss: minimize dE/dt
-#                     # derviatve_E_sum = torch.gradient(E_sum, dim=0)[0]
-#                     # print(f'derviative_E_sum shape is {derviatve_E_sum.shape}')
-#                     # print(f'L shape is {L.shape}')
-#                     # print(f'L is {L}')
-#                     # skew_loss = mse(L, -L.T)
-#                     #neg_diag_loss = torch.relu(G.diag()).sum()
-#                     #l1_loss = sum(torch.abs(param).sum() for param in model.parameters())
-     
-#                     total_loss = total_pred_loss#+skew_loss #+ neg_diag_loss
-#                     # print(f'total_loss is {total_loss}, cov_loss is {cov_loss}, total_pred_loss is {total_pred_loss}, l1_loss is {l1_loss}')
-#                     total_loss.backward()
-#                     model_optim.step()
+    # # Training loop
+    # for train_idx in range(TRAIN_EPOCHS_SECOND):
+    #     model_optim.zero_grad()
+    #     total_pred_loss = 0
 
-#                     with torch.no_grad():
+    #     # Prediction and extra loss
+    #     for dim in range(1, dimension+1):
+    #         model = models[str(dim)]
+    #         # Step 1: Get coefficients with autograd enabled
+    #         coeff_x1, coeff_x2, coeff_x3 = model.get_all_linear_nonlinear_coeffs_autograd(dim=dim-1)
+    #         # Step 2: Compute rounded values
+
+    #         integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+    #         current_state = dataset_tensor[:, :, :-1]
+    #         u_current = current_state[:, 0, :]
+    #         u_pred, u_target = integrator.integrate(integration_args)
+
+    #         du_pred = torch.gradient(u_pred, dim=0)[0]
+    #         loss = mse(u_pred, u_target)
+    #         if dim == 1:
+    #             coeffs_3 = round(float(coeff_x3))
+    #             coeffs_2 = round(float(coeff_x2))
+    #             extra_loss = torch.abs(model.linear_a[0] + 0.2)**2
                         
-                                
-#                         if train_idx % 100 == 0:
-#                             print(f"Training index: {train_idx}")
-#                             print(f"Loss: {total_loss.item():.6f},")
-#                             print(f"Expression: {combined_conservation_law.expression_visualize()}")
-                
+    #         elif dim == 2:
+    #             coeffs_3 = round(float(coeff_x3))
+    #             coeffs_1 = round(float(coeff_x1))
+    #             extra_loss = torch.abs(model.linear_a[1] + 0.1)**2
+    #         elif dim == 3:
+    #             coeffs_2 = round(float(coeff_x2))
+    #             coeffs_1 = round(float(coeff_x1))
+    #             extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
+    #         total_pred_loss += loss + extra_loss
+        
+    #     # Call backward only once after all dimensions are processed
+    #     total_pred_loss.backward(retain_graph=True)
+    #     model_optim.step()
 
-#                 # After the main Adam training loop, do LBFGS fine-tuning for each model
-#                 for dim in range(1, dimension+1):
-#                      model = combined_conservation_law.models[str(dim)]
-#                      # Save individual model after training
-#                      save_path = os.path.join(args.log_save_path, f'FEX_dim_{dim}.pth')
-#                      torch.save(model.state_dict(), save_path)
-#                      optimal_idx_path = os.path.join(args.log_save_path, f'optimal_idx_{dim}.npy')
-#                      np.save(optimal_idx_path,  op_seqs_all[dim] )
-#                      print(f"Model for dimension {dim} saved to {save_path}")
-#             else:
-#                 for dim in range(1, dimension+1):
-#                     model = FEX(op_seqs_all[dim], dim=dimension).to(DEVICE)
-#                     model.apply(weights_init)
-#                     model_optim = torch.optim.Adam(model.parameters(), lr=FEX_LR)
-#                     for train_idx in range(TRAIN_EPOCHS_SECOND):
-#                         model_optim.zero_grad()
-#                         adjust_learning_rate(model_optim,train_idx,FEX_LR,TRAIN_EPOCHS_SECOND)
-#                         integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
-#                         du_pred, du_target = integrator.integrate(integration_args)
-#                         loss = mse(du_pred, du_target)
-#                         loss.backward()
-#                         model_optim.step()
-#                         if train_idx % 100 == 0:
-#                             print(f"Training index: {train_idx}")
-#                             print(f"Loss: {loss.item():.6f}")
-#                             print(f"Expression: {model.expression_visualize()}")
-                            
+    #     with torch.no_grad():
+    #         if train_idx % 100 == 0:
+    #             print("\n"+"="*60)
+    #             print(f"Training index: {train_idx}")
+    #             print(f"Loss: {total_pred_loss.item():.6f}")
+    #             # Print expressions for each dimension
+    #             expressions = {}
+    #             for dim in range(1, dimension+1):
+    #                 expressions[f'Dimension {dim}'] = models[str(dim)].expression_visualize_simplified()
+    #             print(f"Expression: {expressions}")
+    #             print("="*60)
 
-#                     # Save individual model after training
-#                     save_path = os.path.join(args.log_save_path, f'FEX_dim_{dim}.pth')
-#                     torch.save(model.state_dict(), save_path)
-#                     optimal_idx_path = os.path.join(args.log_save_path, f'optimal_idx_{dim}.npy')
-#                     np.save(optimal_idx_path,  op_seqs_all[dim] )
-#                     print(f"Model for dimension {dim} saved to {save_path}")
-# else:
-#     if not os.path.exists(os.path.join(args.log_save_path, 'optimal_idx_1.npy')) and not os.path.exists(os.path.join(args.log_save_path, 'optimal_idx_2.npy')) and not os.path.exists(os.path.join(args.log_save_path, 'optimal_idx_3.npy')):
-#         raise FileNotFoundError(f"optimal_idx_1.npy, optimal_idx_2.npy, optimal_idx_3.npy not found in {args.log_save_path}, you should run the FEX stage first.")
-    
-#     # Load the optimal operator sequences
-#     op_seq_file_1 = np.load(os.path.join(args.log_save_path, 'optimal_idx_1.npy'), allow_pickle=True)
-#     op_seq_file_2 = np.load(os.path.join(args.log_save_path, 'optimal_idx_2.npy'), allow_pickle=True)
-#     op_seq_file_3 = np.load(os.path.join(args.log_save_path, 'optimal_idx_3.npy'), allow_pickle=True)
-#     op_seqs_all = [op_seq_file_1, op_seq_file_2, op_seq_file_3]
-#     diff_scale = args.DIFF_SCALE
-#     print(f'the dataset shape is {dataset.shape}')
-    
-#     batch_size = 50000  # Changed from 4000 to 1000 to match the actual data size
-#     x_sample = dataset[:,:,:-1].reshape(-1, 3) 
-#     train_size = int(x_sample.shape[0]/10)
-#     print(f'train_size is {train_size}')
-#     # Reshape dataset to get x_sample
-#     SELECTED_ROW_INDICES = np.random.permutation(x_sample.shape[0])[:train_size]
-#      # Shape: (1000000, 3)
-#     X_TRAIN = x_sample[SELECTED_ROW_INDICES]
-#     print(f'x_sample shape is {x_sample.shape}')
-    
-#     # Calculate z_short
-#     DIFFEREMCE = np.zeros((x_sample.shape[0], dimension))
-#     for idx in range(1, dimension+1):
-#         model_file = os.path.join(args.log_save_path, f'FEX_dim_{idx}.pth')
-#         if not os.path.exists(model_file):
-#             raise FileNotFoundError(f"FEX_dim_{idx}.pth not found in {args.log_save_path}, you should run the FEX stage first.")
-#         op_seq = op_seqs_all[idx-1]
-#         FEX_model = FEX(op_seq, dim=dimension).to(DEVICE)
-#         FEX_model.load_state_dict(torch.load(str(model_file), weights_only=True))
-#         integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor.to(DEVICE), integration_func=FEX_model, index=idx)
-#         du_pred, du_target = integrator.integrate(integration_args)
-#         difference = (du_target-du_pred)*diff_scale
-#         DIFFEREMCE[:,idx-1] = np.squeeze(difference.cpu().detach().numpy())
-#     print('✅'*40)
-#     print(f'DIFFEREMCE shape is {DIFFEREMCE.shape}')
-#     print(f'First few x_sample values:\n{x_sample[:5]}')
-#     print(f'First few DIFFEREMCE values:\n{DIFFEREMCE[:5]}')
-#     print(DIFFEREMCE)
-#     print(np.max(DIFFEREMCE, axis=0))
-#     print(np.min(DIFFEREMCE, axis=0))
-#     it_n_index = int(np.ceil(train_size / batch_size))
-#     print(f'it_n_index is {it_n_index}')
-#     TRAIN_INDEX_INITIAL = process_chunk_auto(
-#         it_n_index=it_n_index,
-#         it_size_x0train=batch_size,
-#         short_size=SHORT_SIZE,
-#         x_sample=x_sample,
-#         x0_train=X_TRAIN,  # Using x_sample as both training and query data
-#         train_size=train_size,
-#         x_dim=dimension
-#     )
-#     print(f'Index search completed. Shape of indices: {TRAIN_INDEX_INITIAL.shape}')
-#     X_SHORT = x_sample[TRAIN_INDEX_INITIAL]
-#     Z_SHORT = DIFFEREMCE[TRAIN_INDEX_INITIAL]
-#     ZT = np.random.randn(train_size, dimension)
-#     ODE_solution = np.zeros((train_size, dimension))
-    
-#     print('✅'*40)
-#     EPOCHS_ODE_BATCH = int(min(train_size, 50000)/batch_size)  # Changed from 400000 to 200000 to be more conservative
-#     print(f'ZT shape is {ZT.shape}; ODE_solution shape is {ODE_solution.shape}, EPOCHS_ODE_BATCH is {EPOCHS_ODE_BATCH}')
-#     print('✅'*40)
-#     print('right now, we are going to solve the reverse ODE')
-    
-#     torch.cuda.empty_cache()
-#     for BATCH_IDX in range(EPOCHS_ODE_BATCH):
-#         start_idx = BATCH_IDX*batch_size
-#         end_idx = min((BATCH_IDX+1)*batch_size,x_sample.shape[0])
-#         print(f'start_idx is {start_idx}; end_idx is {end_idx}')
-#         ZT_BATCH = torch.tensor(ZT[start_idx:end_idx]).to(DEVICE,dtype = torch.float32)
-#         INPUT_BATCH = torch.tensor(X_TRAIN[start_idx:end_idx]).to(DEVICE,dtype = torch.float32)
-#         MEAN_INPUT_BATCH = torch.tensor(X_SHORT[start_idx:end_idx]).to(DEVICE,dtype = torch.float32)
-#         RESIDUAL_BATCH = torch.tensor(Z_SHORT[start_idx:end_idx]).to(DEVICE,dtype = torch.float32)
-#         ODE_solution_BATCH = ODE_solver(ZT_BATCH,MEAN_INPUT_BATCH,RESIDUAL_BATCH,INPUT_BATCH)
-#         ODE_solution[start_idx:end_idx,:] = ODE_solution_BATCH.to('cpu').detach().numpy()
-#         if BATCH_IDX % 4 == 0:
-#             print(f'this is {BATCH_IDX} times / overall {EPOCHS_ODE_BATCH} times')
-#     print(f'ODE_solution shape is {ODE_solution.shape}')
-#     print('✅'*40)
-#     print('\nright now, we are going to save the data for second stage training')
-#     if not os.path.exists(os.path.join(args.log_save_path, 'DATA_TRAINING_X_SHORT.npy')):
-#         np.save(os.path.join(args.log_save_path, 'DATA_TRAINING_X_SHORT.npy'), X_SHORT)
-#     if not os.path.exists(os.path.join(args.log_save_path, 'DATA_TRAINING_Z_SHORT.npy')):
-#         np.save(os.path.join(args.log_save_path, 'DATA_TRAINING_Z_SHORT.npy'), Z_SHORT)
-#     if not os.path.exists(os.path.join(args.log_save_path, 'DATA_TRAINING_X_TRAIN.npy')):
-#         np.save(os.path.join(args.log_save_path, 'DATA_TRAINING_X_TRAIN.npy'), X_TRAIN)
-    
 
-#     SECOND_STAGE_TRAINING_DATA = ZT
-#     if not os.path.exists(os.path.join(args.log_save_path, 'SECOND_STAGE_TRAINING_DATA.npy')):
-#         np.save(os.path.join(args.log_save_path, 'SECOND_STAGE_TRAINING_DATA.npy'), SECOND_STAGE_TRAINING_DATA)
-#     if not os.path.exists(os.path.join(args.log_save_path, 'ODE_REVERSE_SOLUTION.npy')):
-#         np.save(os.path.join(args.log_save_path, 'ODE_REVERSE_SOLUTION.npy'), ODE_solution)
-
-#     IS_FINITE_ODESOLUTION = np.isfinite(ODE_solution) &~np.isnan(ODE_solution)
-#     SECOND_STAGE_TRAINING_DATA_FILTERED = SECOND_STAGE_TRAINING_DATA[IS_FINITE_ODESOLUTION.all(axis=1)]
-#     ODE_REVERSE_SOLUTION_FILTERED = ODE_solution[IS_FINITE_ODESOLUTION.all(axis=1)]
-#     print(f'SECOND_STAGE_TRAINING_DATA_FILTERED shape is {SECOND_STAGE_TRAINING_DATA_FILTERED.shape[0]}')
-#     INDICES = np.random.permutation(SECOND_STAGE_TRAINING_DATA_FILTERED.shape[0])
-#     SECOND_STAGE_TRAINING_DATA_SHUFFLED = SECOND_STAGE_TRAINING_DATA_FILTERED[INDICES]
-#     ODE_REVERSE_SOLUTION_SHUFFLED = ODE_REVERSE_SOLUTION_FILTERED[INDICES]
-#     print(f'SECOND_STAGE_TRAINING_DATA_SHUFFLED shape is {SECOND_STAGE_TRAINING_DATA_SHUFFLED.shape}')
-#     print(f'ODE_REVERSE_SOLUTION_SHUFFLED shape is {ODE_REVERSE_SOLUTION_SHUFFLED.shape}')
-
-#     SECOND_STAGE_TRAINING_DATA_MEAN = np.mean(SECOND_STAGE_TRAINING_DATA_SHUFFLED, axis=0, keepdims=True)
-#     SECOND_STAGE_TRAINING_DATA_STD = np.std(SECOND_STAGE_TRAINING_DATA_SHUFFLED, axis=0, keepdims=True)
-#     SECOND_STAGE_TRAINING_DATA_NEW = (SECOND_STAGE_TRAINING_DATA_SHUFFLED - SECOND_STAGE_TRAINING_DATA_MEAN) / SECOND_STAGE_TRAINING_DATA_STD
-
-#     ODE_REVERSE_SOLUTION_MEAN = np.mean(ODE_REVERSE_SOLUTION_SHUFFLED, axis=0, keepdims=True)
-#     ODE_REVERSE_SOLUTION_STD = np.std(ODE_REVERSE_SOLUTION_SHUFFLED, axis=0, keepdims=True)
-#     ODE_REVERSE_SOLUTION_NEW = (ODE_REVERSE_SOLUTION_SHUFFLED - ODE_REVERSE_SOLUTION_MEAN) / ODE_REVERSE_SOLUTION_STD
-
-#     SECOND_STAGE_TRAINING_DATA_MEAN = torch.tensor(SECOND_STAGE_TRAINING_DATA_MEAN, dtype=torch.float32).to(DEVICE)
-#     SECOND_STAGE_TRAINING_DATA_STD = torch.tensor(SECOND_STAGE_TRAINING_DATA_STD, dtype=torch.float32).to(DEVICE)
-#     ODE_REVERSE_SOLUTION_MEAN = torch.tensor(ODE_REVERSE_SOLUTION_MEAN, dtype=torch.float32).to(DEVICE)
-#     ODE_REVERSE_SOLUTION_STD = torch.tensor(ODE_REVERSE_SOLUTION_STD, dtype=torch.float32).to(DEVICE)
-
-#     SECOND_STAGE_TRAINING_DATA_NEW = torch.tensor(SECOND_STAGE_TRAINING_DATA_NEW, dtype=torch.float32).to(DEVICE)
-#     ODE_REVERSE_SOLUTION_NEW = torch.tensor(ODE_REVERSE_SOLUTION_NEW, dtype=torch.float32).to(DEVICE)
-
-#     dataname2 = os.path.join(args.log_save_path, 'data_inf.pt')
-#     if not os.path.exists(dataname2):
-#         torch.save({'SECOND_STAGE_TRAINING_DATA_MEAN': SECOND_STAGE_TRAINING_DATA_MEAN,
-#                 'SECOND_STAGE_TRAINING_DATA_STD': SECOND_STAGE_TRAINING_DATA_STD,
-#                 'ODE_REVERSE_SOLUTION_MEAN': ODE_REVERSE_SOLUTION_MEAN,
-#                 'ODE_REVERSE_SOLUTION_STD': ODE_REVERSE_SOLUTION_STD,
-#                 'diff_scale': diff_scale}, dataname2)
-#         print(f'data saved to {dataname2}')
-#     else:
-#         print(f'data already exists in {dataname2}')
-    
-#     print('✅'*40)
-#     print('SECOND STAGE TRAINING DATA IS SAVED')
-#     print(f'second stage mean is {SECOND_STAGE_TRAINING_DATA_MEAN}, std is {SECOND_STAGE_TRAINING_DATA_STD}')
-#     print(f'ODE reverse solution mean is {ODE_REVERSE_SOLUTION_MEAN}, std is {ODE_REVERSE_SOLUTION_STD}')
-#     print('✅'*40)
-
-#     NTrain = int(SECOND_STAGE_TRAINING_DATA_SHUFFLED.shape[0]*0.8)
-#     NValid = int(SECOND_STAGE_TRAINING_DATA_SHUFFLED.shape[0]*0.2)
-#     SECOND_STAGE_TRAINING_DATA_NORMAL = SECOND_STAGE_TRAINING_DATA_NEW[:NTrain,:]
-#     ODE_REVERSE_SOLUTION_NORMAL = ODE_REVERSE_SOLUTION_NEW[:NTrain,:]
-#     SECOND_STAGE_TRAINING_DATA_VALID = SECOND_STAGE_TRAINING_DATA_NEW[NTrain:,:]
-#     ODE_REVERSE_SOLUTION_VALID = ODE_REVERSE_SOLUTION_NEW[NTrain:,:]
-
-#     FN = FN_Net(dimension,dimension,50).to(DEVICE)
-#     FN.zero_grad()
-#     optimizer = torch.optim.Adam(FN.parameters(),lr = args.NN_SOLVER_LR,weight_decay = 1e-6)
-#     criterion = torch.nn.MSELoss()
-#     best_valid_err = 5.0
-#     for j in range(args.NN_SOLVER_EPOCHS):
-#         optimizer.zero_grad()
-#         pred = FN(SECOND_STAGE_TRAINING_DATA_NORMAL)
-#         loss = criterion(pred,ODE_REVERSE_SOLUTION_NORMAL)
-#         loss.backward()
-#         optimizer.step()
-#         pred1 = FN(SECOND_STAGE_TRAINING_DATA_VALID)
-#         valid_loss = criterion(pred1,ODE_REVERSE_SOLUTION_VALID)
-#         if valid_loss < best_valid_err:
-#             FN.update_best()
-#             best_valid_err = valid_loss
-#             print(f'best valid loss is {best_valid_err} at iteration {j}')
-#     FN.final_update()
-#     torch.save(FN.state_dict(), os.path.join(args.log_save_path, 'FN_Net.pth'))
-#     print('FN_Net saved to same folder')
-#     print('✅'*40)
-#     print('SECOND STAGE TRAINING IS COMPLETED')
-#     print('✅'*40)
-#     print('NOW, you can run the prediction file.')
 
 
     

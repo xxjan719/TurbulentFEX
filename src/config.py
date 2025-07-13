@@ -245,8 +245,8 @@ class Config:
         parser.add_argument('--FIGURE_SAVE_PATH',type=str,
                             default = None,
                             help='Path to save figure.')
-        parser.add_argument('--TRAIN_GROUND_TRUTH',type=bool,
-                            default = False,
+        parser.add_argument('--TRAIN_THREE_DIMENSION_INTEGRATED',type=bool,
+                            default = True,
                             help='Whether to train the FEX with ground truth data.')
         return parser
     
@@ -292,24 +292,7 @@ class Config:
             print(f"Warning: Failed to load {file_path}: {str(e)}")
             return None
     
-    def get_triad_config(self, dimension, config_type='equipart'):
-        """
-        Get triad configuration with loaded data
-        
-        Args:
-            dimension (str): Dimension number ('1', '2', '3')
-            config_type (str): Either 'equipart' or 'cascade'
-            
-        Returns:
-            dict: Configuration with loaded data
-        """
-        config = self.TRIAD_MODEL_CONFIG[dimension].copy()
-        
-        # Load the appropriate data
-        data = self.load_triad_config_data(dimension, config_type)
-        config[f'op_seq_{config_type}'] = data
-        
-        return config
+
 
 # Create global instance
 config = Config()
@@ -326,7 +309,6 @@ create_main_parser = config.create_main_parser
 parse_args = config.parse_args
 check_and_install_packages = config.check_and_install_packages
 load_triad_config_data = config.load_triad_config_data
-get_triad_config = config.get_triad_config
 
 
 # Add project directory to sys.path
