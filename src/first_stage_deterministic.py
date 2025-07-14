@@ -363,14 +363,11 @@ else:
         
 
     print("="*60)
-    # # Replace the hardcoded symbols with a dimension-variable approach
-              
-    #if dim == 1: # torch.tensor([1, 0, 0, 1, 2, 0, 0, 2, 0, 0, 2, 2], device=DEVICE)
-    #elif dim == 2: # torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
-    #elif dim == 3:#torch.tensor([0, 0, 2, 2, 2, 0, 2, 2, 5, 0, 7, 1], device=DEVICE)
-    # print(f"the coefficents_history is {coefficents_history}")
+    print("[INFO] Starting coupled training of all three FEX models together...")
+    print(f"[INFO] Training {len(models)} models simultaneously")
+    
     loss_history = []
-    # # Create optimizer for all parameters
+    # Create optimizer for all parameters from all models
     all_params = []
     for model in models.values():
         all_params.extend(model.parameters())
@@ -381,16 +378,17 @@ else:
         model_optim.zero_grad()
         total_pred_loss = 0
 
-        # Use all dimensions simultaneously with the new integrator
-        # Pass the dictionary of models to the integrator
+        # Train all three models together using coupled dynamics
+        # This ensures the models learn to work together as a system
         integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=models, index='all')
         u_pred_all, u_target_all = integrator.integrate(integration_args)
         
-        # Compute loss for all dimensions
+        # Compute combined loss for all dimensions
         loss_all = mse(u_pred_all, u_target_all)
         total_pred_loss += loss_all
         
-        # Option 2: Keep the original approach but with better coupling
+        # Alternative: Train each dimension separately but with proper coupling
+        # Uncomment this if you want to try individual training with coupling
         # for dim in range(1, dimension+1):
         #     model = models[str(dim)]
         #     integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)

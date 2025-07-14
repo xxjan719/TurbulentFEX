@@ -134,6 +134,77 @@ class Config:
         """Check if the script is running in a virtual environment"""
         return hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)
     
+    def create_virtual_environment(self, env_name='turbulentfex_env'):
+        """Create a virtual environment for the project"""
+        import subprocess
+        import os
+        
+        env_path = os.path.join(self.DIR_PROJECT, env_name)
+        
+        if os.path.exists(env_path):
+            print(f"Virtual environment '{env_name}' already exists at {env_path}")
+            return env_path
+        
+        print(f"Creating virtual environment '{env_name}'...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "venv", env_path])
+            print(f"Successfully created virtual environment at {env_path}")
+            return env_path
+        except Exception as e:
+            print(f"Error creating virtual environment: {str(e)}")
+            raise
+    
+    def activate_virtual_environment(self, env_name='turbulentfex_env'):
+        """Activate the virtual environment"""
+        import subprocess
+        import os
+        
+        env_path = os.path.join(self.DIR_PROJECT, env_name)
+        
+        if not os.path.exists(env_path):
+            print(f"Virtual environment '{env_name}' does not exist. Creating it first...")
+            self.create_virtual_environment(env_name)
+        
+        # Get the activation script path
+        if os.name == 'nt':  # Windows
+            activate_script = os.path.join(env_path, 'Scripts', 'activate.bat')
+        else:  # Unix/Linux/macOS
+            activate_script = os.path.join(env_path, 'bin', 'activate')
+        
+        if not os.path.exists(activate_script):
+            print(f"Activation script not found at {activate_script}")
+            return False
+        
+        print(f"To activate the virtual environment, run:")
+        print(f"source {activate_script}")
+        print(f"Or on Windows:")
+        print(f"{activate_script}")
+        
+        return True
+    
+    def setup_environment(self, env_name='turbulentfex_env'):
+        """Complete environment setup: create, activate, and install packages"""
+        print("Setting up TurbulentFEX environment...")
+        
+        # Create virtual environment
+        env_path = self.create_virtual_environment(env_name)
+        
+        # Check if we're in the virtual environment
+        if not self._is_in_virtual_environment():
+            print("Please activate the virtual environment first:")
+            if os.name == 'nt':  # Windows
+                print(f"{os.path.join(env_path, 'Scripts', 'activate.bat')}")
+            else:  # Unix/Linux/macOS
+                print(f"source {os.path.join(env_path, 'bin', 'activate')}")
+            print("Then run this script again to install packages.")
+            return False
+        
+        # Install packages
+        self.check_and_install_packages()
+        
+        print("Environment setup complete!")
+        return True
+    
     
     def create_main_parser(self):
         """Create main argument parser"""
@@ -199,7 +270,7 @@ class Config:
                             default=20,
                             help='Number of epochs for first stage training')
         parser.add_argument('--TRAIN_EPOCHS_SECOND', type=int, 
-                            default=5000,
+                            default=50000,
                             help='Number of epochs for second stage training')
 
         # parser.add_argument('--MULTI_FEX_OPEN',type=float,default = True)
@@ -309,6 +380,9 @@ create_main_parser = config.create_main_parser
 parse_args = config.parse_args
 check_and_install_packages = config.check_and_install_packages
 load_triad_config_data = config.load_triad_config_data
+create_virtual_environment = config.create_virtual_environment
+activate_virtual_environment = config.activate_virtual_environment
+setup_environment = config.setup_environment
 
 
 
@@ -336,7 +410,9 @@ __all__ = [
     'parse_args',
     'check_and_install_packages',
     'load_triad_config_data',
-    'get_triad_config',
+    'create_virtual_environment',
+    'activate_virtual_environment',
+    'setup_environment',
     'DIR_PROJECT',
     'DIR_TRIAD',
     'DIR_EQUIPART',
@@ -351,6 +427,18 @@ __all__ = [
 if __name__ == "__main__":
     # Example usage
     print("Configuration module loaded successfully!")
+    
+    # Example: Create and setup environment
+    # config.create_virtual_environment('turbulentfex_env')
+    # config.activate_virtual_environment('turbulentfex_env')
+    # config.setup_environment('turbulentfex_env')
+    # Get activation instructions
+    if not os.path.exists(os.path.join(config.DIR_PROJECT, 'turbulentfex_env')):
+        config.create_virtual_environment('turbulentfex_env')
+    
+    config.activate_virtual_environment('turbulentfex_env')
 
+    # Complete setup (requires manual activation first)
+    config.setup_environment('turbulentfex_env')
     # Uncomment to check packages
-    config.check_and_install_packages()
+    # config.check_and_install_packages()
