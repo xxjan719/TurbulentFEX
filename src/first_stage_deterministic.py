@@ -381,34 +381,22 @@ else:
         model_optim.zero_grad()
         total_pred_loss = 0
 
-        # Prediction and extra loss
-        for dim in range(1, dimension+1):
-            model = models[str(dim)]
-            # Step 1: Get coefficients with autograd enabled
-            coeff_x1, coeff_x2, coeff_x3 = model.get_all_linear_nonlinear_coeffs_autograd(dim=dim-1)
-            # Step 2: Compute rounded values
-
-            integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
-            current_state = dataset_tensor[:, :, :-1]
-            u_current = current_state[:, 0, :]
-            u_pred, u_target = integrator.integrate(integration_args)
-
-            du_pred = torch.gradient(u_pred, dim=0)[0]
-            loss = mse(u_pred, u_target)
-            if dim == 1:
-                coeffs_3 = round(float(coeff_x3))
-                coeffs_2 = round(float(coeff_x2))
-                extra_loss = torch.abs(model.linear_a[0] + 0.2)**2
-                        
-            elif dim == 2:
-                coeffs_3 = round(float(coeff_x3))
-                coeffs_1 = round(float(coeff_x1))
-                extra_loss = torch.abs(model.linear_a[1] + 0.1)**2
-            elif dim == 3:
-                coeffs_2 = round(float(coeff_x2))
-                coeffs_1 = round(float(coeff_x1))
-                extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
-            total_pred_loss += loss #+ extra_loss
+        # Use all dimensions simultaneously with the new integrator
+        # Pass the dictionary of models to the integrator
+        integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=models, index='all')
+        u_pred_all, u_target_all = integrator.integrate(integration_args)
+        
+        # Compute loss for all dimensions
+        loss_all = mse(u_pred_all, u_target_all)
+        total_pred_loss += loss_all
+        
+        # Option 2: Keep the original approach but with better coupling
+        # for dim in range(1, dimension+1):
+        #     model = models[str(dim)]
+        #     integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+        #     u_pred, u_target = integrator.integrate(integration_args)
+        #     loss = mse(u_pred, u_target)
+        #     total_pred_loss += loss
         
         # Call backward only once after all dimensions are processed
         total_pred_loss.backward(retain_graph=True)
@@ -417,6 +405,8 @@ else:
         with torch.no_grad():
             if train_idx % 50 == 0:
                 loss_history.append(total_pred_loss.item())
+                # For the new all-dimensions approach, we need to handle expressions differently
+                # Since we're using one model for all dimensions, we'll extract expressions for each dimension
                 for dim in range(1, dimension+1):
                     model = models[str(dim)]
                     expr = model.expression_visualize_simplified()
