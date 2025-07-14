@@ -408,7 +408,7 @@ else:
                 coeffs_2 = round(float(coeff_x2))
                 coeffs_1 = round(float(coeff_x1))
                 extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
-            total_pred_loss += loss + extra_loss
+            total_pred_loss += loss #+ extra_loss
         
         # Call backward only once after all dimensions are processed
         total_pred_loss.backward(retain_graph=True)
@@ -435,11 +435,11 @@ else:
                 print(f"Expression: {expressions}")
                 print("="*60)
 
-        if train_idx == TRAIN_EPOCHS_SECOND-1:
-            for dim in range(1, dimension+1):
-                final_expr = models[str(dim)].expression_visualize_simplified()
-            loss_history_dict = {1: loss_history, 2: loss_history, 3: loss_history}
-            plot_training_progress_grid(loss_history_dict, coefficents_history, final_expr, args.NOISE_LEVEL,save_dir=args.LOG_SAVE_PATH)
+        # if train_idx == TRAIN_EPOCHS_SECOND-1:
+        #     for dim in range(1, dimension+1):
+        #         final_expr = models[str(dim)].expression_visualize_simplified()
+        #     loss_history_dict = {1: loss_history, 2: loss_history, 3: loss_history}
+        #     plot_training_progress_grid(loss_history_dict, coefficents_history, final_expr, args.NOISE_LEVEL,save_dir=args.LOG_SAVE_PATH)
 
 
 

@@ -63,29 +63,18 @@ class Body4TrainIntegrator:
             dt = self._integratorparams.dt
             derivative_func = integration_func
             
-            # Compute the two k values for RK2
+            # RK2 method: y_{n+1} = y_n + (dt/2) * (k1 + k2)
+            # where k1 = f(t_n, y_n) and k2 = f(t_n + dt, y_n + dt*k1)
+            
+            # Compute k1: derivative at current state (single value for this dimension)
             k1 = derivative_func(u_flat)
-            # print(k1.shape)
-            # print(u_flat)
-            # print(dt*k1)
             
-            # Initialize k2 to avoid UnboundLocalError
-            k2 = k1.clone()
-            
-            if index == 1:
-                u_i_next = ui_flat + dt * k1
-                u_k2 = torch.cat([u_i_next, u2_flat, u3_flat], dim=1)
-                k2 = derivative_func(u_k2)
-
-            elif index == 2:
-                u_i_next = ui_flat + dt * k1
-                u_k2 = torch.cat([u1_flat, u_i_next, u3_flat], dim=1)
-                k2 = derivative_func(u_k2)
-
-            elif index == 3:
-                u_i_next = ui_flat + dt * k1
-                u_k2 = torch.cat([u1_flat, u2_flat, u_i_next], dim=1)
-                k2 = derivative_func(u_k2)
+            # Compute k2: derivative at updated state (y_n + dt*k1)
+            # We need to update the full state vector for k2 calculation
+            # Create updated state by adding dt*k1 to the appropriate dimension
+            u_updated = u_flat.clone()
+            u_updated[:, index-1] = u_flat[:, index-1] + dt * k1.flatten()
+            k2 = derivative_func(u_updated)
             
             # Compute the next state using RK2 formula
             expression_pred = ui_flat + (dt/2.0) * (k1 + k2)
