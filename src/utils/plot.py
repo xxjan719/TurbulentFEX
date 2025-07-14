@@ -622,7 +622,8 @@ def plot_training_progress_grid(loss_history, coeff_history, final_expr, noise_l
     }
     colors = ['C0', 'C1', 'C2', 'C3', 'C4']  # You can change these to any matplotlib color names
     fig, axes = plt.subplots(3, 5, figsize=(22, 12), constrained_layout=True)
-    epochs = np.arange(len(next(iter(loss_history.values()))))
+    print_interval = 50
+    epochs = np.arange(len(next(iter(loss_history.values())))) * print_interval
     for i, dim in enumerate(dims):
         for j, term in enumerate(terms[dim]):
             ax = axes[i, j]
