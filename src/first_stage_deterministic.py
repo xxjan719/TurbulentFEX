@@ -377,7 +377,7 @@ else:
     model_optim = torch.optim.Adam(all_params, lr=FEX_LR)
     
     # # Training loop
-    for train_idx in range(TRAIN_EPOCHS_SECOND):
+    for train_idx in range(7000):#TRAIN_EPOCHS_SECOND):
         model_optim.zero_grad()
         total_pred_loss = 0
 
@@ -435,7 +435,7 @@ else:
                 print(f"Expression: {expressions}")
                 print("="*60)
 
-        if train_idx == TRAIN_EPOCHS_SECOND-1:
+        if train_idx == 7000-1:#TRAIN_EPOCHS_SECOND-1:
             for dim in range(1, dimension+1):
                 final_expr = models[str(dim)].expression_visualize_simplified()
             loss_history_dict = {1: loss_history, 2: loss_history, 3: loss_history}

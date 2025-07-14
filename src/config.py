@@ -229,7 +229,7 @@ class Config:
                             help='Number of samples for DM training.')
         
         parser.add_argument('--NOISE_LEVEL',type=float,
-                            default = 1.0,
+                            default = 0.0,
                             help='Noise level for MC simulation.')
         parser.add_argument('--TRAIN_SIZE',type=int,
                             default = 10000,
