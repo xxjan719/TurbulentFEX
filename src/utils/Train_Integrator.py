@@ -126,7 +126,8 @@ class Body4TrainIntegrator:
                         k2_all[:, dim_idx:dim_idx+1] = integration_func(u_updated)
                 
                 # Step 4: Apply RK2 formula for all dimensions
-                expression_pred = ui_flat + (dt/2.0) * (k1_all + k2_all)
+                # Heun's method: y_{n+1} = y_n + dt * k2
+                expression_pred = ui_flat + dt * k2_all
                 label = ui_next_flat
                 
             else:
