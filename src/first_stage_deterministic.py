@@ -382,10 +382,12 @@ else:
         # This ensures the models learn to work together as a system
         integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=models, index='all')
         u_pred_all, u_target_all = integrator.integrate(integration_args)
-        
+        du_pred = torch.gradient(u_pred_all, dim=0)[0]
+        dE_dt = torch.sum(u_pred_all * du_pred, dim=1)
         # Compute combined loss for all dimensions
         loss_all = mse(u_pred_all, u_target_all)
         total_pred_loss += loss_all
+        total_pred_loss += 1*dE_dt
         
         # Alternative: Train each dimension separately but with proper coupling
         # Uncomment this if you want to try individual training with coupling
