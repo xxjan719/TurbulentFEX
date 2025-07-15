@@ -317,7 +317,7 @@ class Config:
                             default = None,
                             help='Path to save figure.')
         parser.add_argument('--TRAIN_THREE_DIMENSION_INTEGRATED',type=bool,
-                            default = True,
+                            default = False,
                             help='Whether to train the FEX with ground truth data.')
         return parser
     

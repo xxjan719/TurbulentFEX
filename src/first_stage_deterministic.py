@@ -30,7 +30,7 @@ else:
     base_path = os.path.join(DIR_EXAMPLE,args.Model,'Results')
 
 if args.DATA_SAVE_PATH is None:
-    args.DATA_SAVE_PATH = f'{base_path}/{args.params_name}/simulation_results_noise_{args.NOISE_LEVEL}.npz'
+    args.DATA_SAVE_PATH = f'{base_path}/{args.params_name}/noise_{args.NOISE_LEVEL}/simulation_results_noise_{args.NOISE_LEVEL}.npz'
 if args.LOG_SAVE_PATH is None:
     args.LOG_SAVE_PATH = f'{base_path}/{args.params_name}'
 if args.FIGURE_SAVE_PATH is None:
