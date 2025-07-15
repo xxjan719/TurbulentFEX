@@ -82,7 +82,7 @@ else:
     print("\n"+"="*60)
     print(f'[INFO] There is no dataset in this environment, it generates automatically'.center(60,'-'))
     dataset, mean_MC, cov_MC, moment3_MC, moment3_MC_norm,Energy_MC, Energy_dyn = MC_triad_direct(params, m0, var0,
-    method = 'RK4',noise_level = args.NOISE_LEVEL)
+    method = 'Euler',noise_level = args.NOISE_LEVEL)
     np.savez(
     args.DATA_SAVE_PATH,
     dataset=dataset,
@@ -363,30 +363,52 @@ else:
         
 
     print("="*60)
-    print("[INFO] Starting coupled training of all three FEX models together...")
-    print(f"[INFO] Training {len(models)} models simultaneously")
-    
+    # # Replace the hardcoded symbols with a dimension-variable approach
+              
+    #if dim == 1: # torch.tensor([1, 0, 0, 1, 2, 0, 0, 2, 0, 0, 2, 2], device=DEVICE)
+    #elif dim == 2: # torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
+    #elif dim == 3:#torch.tensor([0, 0, 2, 2, 2, 0, 2, 2, 5, 0, 7, 1], device=DEVICE)
+    # print(f"the coefficents_history is {coefficents_history}")
     loss_history = []
-    # Create optimizer for all parameters from all models
+    # # Create optimizer for all parameters
     all_params = []
     for model in models.values():
         all_params.extend(model.parameters())
-    # Use a much higher learning rate for better coefficient convergence
-    model_optim = torch.optim.Adam(all_params, lr=100.0 * FEX_LR)
+    model_optim = torch.optim.Adam(all_params, lr=FEX_LR)
     
     # # Training loop
     for train_idx in range(TRAIN_EPOCHS_SECOND):
         model_optim.zero_grad()
-        total_pred_loss = torch.tensor(0.0, device=DEVICE, requires_grad=True)
+        total_pred_loss = 0
 
-        # Train each dimension separately using integration-based method
-        # This was the original approach that worked in the first stage
+        # Prediction and extra loss
         for dim in range(1, dimension+1):
             model = models[str(dim)]
+            # Step 1: Get coefficients with autograd enabled
+            coeff_x1, coeff_x2, coeff_x3 = model.get_all_linear_nonlinear_coeffs_autograd(dim=dim-1)
+            # Step 2: Compute rounded values
+
             integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+            current_state = dataset_tensor[:, :, :-1]
+            u_current = current_state[:, 0, :]
             u_pred, u_target = integrator.integrate(integration_args)
+
+            du_pred = torch.gradient(u_pred, dim=0)[0]
             loss = mse(u_pred, u_target)
-            total_pred_loss = total_pred_loss + loss
+            if dim == 1:
+                coeffs_3 = round(float(coeff_x3))
+                coeffs_2 = round(float(coeff_x2))
+                extra_loss = torch.abs(model.linear_a[0] + 0.2)**2
+                        
+            elif dim == 2:
+                coeffs_3 = round(float(coeff_x3))
+                coeffs_1 = round(float(coeff_x1))
+                extra_loss = torch.abs(model.linear_a[1] + 0.1)**2
+            elif dim == 3:
+                coeffs_2 = round(float(coeff_x2))
+                coeffs_1 = round(float(coeff_x1))
+                extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
+            total_pred_loss += loss#+ extra_loss
         
         # Call backward only once after all dimensions are processed
         total_pred_loss.backward(retain_graph=True)
@@ -395,8 +417,6 @@ else:
         with torch.no_grad():
             if train_idx % 50 == 0:
                 loss_history.append(total_pred_loss.item())
-                # For the new all-dimensions approach, we need to handle expressions differently
-                # Since we're using one model for all dimensions, we'll extract expressions for each dimension
                 for dim in range(1, dimension+1):
                     model = models[str(dim)]
                     expr = model.expression_visualize_simplified()
