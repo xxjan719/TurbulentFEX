@@ -371,32 +371,22 @@ else:
     all_params = []
     for model in models.values():
         all_params.extend(model.parameters())
-    model_optim = torch.optim.Adam(all_params, lr=FEX_LR)
+    # Use a much higher learning rate for better coefficient convergence
+    model_optim = torch.optim.Adam(all_params, lr=100.0 * FEX_LR)
     
     # # Training loop
     for train_idx in range(TRAIN_EPOCHS_SECOND):
         model_optim.zero_grad()
-        total_pred_loss = 0
+        total_pred_loss = torch.tensor(0.0, device=DEVICE, requires_grad=True)
 
-        # Train all three models together using coupled dynamics
-        # This ensures the models learn to work together as a system
-        integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=models, index='all')
-        u_pred_all, u_target_all = integrator.integrate(integration_args)
-        du_pred = torch.gradient(u_pred_all, dim=0)[0]
-        dE_dt = torch.sum(u_pred_all * du_pred, dim=1)
-        # Compute combined loss for all dimensions
-        loss_all = mse(u_pred_all, u_target_all)
-        total_pred_loss += loss_all
-        total_pred_loss += 1*dE_dt
-        
-        # Alternative: Train each dimension separately but with proper coupling
-        # Uncomment this if you want to try individual training with coupling
-        # for dim in range(1, dimension+1):
-        #     model = models[str(dim)]
-        #     integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
-        #     u_pred, u_target = integrator.integrate(integration_args)
-        #     loss = mse(u_pred, u_target)
-        #     total_pred_loss += loss
+        # Train each dimension separately using integration-based method
+        # This was the original approach that worked in the first stage
+        for dim in range(1, dimension+1):
+            model = models[str(dim)]
+            integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+            u_pred, u_target = integrator.integrate(integration_args)
+            loss = mse(u_pred, u_target)
+            total_pred_loss = total_pred_loss + loss
         
         # Call backward only once after all dimensions are processed
         total_pred_loss.backward(retain_graph=True)
