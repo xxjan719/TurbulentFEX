@@ -128,14 +128,16 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
         print(f"The dimension is {dim}")
         model_save_path = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}",f"best_candidates_pool_summary_{dim}.txt")
         log_file = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}",f'log_dimension_{dim}_{args.NOISE_LEVEL}.txt')
+        # Always create the log file directory
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        
         if os.path.exists(model_save_path) and os.path.exists(log_file): #os.path.exists(model_save_path) and 
             print(f'[INFO] Model for dimension {dim} has already generated, just using for the second stage training:FEX'.center(60, '='))
             print("\n Loading the initial training model and log file")
             print('[INFO] Print the initial training model expression')          
-            get_score_expression_from_file(model_save_path)          
+            get_score_expression_from_file(model_save_path)
         else:
             print(f'[INFO]No MODEL FOR DIMENSION {dim} SAVED IN THIS PATH, it will be generated automatically')        
-            os.makedirs(os.path.dirname(log_file), exist_ok=True)
             # Remove any existing handlers
             for handler in logging.root.handlers[:]:
                 logging.root.removeHandler(handler)
@@ -294,7 +296,14 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
                     current_score = candidate_.score  # assuming .score exists
                                         
                     # Check if expression follows the allowed terms for this dimension
-                    if not check_allowed_terms(current_expr, dim):
+                    check_result = check_allowed_terms(current_expr, dim)
+                    if not check_result['valid']:
+                        continue
+                    elif dim == 1 and not ('x2*x3' in check_result['terms_present'] or 'x2x3' in check_result['terms_present']):
+                        continue
+                    elif dim == 2 and not ('x1*x3' in check_result['terms_present'] or 'x1x3' in check_result['terms_present']):
+                        continue
+                    elif dim == 3 and not ('x1*x2' in check_result['terms_present'] or 'x1x2' in check_result['terms_present']):
                         continue
                     else:
                         best_candidates_pool.append(candidate_)

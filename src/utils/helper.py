@@ -19,7 +19,7 @@ def check_allowed_terms(expression, dimension):
         dimension (int): Dimension (1, 2, or 3)
                     
     Returns:
-        bool: True if expression contains only allowed terms, False otherwise
+        dict: Dictionary with 'valid' (bool) and 'terms_present' (list of terms found)
     """
     # Define allowed terms for each dimension
     allowed_terms = {
@@ -41,13 +41,16 @@ def check_allowed_terms(expression, dimension):
     # Check if any disallowed terms are present
     for term in disallowed_terms[dimension]:
         if term in expr_lower:
-            return False
+            return {'valid': False, 'terms_present': []}
                     
+    # Check which allowed terms are present
+    terms_present = [term for term in allowed_terms[dimension] if term in expr_lower]
+    
     # Check if at least one allowed term is present (excluding constants)
     allowed_vars = ['x1', 'x2', 'x3']
     has_allowed_var = any(var in expr_lower for var in allowed_vars)
                     
-    return has_allowed_var
+    return {'valid': has_allowed_var, 'terms_present': terms_present}
 
 
 def Buu(B,u,v):
