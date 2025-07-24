@@ -299,6 +299,10 @@ class Config:
                             default = 10000,
                             help='Number of samples for DM training.')
         
+        parser.add_argument('--TRAIN_WORKING_DIM',type=int,
+                            default = 1,
+                            help='Working dimension for DM training.')
+
         parser.add_argument('--NOISE_LEVEL',type=float,
                             default = 0.0,
                             help='Noise level for MC simulation.')
