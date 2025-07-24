@@ -130,7 +130,8 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
     log_file = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}",f'log_dimension_{args.TRAIN_WORKING_DIM}_{args.NOISE_LEVEL}.txt')
     # Always create the log file directory
     os.makedirs(os.path.dirname(log_file), exist_ok=True)
-        
+    
+    
     if os.path.exists(model_save_path) and os.path.exists(log_file): #os.path.exists(model_save_path) and 
         print(f'[INFO] Model for dimension {args.TRAIN_WORKING_DIM} has already generated, just using for the second stage training:FEX'.center(60, '='))
         print("\n Loading the initial training model and log file")
@@ -138,9 +139,13 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
         get_score_expression_from_file(model_save_path)
     else:
         print(f'[INFO]No MODEL FOR DIMENSION {args.TRAIN_WORKING_DIM} SAVED IN THIS PATH, it will be generated automatically')        
+        print(f'[DEBUG] About to set up logging to: {log_file}')
+        
         # Remove any existing handlers
         for handler in logging.root.handlers[:]:
             logging.root.removeHandler(handler)
+        
+        try:
             # Set up logging to both file and console
             logging.basicConfig(
                          level=logging.INFO,
@@ -148,6 +153,10 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
                          handlers=[
                          logging.FileHandler(log_file, encoding='utf-8'),  
                          logging.StreamHandler(sys.stdout)])
+            print(f'[DEBUG] Logging setup completed successfully')
+        except Exception as e:
+            print(f'[ERROR] Failed to set up logging: {e}')
+            raise
     
         # Initialize best candidates pool
         print("\n")
@@ -232,6 +241,8 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
                     loss = 1e6 * loss
                 elif args.NOISE_LEVEL == 0.2:
                     loss = 2e3 * loss
+                elif args.NOISE_LEVEL == 0.4:
+                    loss = 1e3 * loss
                 elif args.NOISE_LEVEL == 1:
                     loss = 80*loss
                 # Calculate score and add to pool
