@@ -304,7 +304,7 @@ class Config:
                             help='Working dimension for DM training.')
 
         parser.add_argument('--NOISE_LEVEL',type=float,
-                            default = 0.0,
+                            default = 1.0,
                             help='Noise level for MC simulation.')
         parser.add_argument('--TRAIN_SIZE',type=int,
                             default = 10000,
@@ -321,7 +321,7 @@ class Config:
                             default = None,
                             help='Path to save figure.')
         parser.add_argument('--TRAIN_THREE_DIMENSION_INTEGRATED',type=bool,
-                            default = False,
+                            default = True,
                             help='Whether to train the FEX with ground truth data.')
         return parser
     

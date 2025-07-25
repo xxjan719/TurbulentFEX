@@ -8,13 +8,16 @@ class Candidate:
     model: any
     loss: float
     action: list
+    expression: str = None  # Store expression explicitly
+    
     @property
     def error(self):
         return self.loss
 
-    @property
-    def expression(self):
-        return self.model.expression_visualize_simplified()
+    def get_expression(self):
+        if self.expression is None:
+            return self.model.expression_visualize_simplified()
+        return self.expression
     
 
 class Pool:
@@ -26,7 +29,9 @@ class Pool:
     def add(self, score, model, loss, op_seq):
         if score <= self.top_score_threshold:
             return
-        self.candidates.append(Candidate(score, model, loss,op_seq))
+        # Store the expression at the time of adding to preserve the sequence-expression correspondence
+        expression = model.expression_visualize_simplified()
+        self.candidates.append(Candidate(score, model, loss, op_seq, expression))
         self.sort()
         if len(self.candidates) > self.POOL_LIMIT:
             self.candidates.pop(0)

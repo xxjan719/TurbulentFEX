@@ -227,12 +227,12 @@ class FEX(nn.Module):
 
 if __name__ == "__main__":
     import os
-    op_seqs = torch.tensor([1, 0, 0, 0, 2, 0, 0, 2, 0, 0, 2, 2])
+    op_seqs = torch.tensor([1, 2, 2, 2, 1, 1, 8, 0, 2, 1, 2, 2])
     fex = FEX(op_seqs,3)
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    model_path = os.path.join(base_dir, "Example", "MC_triad", "Results", "equipart", "FEX_dim_1.pth")
-    if os.path.exists(model_path):
-        fex.load_state_dict(torch.load(model_path))
+    # model_path = os.path.join(base_dir, "Example", "MC_triad", "Results", "equipart", "FEX_dim_1.pth")
+    # if os.path.exists(model_path):
+    #     fex.load_state_dict(torch.load(model_path))
     print(fex.expression_visualize())
     print(fex.expression_visualize_simplified())
     # Create an input tensor with requires_grad=True

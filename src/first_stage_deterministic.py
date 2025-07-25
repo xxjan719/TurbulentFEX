@@ -251,6 +251,8 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
                 else:
                     scores[tree_idx] = 0.
                     
+                # Assert that the model's op_seq matches the op_seq being saved
+                assert (model.op_seq == op_seqs[tree_idx,:]).all(), "Mismatch between model and op_seq!"
                 pool.add(scores[tree_idx], model, loss.item(), op_seqs[tree_idx,:].tolist())
                     
                 # Print current model info
@@ -301,7 +303,7 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
             # Update best candidates pool
             for candidate_ in pool:
                 current_loss = candidate_.error
-                current_expr = candidate_.expression  # This is now already simplified
+                current_expr = candidate_.get_expression()  # Use the stored expression
                 current_score = candidate_.score  # assuming .score exists
                             
                 # Check if expression follows the allowed terms for this dimension
@@ -323,12 +325,14 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
             pool_list = sorted(list(pool), key=lambda c: c.score, reverse=True)
             # Print top 50
             for idx, candidate_ in enumerate(pool_list[:50]):
-                print(f"  {idx + 1}. Score: {candidate_.score:.6f}, Loss: {candidate_.error:.6f}, Seq: {candidate_.action}, Expression={candidate_.expression}")
+                print(f"  {idx + 1}. Score: {candidate_.score:.6f}, Loss: {candidate_.error:.6f}, Seq: {candidate_.action}, Expression={candidate_.get_expression()}")
                 
             print("\n")
             print("Best Candidate Pool Selection:")
             for idx,  candidate_ in enumerate(best_candidates_pool):
-                print(f"  {idx + 1}. Loss: {candidate_.error:.6f}, Seq: {candidate_.action}, Expression={candidate_.expression}")
+                # Assert that each candidate's model op_seq matches its action
+                assert (candidate_.model.op_seq == torch.tensor(candidate_.action, device=candidate_.model.op_seq.device)).all(), f"Mismatch between candidate {idx+1} model and action!"
+                print(f"  {idx + 1}. Loss: {candidate_.error:.6f}, Seq: {candidate_.action}, Expression={candidate_.get_expression()}")
             print("=" * 60)
             
         # Select best candidate
@@ -345,15 +349,17 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
         # Write summary
         with open(summary_path, "w") as f:
             for idx, candidate_ in enumerate(best_candidates_pool):
-                f.write(f"Candidate {idx + 1}: Score={candidate_.score:.6f}, Loss={candidate_.error:.6f}, Seq={candidate_.action}, Expr={candidate_.expression}\n")
+                f.write(f"Candidate {idx + 1}: Score={candidate_.score:.6f}, Loss={candidate_.error:.6f}, Seq={candidate_.action}, Expr={candidate_.get_expression()}\n")
 
         print(f"[INFO] best_candidates_pool_summary saved to {summary_path}")
         logprint(f"[INFO] best_candidates_pool_summary saved to {summary_path}")
         # Use best candidate by default (or add user selection if needed)
         best_candidate = min(best_candidates_pool, key=lambda c: c.error)
         optimal_idx = best_candidate.action
-        logprint(f"Selected: Loss={best_candidate.error:.6f}, Expression={best_candidate.expression}")
-        print(f"Selected: Loss={best_candidate.error:.6f}, Expression={best_candidate.expression}")
+        # Assert that the best candidate's model op_seq matches its action
+        assert (best_candidate.model.op_seq == torch.tensor(best_candidate.action, device=best_candidate.model.op_seq.device)).all(), "Mismatch between best_candidate model and action!"
+        logprint(f"Selected: Loss={best_candidate.error:.6f}, Expression={best_candidate.get_expression()}")
+        print(f"Selected: Loss={best_candidate.error:.6f}, Expression={best_candidate.get_expression()}")
 
             
         logprint(f"[INFO] Now we need to train the integrated FEX model")
@@ -368,6 +374,7 @@ else:
     op_seqs_all = {}
     models = {}
     symbols = [sp.symbols(f'x{i+1}') for i in range(dimension)]
+    print(f'[INFO] the noise level is {args.NOISE_LEVEL}')
     for dim in range(1, dimension+1):
         print(f'the dimension is {dim}')
         sequence = get_sequence(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'best_candidates_pool_summary_{dim}.txt'))
@@ -378,6 +385,7 @@ else:
         model = FEX(op_seqs, dim=dimension).to(DEVICE)
         model.apply(weights_init)
         models[str(dim)] = model
+        print(model.expression_visualize_simplified())
         
 
     print("="*60)
@@ -387,123 +395,123 @@ else:
     #elif dim == 2: # torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
     #elif dim == 3:#torch.tensor([0, 0, 2, 2, 2, 0, 2, 2, 5, 0, 7, 1], device=DEVICE)
     # print(f"the coefficents_history is {coefficents_history}")
-    loss_history = []
-    # # Create optimizer for all parameters
-    all_params = []
-    for model in models.values():
-        all_params.extend(model.parameters())
-    model_optim = torch.optim.Adam(all_params, lr=FEX_LR)
+#     loss_history = []
+#     # # Create optimizer for all parameters
+#     all_params = []
+#     for model in models.values():
+#         all_params.extend(model.parameters())
+#     model_optim = torch.optim.Adam(all_params, lr=FEX_LR)
     
-    # # Training loop
-    for train_idx in range(TRAIN_EPOCHS_SECOND):
-        model_optim.zero_grad()
-        total_pred_loss = 0
+#     # # Training loop
+#     for train_idx in range(TRAIN_EPOCHS_SECOND):
+#         model_optim.zero_grad()
+#         total_pred_loss = 0
 
-        # Prediction and extra loss
-        for dim in range(1, dimension+1):
-            model = models[str(dim)]
-            # Step 1: Get coefficients with autograd enabled
-            coeff_x1, coeff_x2, coeff_x3 = model.get_all_linear_nonlinear_coeffs_autograd(dim=dim-1)
-            # Step 2: Compute rounded values
+#         # Prediction and extra loss
+#         for dim in range(1, dimension+1):
+#             model = models[str(dim)]
+#             # Step 1: Get coefficients with autograd enabled
+#             coeff_x1, coeff_x2, coeff_x3 = model.get_all_linear_nonlinear_coeffs_autograd(dim=dim-1)
+#             # Step 2: Compute rounded values
 
-            integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
-            current_state = dataset_tensor[:, :, :-1]
-            u_current = current_state[:, 0, :]
-            u_pred, u_target = integrator.integrate(integration_args)
+#             integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+#             current_state = dataset_tensor[:, :, :-1]
+#             u_current = current_state[:, 0, :]
+#             u_pred, u_target = integrator.integrate(integration_args)
 
-            du_pred = torch.gradient(u_pred, dim=0)[0]
-            loss = mse(u_pred, u_target)
-            # if dim == 1:
-            #     coeffs_3 = round(float(coeff_x3))
-            #     coeffs_2 = round(float(coeff_x2))
-            #     extra_loss = torch.abs(model.linear_a[0] + 0.2)**2
+#             du_pred = torch.gradient(u_pred, dim=0)[0]
+#             loss = mse(u_pred, u_target)
+#             # if dim == 1:
+#             #     coeffs_3 = round(float(coeff_x3))
+#             #     coeffs_2 = round(float(coeff_x2))
+#             #     extra_loss = torch.abs(model.linear_a[0] + 0.2)**2
                         
-            # elif dim == 2:
-            #     coeffs_3 = round(float(coeff_x3))
-            #     coeffs_1 = round(float(coeff_x1))
-            #     extra_loss = torch.abs(model.linear_a[1] + 0.1)**2
-            # elif dim == 3:
-            #     coeffs_2 = round(float(coeff_x2))
-            #     coeffs_1 = round(float(coeff_x1))
-            #     extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
-            total_pred_loss += loss#+ extra_loss
+#             # elif dim == 2:
+#             #     coeffs_3 = round(float(coeff_x3))
+#             #     coeffs_1 = round(float(coeff_x1))
+#             #     extra_loss = torch.abs(model.linear_a[1] + 0.1)**2
+#             # elif dim == 3:
+#             #     coeffs_2 = round(float(coeff_x2))
+#             #     coeffs_1 = round(float(coeff_x1))
+#             #     extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
+#             total_pred_loss += loss#+ extra_loss
         
-        # Call backward only once after all dimensions are processed
-        total_pred_loss.backward(retain_graph=True)
-        model_optim.step()
+#         # Call backward only once after all dimensions are processed
+#         total_pred_loss.backward(retain_graph=True)
+#         model_optim.step()
 
-        with torch.no_grad():
-            if train_idx % 50 == 0:
-                loss_history.append(total_pred_loss.item())
-                for dim in range(1, dimension+1):
-                    model = models[str(dim)]
-                    expr = model.expression_visualize_simplified()
-                    coeffs = extract_coefficients_from_expr(expr, dim)
-                    for term, value in coeffs.items():
-                        coefficents_history[dim][term].append(value)
-                #print(f"the coefficents_history is {coefficents_history}")
-            if train_idx % 100 == 0:
-                print("\n"+"="*60)
-                print(f"Training index: {train_idx}")
-                print(f"Loss: {total_pred_loss.item():.6f}")
-                # Print expressions for each dimension
-                expressions = {}
-                for dim in range(1, dimension+1):
-                    expressions[f'Dimension {dim}'] = models[str(dim)].expression_visualize_simplified()
-                print(f"Expression: {expressions}")
-                print("="*60)
+#         with torch.no_grad():
+#             if train_idx % 50 == 0:
+#                 loss_history.append(total_pred_loss.item())
+#                 for dim in range(1, dimension+1):
+#                     model = models[str(dim)]
+#                     expr = model.expression_visualize_simplified()
+#                     coeffs = extract_coefficients_from_expr(expr, dim)
+#                     for term, value in coeffs.items():
+#                         coefficents_history[dim][term].append(value)
+#                 #print(f"the coefficents_history is {coefficents_history}")
+#             if train_idx % 100 == 0:
+#                 print("\n"+"="*60)
+#                 print(f"Training index: {train_idx}")
+#                 print(f"Loss: {total_pred_loss.item():.6f}")
+#                 # Print expressions for each dimension
+#                 expressions = {}
+#                 for dim in range(1, dimension+1):
+#                     expressions[f'Dimension {dim}'] = models[str(dim)].expression_visualize_simplified()
+#                 print(f"Expression: {expressions}")
+#                 print("="*60)
 
-        if train_idx == TRAIN_EPOCHS_SECOND-1:
-            for dim in range(1, dimension+1):
-                final_expr = models[str(dim)].expression_visualize_simplified()
-            loss_history_dict = {1: loss_history, 2: loss_history, 3: loss_history}
-            plot_training_progress_grid(loss_history_dict, coefficents_history, final_expr, args.NOISE_LEVEL,save_dir=args.LOG_SAVE_PATH)
-
-
-
-    
+#         if train_idx == TRAIN_EPOCHS_SECOND-1:
+#             for dim in range(1, dimension+1):
+#                 final_expr = models[str(dim)].expression_visualize_simplified()
+#             loss_history_dict = {1: loss_history, 2: loss_history, 3: loss_history}
+#             plot_training_progress_grid(loss_history_dict, coefficents_history, final_expr, args.NOISE_LEVEL,save_dir=args.LOG_SAVE_PATH)
 
 
 
     
-    
-    
-    
 
 
+
+    
     
     
     
 
 
     
+    
+    
+
+
+    
 
 
 
 
 
-# # Formula_1 = [-1.6100, 0.9751, -0.2461, 0.8654] # −0.2461x1+0.9751x2−1.6100x3+0.8654x2x3−0.0229
-# # Formula_2 = [-0.9674, -2.0017, -0.15087, -0.3720]
-# # Formula_3 = [1.5229, 1.2813, 0.1577, 1.05]
+# # # Formula_1 = [-1.6100, 0.9751, -0.2461, 0.8654] # −0.2461x1+0.9751x2−1.6100x3+0.8654x2x3−0.0229
+# # # Formula_2 = [-0.9674, -2.0017, -0.15087, -0.3720]
+# # # Formula_3 = [1.5229, 1.2813, 0.1577, 1.05]
 
 
 
 
-# # [2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2] dimension 2  11 epochs
-# #  [0, 0, 2, 2, 2, 2, 2, 2, 5, 0, 7, 0] dimension 3 14 epochs
-# # Selected candidate 4:
-# # Operator sequence: [8, 2, 2, 2, 5, 2, 1, 0, 2, 2, 7, 2]
+# # # [2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2] dimension 2  11 epochs
+# # #  [0, 0, 2, 2, 2, 2, 2, 2, 5, 0, 7, 0] dimension 3 14 epochs
+# # # Selected candidate 4:
+# # # Operator sequence: [8, 2, 2, 2, 5, 2, 1, 0, 2, 2, 7, 2]
 
 
 
 
 
 
-# # save_path = os.path.join(args.figure_save_path, 'three_comparing.pdf')
-# # os.makedirs(os.path.dirname(save_path), exist_ok=True)
-# # plot_stats(np.arange(params['Nt']+1), mean_MC_all, cov_MC_all, moment3_MC_all, Energy_MC_all, Energy_dyn,save_path)
-# # plot_third_order_moments(np.arange(params['Nt']+1), moment3_MC_all,save_path)
-# # plot_deviation_subplots(np.arange(params['Nt']+1), cov_MC_all, moment3_MC_norm_all,save_path)
+# # # save_path = os.path.join(args.figure_save_path, 'three_comparing.pdf')
+# # # os.makedirs(os.path.dirname(save_path), exist_ok=True)
+# # # plot_stats(np.arange(params['Nt']+1), mean_MC_all, cov_MC_all, moment3_MC_all, Energy_MC_all, Energy_dyn,save_path)
+# # # plot_third_order_moments(np.arange(params['Nt']+1), moment3_MC_all,save_path)
+# # # plot_deviation_subplots(np.arange(params['Nt']+1), cov_MC_all, moment3_MC_norm_all,save_path)
 
 
 
