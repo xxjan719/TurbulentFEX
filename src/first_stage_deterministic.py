@@ -424,6 +424,7 @@ else:
     
     # # Training loop
     for train_idx in range(TRAIN_EPOCHS_SECOND):
+        adjust_learning_rate(model_optim, train_idx, FEX_LR, TRAIN_EPOCHS_SECOND)
         model_optim.zero_grad()
         total_pred_loss = 0
 
