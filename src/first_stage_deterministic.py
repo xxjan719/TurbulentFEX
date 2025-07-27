@@ -367,6 +367,10 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
 else:
     print("\n"+"="*60)
     print("[INFO] Loading FEX models from previous stage...")
+    # Ask user whether to train everything in second stage or skip to calculate the measurements
+    print("\n"+"="*60)
+    print("Find the candidate operator sequence from training")
+    
     # print(f"[INFO] get the picture of how the single dimension FEX model works")
     # coefficients = get_coefficients(load_dir= DIR_TRIAD, DEVICE=args.DEVICE)
     # plot_NOISE_LEVEL_EFFECT(coefficients,save_dir=args.LOG_SAVE_PATH)
@@ -375,17 +379,33 @@ else:
     models = {}
     symbols = [sp.symbols(f'x{i+1}') for i in range(dimension)]
     print(f'[INFO] the noise level is {args.NOISE_LEVEL}')
+    
+    # Let user select operator sequences for each dimension
+    print("\n" + "="*60)
+    print("Selecting operator sequences for each dimension...")
+    print("="*60)
+    
     for dim in range(1, dimension+1):
-        print(f'the dimension is {dim}')
-        sequence = get_sequence(os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'best_candidates_pool_summary_{dim}.txt'))
-        op_seqs = torch.tensor(sequence, device=DEVICE)
+        print(f'\nSelecting for dimension {dim}...')
+        file_path = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'best_candidates_pool_summary_{dim}.txt')
+        selected_sequence = select_operator_sequence(file_path, dim)
+        if selected_sequence is None:
+            print(f"[ERROR] Failed to get sequence for dimension {dim}")
+            sys.exit(1)
+            
+        op_seqs = torch.tensor(selected_sequence, device=DEVICE)
         op_seqs_all[dim] = op_seqs
-        print(f"[INFO] {dim} dimensiondata found. Now let us train inetgerated FEX model")
+        print(f"[INFO] {dim} dimension data found. Now let us train integrated FEX model")
         print("\n")
         model = FEX(op_seqs, dim=dimension).to(DEVICE)
         model.apply(weights_init)
         models[str(dim)] = model
-        print(model.expression_visualize_simplified())
+        
+        # Show initial expression before training
+        print(f"Initial expression for Dimension {dim}:")
+        print(f"  Full expression: {model.expression_visualize()}")
+        print(f"  Simplified expression: {model.expression_visualize_simplified()}")
+        print("-" * 60)
         
 
     print("="*60)

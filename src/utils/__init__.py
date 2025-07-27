@@ -14,7 +14,8 @@ from .helper import (Buu, compute_third_order_moments,
                      double_check_energy, logprint,
                      adjust_learning_rate, weights_init,
                      get_coefficients, get_score_expression_from_file,
-                     check_allowed_terms,get_sequence,extract_coefficients_from_expr)
+                     check_allowed_terms,get_sequence_from_candidate,extract_coefficients_from_expr,
+                     select_operator_sequence)
 from .plot import (plot_NOISE_LEVEL_EFFECT,plot_training_progress_grid)
 
 __all__ = [
@@ -26,6 +27,6 @@ __all__ = [
     "Body4TrainIntegrationArgs", "Body4TrainIntegrator", "Controller", 
     "binary_ops", "unary_ops", "POOL_LIMIT", "MultiDimensionFEX", "get_coefficients", 
     "get_score_expression_from_file", "check_allowed_terms", "plot_NOISE_LEVEL_EFFECT",
-    "get_sequence", "coefficents_history", "extract_coefficients_from_expr",
-    "plot_training_progress_grid"
+    "get_sequence_from_candidate", "coefficents_history", "extract_coefficients_from_expr",
+    "plot_training_progress_grid", "select_operator_sequence"
 ]

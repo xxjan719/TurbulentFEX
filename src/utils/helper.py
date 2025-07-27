@@ -334,31 +334,122 @@ def get_score_expression_from_file(file_path: str) -> dict:
         return {'score': None, 'loss': None, 'expression': None}
 
 
-def get_sequence(file_path: str) -> list:
+def get_sequence_from_candidate(file_path: str, candidate_num: int) -> list:
     """
-    Extract the sequence (Seq=[...]) from candidate 5 in the given file.
+    Extract the sequence (Seq=[...]) from a specific candidate in the given file.
     Args:
         file_path (str): Path to the file containing candidate information
+        candidate_num (int): Candidate number to extract (1-based)
     Returns:
         list: Sequence as a list of integers (or empty list if not found)
     """
     import re
     with open(file_path, 'r') as f:
         lines = f.readlines()
-    if len(lines) > 4:
-        candidate_5_line = lines[4]
-        seq_match = re.search(r'Seq=\[([^\]]+)\]', candidate_5_line)
+    
+    # Find the line for the specified candidate
+    candidate_line = None
+    for line in lines:
+        if line.startswith(f'Candidate {candidate_num}:'):
+            candidate_line = line
+            break
+    
+    if candidate_line:
+        seq_match = re.search(r'Seq=\[([^\]]+)\]', candidate_line)
         if seq_match:
             seq_str = seq_match.group(1)
             seq_list = [int(x.strip()) for x in seq_str.split(',')]
-            print(f"[INFO] Candidate 5 sequence from {file_path}: {seq_list}")
             return seq_list
         else:
-            print(f"[WARN] No sequence found in candidate 5 for {file_path}")
+            print(f"[WARN] No sequence found in candidate {candidate_num} for {file_path}")
             return []
     else:
-        print(f"[WARN] File {file_path} has fewer than 5 lines")
+        print(f"[WARN] Candidate {candidate_num} not found in {file_path}")
         return []
+
+def select_operator_sequence(file_path: str, dim: int) -> list:
+    """
+    Display unique candidates and let user select one for the given dimension
+    Args:
+        file_path (str): Path to the candidate file
+        dim (int): Dimension number for display purposes
+    Returns:
+        list: Selected sequence as a list of integers (or None if failed)
+    """
+    import re
+    import sys
+    
+    if not os.path.exists(file_path):
+        print(f"[ERROR] File not found: {file_path}")
+        return None
+        
+    with open(file_path, 'r') as f:
+        lines = f.readlines()
+    
+    # Parse all candidates with their expressions
+    candidates = []
+    for line in lines:
+        if line.startswith('Candidate'):
+            # Extract candidate number, score, loss, sequence, and expression
+            candidate_match = re.search(r'Candidate (\d+): Score=([^,]+), Loss=([^,]+), Seq=\[([^\]]+)\], Expr=(.+)', line)
+            if candidate_match:
+                candidate_num = int(candidate_match.group(1))
+                score = candidate_match.group(2)
+                loss = candidate_match.group(3)
+                seq_str = candidate_match.group(4)
+                expr = candidate_match.group(5).strip()
+                seq_list = [int(x.strip()) for x in seq_str.split(',')]
+                candidates.append({
+                    'num': candidate_num,
+                    'score': score,
+                    'loss': loss,
+                    'seq': seq_list,
+                    'expr': expr
+                })
+    
+    if not candidates:
+        print(f"[ERROR] No candidates found in {file_path}")
+        return None
+    
+    # Filter to unique sequences only
+    unique_candidates = []
+    seen_sequences = set()
+    
+    for candidate in candidates:
+        seq_tuple = tuple(candidate['seq'])
+        if seq_tuple not in seen_sequences:
+            seen_sequences.add(seq_tuple)
+            unique_candidates.append(candidate)
+    
+    # Display unique candidates
+    print(f"\n" + "="*80)
+    print(f"Unique candidates for Dimension {dim} (showing {len(unique_candidates)} out of {len(candidates)} total):")
+    print("="*80)
+    
+    for i, candidate in enumerate(unique_candidates, 1):
+        print(f"Option {i}: Score={candidate['score']}, Loss={candidate['loss']}")
+        print(f"  Sequence: {candidate['seq']}")
+        print(f"  Expression: {candidate['expr']}")
+        print("-" * 80)
+    
+    # Get user selection
+    while True:
+        try:
+            selection = input(f"Select option for Dimension {dim} (1-{len(unique_candidates)}): ").strip()
+            selection_idx = int(selection)
+            if 1 <= selection_idx <= len(unique_candidates):
+                selected_candidate = unique_candidates[selection_idx - 1]
+                print(f"Selected for Dimension {dim}: Option {selection_idx}")
+                print(f"  Sequence: {selected_candidate['seq']}")
+                print(f"  Expression: {selected_candidate['expr']}")
+                return selected_candidate['seq']
+            else:
+                print(f"Invalid selection. Please enter a number between 1 and {len(unique_candidates)}.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+        except KeyboardInterrupt:
+            print("\nExiting...")
+            sys.exit(0)
 
 
 def extract_coefficients_from_expr(expr: str, dim: int) -> dict:
