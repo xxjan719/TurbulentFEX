@@ -487,10 +487,11 @@ else:
                 final_expr = models[str(dim)].expression_visualize_simplified()
                 final_expressions[f'dimension_{dim}'] = final_expr
             loss_history_dict = {1: loss_history, 2: loss_history, 3: loss_history}
-            plot_training_progress_grid(loss_history_dict, coefficents_history, final_expr, args.NOISE_LEVEL,save_dir=args.LOG_SAVE_PATH)
+            save_dir = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}")
+            plot_training_progress_grid(loss_history_dict, coefficents_history, final_expr, args.NOISE_LEVEL,save_dir=save_dir)
             
             # Save final expressions to text file
-            final_expr_save_path = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", "final_expressions.txt")
+            final_expr_save_path = os.path.join(save_dir, "final_expressions.txt")
             os.makedirs(os.path.dirname(final_expr_save_path), exist_ok=True)
             with open(final_expr_save_path, "w") as f:
                 f.write("Final Expressions After Training:\n")

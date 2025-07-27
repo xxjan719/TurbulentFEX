@@ -651,9 +651,9 @@ def plot_training_progress_grid(loss_history, coeff_history, final_expr, noise_l
                         fontsize=10, va='top', ha='left', color='purple', bbox=dict(facecolor='white', alpha=0.7))
     plt.suptitle(f'Training Progress (Noise Level: {noise_level})', fontsize=18)
     if save_dir:
-        plt.savefig(os.path.join(save_dir, 'training_progress_grid.pdf'), 
+        plt.savefig(os.path.join(save_dir, f'training_progress_grid_noise_{noise_level}.pdf'), 
                     dpi=300, bbox_inches='tight')
-        print(f"Training progress grid plot saved to {os.path.join(save_dir, 'training_progress_grid.pdf')}")
+        print(f"Training progress grid plot saved to {os.path.join(save_dir, f'training_progress_grid_noise_{noise_level}.pdf')}")
     plt.show()
     
     
