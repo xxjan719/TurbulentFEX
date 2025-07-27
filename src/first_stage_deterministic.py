@@ -395,78 +395,91 @@ else:
     #elif dim == 2: # torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
     #elif dim == 3:#torch.tensor([0, 0, 2, 2, 2, 0, 2, 2, 5, 0, 7, 1], device=DEVICE)
     # print(f"the coefficents_history is {coefficents_history}")
-#     loss_history = []
-#     # # Create optimizer for all parameters
-#     all_params = []
-#     for model in models.values():
-#         all_params.extend(model.parameters())
-#     model_optim = torch.optim.Adam(all_params, lr=FEX_LR)
+    loss_history = []
+    # # Create optimizer for all parameters
+    all_params = []
+    for model in models.values():
+        all_params.extend(model.parameters())
+    model_optim = torch.optim.Adam(all_params, lr=FEX_LR)
     
-#     # # Training loop
-#     for train_idx in range(TRAIN_EPOCHS_SECOND):
-#         model_optim.zero_grad()
-#         total_pred_loss = 0
+    # # Training loop
+    for train_idx in range(TRAIN_EPOCHS_SECOND):
+        model_optim.zero_grad()
+        total_pred_loss = 0
 
-#         # Prediction and extra loss
-#         for dim in range(1, dimension+1):
-#             model = models[str(dim)]
-#             # Step 1: Get coefficients with autograd enabled
-#             coeff_x1, coeff_x2, coeff_x3 = model.get_all_linear_nonlinear_coeffs_autograd(dim=dim-1)
-#             # Step 2: Compute rounded values
+        # Prediction and extra loss
+        for dim in range(1, dimension+1):
+            model = models[str(dim)]
+            # Step 1: Get coefficients with autograd enabled
+            coeff_x1, coeff_x2, coeff_x3 = model.get_all_linear_nonlinear_coeffs_autograd(dim=dim-1)
+            # Step 2: Compute rounded values
 
-#             integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
-#             current_state = dataset_tensor[:, :, :-1]
-#             u_current = current_state[:, 0, :]
-#             u_pred, u_target = integrator.integrate(integration_args)
+            integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
+            current_state = dataset_tensor[:, :, :-1]
+            u_current = current_state[:, 0, :]
+            u_pred, u_target = integrator.integrate(integration_args)
 
-#             du_pred = torch.gradient(u_pred, dim=0)[0]
-#             loss = mse(u_pred, u_target)
-#             # if dim == 1:
-#             #     coeffs_3 = round(float(coeff_x3))
-#             #     coeffs_2 = round(float(coeff_x2))
-#             #     extra_loss = torch.abs(model.linear_a[0] + 0.2)**2
+            du_pred = torch.gradient(u_pred, dim=0)[0]
+            loss = mse(u_pred, u_target)
+            # if dim == 1:
+            #     coeffs_3 = round(float(coeff_x3))
+            #     coeffs_2 = round(float(coeff_x2))
+            #     extra_loss = torch.abs(model.linear_a[0] + 0.2)**2
                         
-#             # elif dim == 2:
-#             #     coeffs_3 = round(float(coeff_x3))
-#             #     coeffs_1 = round(float(coeff_x1))
-#             #     extra_loss = torch.abs(model.linear_a[1] + 0.1)**2
-#             # elif dim == 3:
-#             #     coeffs_2 = round(float(coeff_x2))
-#             #     coeffs_1 = round(float(coeff_x1))
-#             #     extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
-#             total_pred_loss += loss#+ extra_loss
+            # elif dim == 2:
+            #     coeffs_3 = round(float(coeff_x3))
+            #     coeffs_1 = round(float(coeff_x1))
+            #     extra_loss = torch.abs(model.linear_a[1] + 0.1)**2
+            # elif dim == 3:
+            #     coeffs_2 = round(float(coeff_x2))
+            #     coeffs_1 = round(float(coeff_x1))
+            #     extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
+            total_pred_loss += loss#+ extra_loss
         
-#         # Call backward only once after all dimensions are processed
-#         total_pred_loss.backward(retain_graph=True)
-#         model_optim.step()
+        # Call backward only once after all dimensions are processed
+        total_pred_loss.backward(retain_graph=True)
+        model_optim.step()
 
-#         with torch.no_grad():
-#             if train_idx % 50 == 0:
-#                 loss_history.append(total_pred_loss.item())
-#                 for dim in range(1, dimension+1):
-#                     model = models[str(dim)]
-#                     expr = model.expression_visualize_simplified()
-#                     coeffs = extract_coefficients_from_expr(expr, dim)
-#                     for term, value in coeffs.items():
-#                         coefficents_history[dim][term].append(value)
-#                 #print(f"the coefficents_history is {coefficents_history}")
-#             if train_idx % 100 == 0:
-#                 print("\n"+"="*60)
-#                 print(f"Training index: {train_idx}")
-#                 print(f"Loss: {total_pred_loss.item():.6f}")
-#                 # Print expressions for each dimension
-#                 expressions = {}
-#                 for dim in range(1, dimension+1):
-#                     expressions[f'Dimension {dim}'] = models[str(dim)].expression_visualize_simplified()
-#                 print(f"Expression: {expressions}")
-#                 print("="*60)
+        with torch.no_grad():
+            if train_idx % 50 == 0:
+                loss_history.append(total_pred_loss.item())
+                for dim in range(1, dimension+1):
+                    model = models[str(dim)]
+                    expr = model.expression_visualize_simplified()
+                    coeffs = extract_coefficients_from_expr(expr, dim)
+                    for term, value in coeffs.items():
+                        coefficents_history[dim][term].append(value)
+                #print(f"the coefficents_history is {coefficents_history}")
+            if train_idx % 100 == 0:
+                print("\n"+"="*60)
+                print(f"Training index: {train_idx}")
+                print(f"Loss: {total_pred_loss.item():.6f}")
+                # Print expressions for each dimension
+                expressions = {}
+                for dim in range(1, dimension+1):
+                    expressions[f'Dimension {dim}'] = models[str(dim)].expression_visualize_simplified()
+                print(f"Expression: {expressions}")
+                print("="*60)
 
-#         if train_idx == TRAIN_EPOCHS_SECOND-1:
-#             for dim in range(1, dimension+1):
-#                 final_expr = models[str(dim)].expression_visualize_simplified()
-#             loss_history_dict = {1: loss_history, 2: loss_history, 3: loss_history}
-#             plot_training_progress_grid(loss_history_dict, coefficents_history, final_expr, args.NOISE_LEVEL,save_dir=args.LOG_SAVE_PATH)
-
+        if train_idx == TRAIN_EPOCHS_SECOND-1:
+            final_expressions = {}
+            for dim in range(1, dimension+1):
+                final_expr = models[str(dim)].expression_visualize_simplified()
+                final_expressions[f'dimension_{dim}'] = final_expr
+            loss_history_dict = {1: loss_history, 2: loss_history, 3: loss_history}
+            plot_training_progress_grid(loss_history_dict, coefficents_history, final_expr, args.NOISE_LEVEL,save_dir=args.LOG_SAVE_PATH)
+            
+            # Save final expressions to text file
+            final_expr_save_path = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", "final_expressions.txt")
+            os.makedirs(os.path.dirname(final_expr_save_path), exist_ok=True)
+            with open(final_expr_save_path, "w") as f:
+                f.write("Final Expressions After Training:\n")
+                f.write("=" * 50 + "\n")
+                for dim, expr in final_expressions.items():
+                    f.write(f"{dim}: {expr}\n")
+                f.write("\nTraining completed successfully!\n")
+            print(f"[INFO] Final expressions saved to: {final_expr_save_path}")
+            
 
 
     
