@@ -5,6 +5,31 @@ import re
 import matplotlib.pyplot as plt
 from utils.ODEParser import select_time_points, FN_Net
 import torch
+from config import DIR_EXAMPLE, DIR_TRIAD,create_main_parser
+from utils.plot import plot_NOISE_LEVEL_EFFECT
+from utils import *
+parser = create_main_parser()
+args = parser.parse_args()
+# Check if CUDA is available and set device accordingly
+if torch.cuda.is_available() and args.DEVICE.startswith('cuda'):
+    DEVICE = torch.device(args.DEVICE)
+    print(f"Using {args.DEVICE}")
+    base_path = os.path.join(DIR_EXAMPLE,args.Model,'Results','Results')
+else:
+    DEVICE = torch.device('cpu')
+    print("CUDA is not available, using CPU instead")
+    base_path = os.path.join(DIR_EXAMPLE,args.Model,'Results')
+    
+if args.LOG_SAVE_PATH is None:
+    args.LOG_SAVE_PATH = f'{base_path}/{args.params_name}'
+    
+    
+coefficients = get_coefficients(load_dir= DIR_TRIAD, DEVICE=args.DEVICE)
+plot_NOISE_LEVEL_EFFECT(coefficients,save_dir=args.LOG_SAVE_PATH)
+
+
+
+
 # selected_indices, selected_times = select_time_points(1000, 0.01, 101)
 # selected_indices = np.arange(101)
 
@@ -80,85 +105,85 @@ import torch
 
 
 #--- CASE 1000 ---
-selected_indices_1000, selected_times_1000 = select_time_points(1000, 0.01, 101)
-print(selected_indices_1000)
-print(selected_times_1000)
-cov_truth_1000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_1000','residual_cov_truth.npy'))
-print(cov_truth_1000.shape)
-cov_truth_slice_1000 = cov_truth_1000[selected_indices_1000]
-print(cov_truth_slice_1000.shape)
+# selected_indices_1000, selected_times_1000 = select_time_points(1000, 0.01, 101)
+# print(selected_indices_1000)
+# print(selected_times_1000)
+# cov_truth_1000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_1000','residual_cov_truth.npy'))
+# print(cov_truth_1000.shape)
+# cov_truth_slice_1000 = cov_truth_1000[selected_indices_1000]
+# print(cov_truth_slice_1000.shape)
 
-cov_pred_1000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_1000','residual_cov_pred.npy'))
+# cov_pred_1000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_1000','residual_cov_pred.npy'))
 
-# --- CASE 5000 ---
-selected_indices_5000, selected_times_5000 = select_time_points(1000, 0.01, 101)
-cov_truth_5000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_5000','residual_cov_truth.npy'))
-selected_indices_5000 = np.clip(selected_indices_5000, 0, cov_truth_5000.shape[0] - 1)
-cov_truth_slice_5000 = cov_truth_5000[selected_indices_5000]
-cov_pred_5000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_5000','residual_cov_pred.npy'))
+# # --- CASE 5000 ---
+# selected_indices_5000, selected_times_5000 = select_time_points(1000, 0.01, 101)
+# cov_truth_5000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_5000','residual_cov_truth.npy'))
+# selected_indices_5000 = np.clip(selected_indices_5000, 0, cov_truth_5000.shape[0] - 1)
+# cov_truth_slice_5000 = cov_truth_5000[selected_indices_5000]
+# cov_pred_5000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_5000','residual_cov_pred.npy'))
 
-# --- CASE 10000 ---
-selected_indices_10000, selected_times_10000 = select_time_points(1000, 0.01, 101)
-cov_truth_10000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_10000','residual_cov_truth.npy'))
-selected_indices_10000 = np.clip(selected_indices_10000, 0, cov_truth_10000.shape[0] - 1)
-cov_truth_slice_10000 = cov_truth_10000[selected_indices_10000]
-cov_pred_10000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_10000','residual_cov_pred.npy'))
+# # --- CASE 10000 ---
+# selected_indices_10000, selected_times_10000 = select_time_points(1000, 0.01, 101)
+# cov_truth_10000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_10000','residual_cov_truth.npy'))
+# selected_indices_10000 = np.clip(selected_indices_10000, 0, cov_truth_10000.shape[0] - 1)
+# cov_truth_slice_10000 = cov_truth_10000[selected_indices_10000]
+# cov_pred_10000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_10000','residual_cov_pred.npy'))
 
-# --- CASE 20000 ---
-selected_indices_20000, selected_times_20000 = select_time_points(1000, 0.01, 101)
-cov_truth_20000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_20000','residual_cov_truth.npy'))
-selected_indices_20000 = np.clip(selected_indices_20000, 0, cov_truth_20000.shape[0] - 1)
-cov_truth_slice_20000 = cov_truth_20000[selected_indices_20000]
-cov_pred_20000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_20000','residual_cov_pred.npy'))
+# # --- CASE 20000 ---
+# selected_indices_20000, selected_times_20000 = select_time_points(1000, 0.01, 101)
+# cov_truth_20000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_20000','residual_cov_truth.npy'))
+# selected_indices_20000 = np.clip(selected_indices_20000, 0, cov_truth_20000.shape[0] - 1)
+# cov_truth_slice_20000 = cov_truth_20000[selected_indices_20000]
+# cov_pred_20000 = np.load(os.path.join(config.DIR_EQUIPART, 'case_20000','residual_cov_pred.npy'))
 
-data_list = [{
-            'residual_cov_pred': cov_pred_1000,
-            'residual_cov_truth': cov_truth_1000,
-            'selected_indices': selected_indices_1000,
-            'sample_size': 1000,
-            'case_dir': f'case_1000'
-        }]
+# data_list = [{
+#             'residual_cov_pred': cov_pred_1000,
+#             'residual_cov_truth': cov_truth_1000,
+#             'selected_indices': selected_indices_1000,
+#             'sample_size': 1000,
+#             'case_dir': f'case_1000'
+#         }]
 
-selected_times_list = [selected_indices_1000]
-labels = ['1000']
+# selected_times_list = [selected_indices_1000]
+# labels = ['1000']
 
-N = 101  # Number of points to plot
+# N = 101  # Number of points to plot
 
-fig, axes = plt.subplots(3, 1, figsize=(12, 10))
-dimensions = ['u1', 'u2', 'u3']
-colors = ['blue', 'red', 'green', 'purple']
-labels = ['case_1000', 'case_5000', 'case_10000', 'case_20000']
+# fig, axes = plt.subplots(3, 1, figsize=(12, 10))
+# dimensions = ['u1', 'u2', 'u3']
+# colors = ['blue', 'red', 'green', 'purple']
+# labels = ['case_1000', 'case_5000', 'case_10000', 'case_20000']
 
-for dim in range(3):
-    ax = axes[dim]
-    # Case 1000
-    pred_1000 = cov_pred_1000[:, dim]
-    truth_1000 = cov_truth_slice_1000[:, dim]
-    log10_error_1000 = np.log10(np.abs(pred_1000 - truth_1000) + 1e-12)
-    ax.plot(selected_times_1000[:N], log10_error_1000[:N], 'o-', color=colors[0], alpha=0.8, linewidth=2, markersize=4, label=labels[0])
-    # Case 5000
-    pred_5000 = cov_pred_5000[:, dim]
-    truth_5000 = cov_truth_slice_5000[:, dim]
-    log10_error_5000 = np.log10(np.abs(pred_5000 - truth_5000) + 1e-12)
-    ax.plot(selected_times_5000[:N], log10_error_5000[:N], 's--', color=colors[1], alpha=0.8, linewidth=2, markersize=4, label=labels[1])
-    # Case 10000
-    pred_10000 = cov_pred_10000[:, dim]
-    truth_10000 = cov_truth_slice_10000[:, dim]
-    log10_error_10000 = np.log10(np.abs(pred_10000 - truth_10000) + 1e-12)
-    ax.plot(selected_times_10000[:N], log10_error_10000[:N], 'd-.', color=colors[2], alpha=0.8, linewidth=2, markersize=4, label=labels[2])
-    # Case 20000
-    pred_20000 = cov_pred_20000[:, dim]
-    truth_20000 = cov_truth_slice_20000[:, dim]
-    log10_error_20000 = np.log10(np.abs(pred_20000 - truth_20000) + 1e-12)
-    ax.plot(selected_times_20000[:N], log10_error_20000[:N], 'x:', color=colors[3], alpha=0.8, linewidth=2, markersize=4, label=labels[3])
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel(f'log10(|Error|) - {dimensions[dim]}')
-    ax.set_title(f'Dimension {dim+1} ({dimensions[dim]}) - Log10 Error (First {N} Points)')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+# for dim in range(3):
+#     ax = axes[dim]
+#     # Case 1000
+#     pred_1000 = cov_pred_1000[:, dim]
+#     truth_1000 = cov_truth_slice_1000[:, dim]
+#     log10_error_1000 = np.log10(np.abs(pred_1000 - truth_1000) + 1e-12)
+#     ax.plot(selected_times_1000[:N], log10_error_1000[:N], 'o-', color=colors[0], alpha=0.8, linewidth=2, markersize=4, label=labels[0])
+#     # Case 5000
+#     pred_5000 = cov_pred_5000[:, dim]
+#     truth_5000 = cov_truth_slice_5000[:, dim]
+#     log10_error_5000 = np.log10(np.abs(pred_5000 - truth_5000) + 1e-12)
+#     ax.plot(selected_times_5000[:N], log10_error_5000[:N], 's--', color=colors[1], alpha=0.8, linewidth=2, markersize=4, label=labels[1])
+#     # Case 10000
+#     pred_10000 = cov_pred_10000[:, dim]
+#     truth_10000 = cov_truth_slice_10000[:, dim]
+#     log10_error_10000 = np.log10(np.abs(pred_10000 - truth_10000) + 1e-12)
+#     ax.plot(selected_times_10000[:N], log10_error_10000[:N], 'd-.', color=colors[2], alpha=0.8, linewidth=2, markersize=4, label=labels[2])
+#     # Case 20000
+#     pred_20000 = cov_pred_20000[:, dim]
+#     truth_20000 = cov_truth_slice_20000[:, dim]
+#     log10_error_20000 = np.log10(np.abs(pred_20000 - truth_20000) + 1e-12)
+#     ax.plot(selected_times_20000[:N], log10_error_20000[:N], 'x:', color=colors[3], alpha=0.8, linewidth=2, markersize=4, label=labels[3])
+#     ax.set_xlabel('Time (s)')
+#     ax.set_ylabel(f'log10(|Error|) - {dimensions[dim]}')
+#     ax.set_title(f'Dimension {dim+1} ({dimensions[dim]}) - Log10 Error (First {N} Points)')
+#     ax.legend()
+#     ax.grid(True, alpha=0.3)
 
-plt.tight_layout()
-plt.show()
+# plt.tight_layout()
+# plt.show()
 
 
 
