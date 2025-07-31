@@ -161,13 +161,13 @@ def get_coefficients(load_dir: str = "",
     import re
     
     # Define noise levels to load
-    if DEVICE == "cuda":
+    if DEVICE == "cuda:0":
         base_path = os.path.join(load_dir, "Results", "Results", "equipart")
     else:
         base_path = os.path.join(load_dir, "Results", "equipart")
     
     # Dictionary to store coefficients for each noise level
-    coefficients_data = {"dim_1":{"x1":[], "x2":[], "x3":[], "x2x3":[], "x1x3":[]}, 
+    coefficients_data = {"dim_1":{"x1":[], "x2":[], "x3":[], "x2x3":[]}, 
         "dim_2":{"x1":[], "x2":[], "x3":[], "x1x3":[]}, 
         "dim_3":{"x1":[], "x2":[], "x3":[], "x1x2":[]}}
     
