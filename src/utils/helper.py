@@ -150,122 +150,95 @@ def get_coefficients(load_dir: str = "",
                      noise_levels: list = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
                      DEVICE: str = "cpu")->dict:
     """
-    Plot coefficients of the FEX model.
+    Extract coefficients from FINAL_EXPR.txt file.
     
     Args:
         load_dir (str): Directory to load the coefficients
-        save_dir (str): Directory to save the plot
         noise_levels (list): List of noise levels to process
         DEVICE (str): Device type for path construction
     """
     import re
     
-    # Define noise levels to load
+    print(f"DEBUG: get_coefficients called with load_dir='{load_dir}', DEVICE='{DEVICE}'")
+    
+    # Define path to FINAL_EXPR.txt
     if DEVICE == "cuda:0":
-        base_path = os.path.join(load_dir, "Results", "Results", "equipart")
+        file_path = os.path.join(load_dir, "Results", "Results", "equipart", "FINAL_EXPR.txt")
     else:
-        base_path = os.path.join(load_dir, "Results", "equipart")
+        file_path = os.path.join(load_dir, "Results", "equipart", "FINAL_EXPR.txt")
+    
+    print(f"DEBUG: Looking for file at: {file_path}")
+    print(f"DEBUG: File exists: {os.path.exists(file_path)}")
     
     # Dictionary to store coefficients for each noise level
     coefficients_data = {"dim_1":{"x1":[], "x2":[], "x3":[], "x2x3":[]}, 
         "dim_2":{"x1":[], "x2":[], "x3":[], "x1x3":[]}, 
         "dim_3":{"x1":[], "x2":[], "x3":[], "x1x2":[]}}
     
+    if not os.path.exists(file_path):
+        print(f"Error: FINAL_EXPR.txt not found at {file_path}")
+        return coefficients_data
+    
+    print(f"Loading coefficients from: {file_path}")
+    
+    # Read the FINAL_EXPR.txt file
+    with open(file_path, 'r') as f:
+        content = f.read()
+    
+    # Process each noise level
     for noise_level in noise_levels:
-        noise_dir = os.path.join(base_path, f"noise_{noise_level}")
-        
-        if os.path.exists(noise_dir):
-            print(f"Loading coefficients from: {noise_dir}")
-            
-            for dim in range(1, 4):
-                file_path = os.path.join(noise_dir, f"best_candidates_pool_summary_{dim}.txt")
-                
-                if os.path.exists(file_path):
-                    # Read the text file
-                    with open(file_path, 'r') as f:
-                        lines = f.readlines()
-                    
-                    # Find candidate 5 (index 4 since we start from 0)
-                    if len(lines) > 4:
-                        candidate_5_line = lines[4]  # Candidate 5 is at index 4
-                        
-                        # Extract the expression part (after "Expr=")
-                        expr_match = re.search(r'Expr=(.+)', candidate_5_line)
-                        if expr_match:
-                            expression = expr_match.group(1).strip()
-                            print(f"  Dimension {dim} - Candidate 5 expression: {expression}")
-                            float_pattern = r'([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?|\d+)'
-                            # --- x1 ---
-                            x1_regex = r'(?<!\*x2)(?<!\*x3)' + float_pattern + r'\s*\*\s*x1(?!\*)'
-                            x1_matches = list(re.finditer(x1_regex, expression))
-                            print(f"    [DEBUG] All x1 matches: {[m.group(0) for m in x1_matches]}")
-                            last_coeff = None
-                            for m in x1_matches:
-                                last_coeff = float(m.group(1))
-                            if last_coeff is not None:
-                                coefficients_data[f"dim_{dim}"]["x1"].append(last_coeff)
-                                print(f"    x1 coefficient: {last_coeff:.7f}")
-                            else:
-                                print(f"    x1 coefficient: NOT FOUND")
-                            
-                            # --- x2 ---
-                            x2_regex = r'(?<!\*x1)(?<!\*x3)' + float_pattern + r'\s*\*\s*x2(?!\*)'
-                            x2_matches = list(re.finditer(x2_regex, expression))
-                            print(f"    [DEBUG] All x2 matches: {[m.group(0) for m in x2_matches]}")
-                            last_coeff = None
-                            for m in x2_matches:
-                                last_coeff = float(m.group(1))
-                            if last_coeff is not None:
-                                coefficients_data[f"dim_{dim}"]["x2"].append(last_coeff)
-                                print(f"    x2 coefficient: {last_coeff:.7f}")
-                            else:
-                                print(f"    x2 coefficient: NOT FOUND")
-                            
-                            # --- x3 ---
-                            x3_regex = r'(?<!\*x1)(?<!\*x2)' + float_pattern + r'\s*\*\s*x3(?!\*)'
-                            x3_matches = list(re.finditer(x3_regex, expression))
-                            print(f"    [DEBUG] All x3 matches: {[m.group(0) for m in x3_matches]}")
-                            last_coeff = None
-                            for m in x3_matches:
-                                last_coeff = float(m.group(1))
-                            if last_coeff is not None:
-                                coefficients_data[f"dim_{dim}"]["x3"].append(last_coeff)
-                                print(f"    x3 coefficient: {last_coeff:.7f}")
-                            else:
-                                print(f"    x3 coefficient: NOT FOUND")
-                            
-                            # --- x2*x3 ---
-                            x2x3_match = re.search(float_pattern + r'\s*\*\s*x2\s*\*\s*x3', expression)
-                            if x2x3_match and dim == 1:
-                                coeff = float(x2x3_match.group(1))
-                                coefficients_data[f"dim_{dim}"]["x2x3"].append(coeff)
-                                print(f"    x2*x3 coefficient: {coeff:.7f}")
-                            elif dim == 1:
-                                print(f"    x2*x3 coefficient: NOT FOUND")
-                            
-                            # --- x1*x3 ---
-                            x1x3_match = re.search(float_pattern + r'\s*\*\s*x1\s*\*\s*x3', expression)
-                            if x1x3_match and dim == 2:
-                                coeff = float(x1x3_match.group(1))
-                                coefficients_data[f"dim_{dim}"]["x1x3"].append(coeff)
-                                print(f"    x1*x3 coefficient: {coeff:.7f}")
-                            elif dim == 2:
-                                print(f"    x1*x3 coefficient: NOT FOUND")
-                            
-                            # --- x1*x2 ---
-                            x1x2_match = re.search(float_pattern + r'\s*\*\s*x1\s*\*\s*x2', expression)
-                            if x1x2_match and dim == 3:
-                                coeff = float(x1x2_match.group(1))
-                                coefficients_data[f"dim_{dim}"]["x1x2"].append(coeff)
-                                print(f"    x1*x2 coefficient: {coeff:.7f}")
-                            elif dim == 3:
-                                print(f"    x1*x2 coefficient: NOT FOUND")
-                        else:
-                            print(f"  Warning: Could not find expression in candidate 5 for dimension {dim}")
-                else:
-                    print(f"  Warning: File not found: {file_path}")
+        # Find the section for this noise level
+        if noise_level == 0.0:
+            noise_pattern = r'NOISE 0\.0 ODE\s*#=+\s*(.*?)(?=\n\nNOISE|\n\nNoise|\Z)'
+        elif noise_level == 1.0:
+            noise_pattern = r'Noise 1\.0 total noise\s*#=+\s*(.*?)(?=\Z)'
         else:
-            print(f"Noise directory not found: {noise_dir}")
+            noise_pattern = rf'NOISE {noise_level}\s*#=+\s*(.*?)(?=\n\nNOISE|\n\nNoise|\Z)'
+        
+        noise_match = re.search(noise_pattern, content, re.DOTALL)
+        if noise_match:
+            noise_section = noise_match.group(1).strip()
+            print(f"\nProcessing noise level {noise_level}:")
+            
+            # Extract expressions for each dimension
+            for dim in range(1, 4):
+                dim_pattern = rf'dimension_{dim}:\s*(.*?)(?=\ndimension_|\Z)'
+                dim_match = re.search(dim_pattern, noise_section, re.DOTALL)
+                
+                if dim_match:
+                    expression = dim_match.group(1).strip()
+                    print(f"  Dimension {dim} expression: {expression}")
+                    
+                    # Extract coefficients using the existing helper function
+                    coeffs = extract_coefficients_from_expr(expression, dim)
+                    
+                    # Store coefficients
+                    if coeffs['x1'] is not None:
+                        coefficients_data[f"dim_{dim}"]["x1"].append(coeffs['x1'])
+                        print(f"    x1 coefficient: {coeffs['x1']:.7f}")
+                    
+                    if coeffs['x2'] is not None:
+                        coefficients_data[f"dim_{dim}"]["x2"].append(coeffs['x2'])
+                        print(f"    x2 coefficient: {coeffs['x2']:.7f}")
+                    
+                    if coeffs['x3'] is not None:
+                        coefficients_data[f"dim_{dim}"]["x3"].append(coeffs['x3'])
+                        print(f"    x3 coefficient: {coeffs['x3']:.7f}")
+                    
+                    # Cross-term coefficients
+                    if dim == 1 and coeffs['x2x3'] is not None:
+                        coefficients_data[f"dim_{dim}"]["x2x3"].append(coeffs['x2x3'])
+                        print(f"    x2*x3 coefficient: {coeffs['x2x3']:.7f}")
+                    elif dim == 2 and coeffs['x1x3'] is not None:
+                        coefficients_data[f"dim_{dim}"]["x1x3"].append(coeffs['x1x3'])
+                        print(f"    x1*x3 coefficient: {coeffs['x1x3']:.7f}")
+                    elif dim == 3 and coeffs['x1x2'] is not None:
+                        coefficients_data[f"dim_{dim}"]["x1x2"].append(coeffs['x1x2'])
+                        print(f"    x1*x2 coefficient: {coeffs['x1x2']:.7f}")
+                else:
+                    print(f"  Warning: Could not find expression for dimension {dim}")
+        else:
+            print(f"Warning: Could not find section for noise level {noise_level}")
     
     # Print summary of loaded coefficients
     print("\n"+"="*60)

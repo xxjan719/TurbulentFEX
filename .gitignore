@@ -1,3 +1,4 @@
+archive/*
 src/Example/MC_triad/Results/*
 **/.ipynb_checkpoints
 **/__pycache__

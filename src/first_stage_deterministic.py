@@ -64,28 +64,39 @@ np.random.seed(SEED)
 random.seed(SEED)
 
 m0, var0 = MC_triad_initial_value()
-params = params_init(args.params_name,sample=1000)
+params = params_init(args.params_name,sample=50000)  # Generate 50,000 samples
 data_file = args.DATA_SAVE_PATH
 
 if os.path.exists(data_file):
     print("\n"+"="*60)
     print(f'[INFO] Data has already generated, just using for the first stage training:FEX'.center(60, '='))
     data = np.load(data_file)
-    dataset =  data['dataset']
+    dataset_full =  data['dataset']  # Full dataset (50000, 3, 1001)
     mean_MC = data['mean_MC']
     cov_MC = data['cov_MC']
     moment3_MC = data['moment3_MC']
     moment3_MC_norm = data['moment3_MC_norm']
     Energy_MC = data['Energy_MC']
     Energy_dyn = data['Energy_dyn']
+    
+    # Select 1000 trajectories for training
+    print(f'[INFO] Full dataset shape: {dataset_full.shape}')
+    print(f'[INFO] Selecting 1000 trajectories for training...')
+    np.random.seed(SEED)  # Use same seed for reproducibility
+    selected_indices = np.random.choice(dataset_full.shape[0], size=1000, replace=False)
+    dataset = dataset_full[selected_indices]  # (1000, 3, 1001)
+    print(f'[INFO] Selected dataset shape: {dataset.shape}')
+    
 else:
     print("\n"+"="*60)
     print(f'[INFO] There is no dataset in this environment, it generates automatically'.center(60,'-'))
-    dataset, mean_MC, cov_MC, moment3_MC, moment3_MC_norm,Energy_MC, Energy_dyn = MC_triad_direct(params, m0, var0,
+    dataset_full, mean_MC, cov_MC, moment3_MC, moment3_MC_norm,Energy_MC, Energy_dyn = MC_triad_direct(params, m0, var0,
     method = 'Euler',noise_level = args.NOISE_LEVEL)
+    
+    # Save the full dataset
     np.savez(
     args.DATA_SAVE_PATH,
-    dataset=dataset,
+    dataset=dataset_full,  # Save full dataset (50000, 3, 1001)
     mean_MC=mean_MC,
     cov_MC=cov_MC,
     moment3_MC=moment3_MC,
@@ -93,6 +104,14 @@ else:
     Energy_MC=Energy_MC,
     Energy_dyn=Energy_dyn
     )
+    
+    # Select 1000 trajectories for training
+    print(f'[INFO] Full dataset shape: {dataset_full.shape}')
+    print(f'[INFO] Selecting 1000 trajectories for training...')
+    np.random.seed(SEED)  # Use same seed for reproducibility
+    selected_indices = np.random.choice(dataset_full.shape[0], size=1000, replace=False)
+    dataset = dataset_full[selected_indices]  # (1000, 3, 1001)
+    print(f'[INFO] Selected dataset shape: {dataset.shape}')
     print(f'[INFO] Right now it is ok for data. We use it for the first stage training: FEX'.center(60,'='))
 
 dataset_tensor = torch.from_numpy(dataset).float().to(DEVICE)
