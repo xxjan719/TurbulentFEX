@@ -44,8 +44,8 @@ print("\n"+ "="*60)
 print("\n[INFO] Setting up the path...")
 if args.Model == 'MC_triad':
     model_PATH = config.DIR_TRIAD
-    if os.path.exists(model_PATH):
-        save_dir = os.path.join( model_PATH,'Results',args.params_name,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}')
+    save_dir = os.path.join( model_PATH,'Results',args.params_name,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}')
+    if os.path.exists(save_dir):   
         print('[INFO] Right now we use our own workspace path.') 
     else:
         model_PATH = Path(os.path.join(config.DIR_TRIAD, 'Results', 'Results', args.params_name))
@@ -66,13 +66,13 @@ print("2. Skip Training and generate the prediction results")
 print("3. Skip all and plot the results directly")
 print("="*60)
 
-while True:
-# #choice = '1' #
-    choice = input("\nChoose option (1 or 2 or 3):").strip()
-    if choice in ['1','2','3']:
-        break
-    else:
-        print("Please enter '1' or '2' or '3'.")
+#while True:
+choice = '1' #
+    # choice = input("\nChoose option (1 or 2 or 3):").strip()
+    # if choice in ['1','2','3']:
+    #     break
+    # else:
+    #     print("Please enter '1' or '2' or '3'.")
 
 if choice == '1':
     # Option 1: Train everything in second stage
@@ -115,16 +115,12 @@ if choice == '1':
     mean_value, std_value = generate_mean_and_std(ODE_Solution)
     print(f'[INFO] this is print for mean and std: {mean_value.shape} {std_value.shape}')
     
-    
-#     print(f'[INFO] the ODE solution shape is: {ODE_Solution.shape}')
-#     mean_value, std_value = generate_mean_and_std(ODE_Solution)
-#     print(f'[INFO] this is print for mean and std: {mean_value.shape} {std_value.shape}')
-#     # Train ensemble models for better accuracy (only on selected time points)
-#     train_FN_ensemble(
-#         ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir,
-#         num_time_points=101,  # Only train on 100 time points
-#         dt=dt
-#     )
+    # Train ensemble models for better accuracy (only on selected time points)
+    train_FN_ensemble(
+        ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir,
+        num_time_points=1001,  # Only train on 100 time points
+        dt=dt
+    )
     
 #     print("\n"+ "="*60)
 #     print("\n[INFO] Testing ensemble predictions...")
