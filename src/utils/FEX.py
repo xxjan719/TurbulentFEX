@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 import sympy as sp
-
+import numpy as np
 try:
     from .constant import unary_ops, binary_ops
 except:
@@ -223,7 +223,156 @@ class FEX(nn.Module):
             rounded_expr += coeff * term
 
         print("Rounded expression:", rounded_expr)
-       
+
+
+def FEX_model1_ground_truth(x):
+    x1 = x[:, 0:1].squeeze(-1)
+    x2 = x[:, 1:2].squeeze(-1)
+    x3 = x[:, 2:3].squeeze(-1)
+    return -0.2*x1 + 1*x2*x3 + 1*x2 + -2*x3 
+
+def FEX_model2_ground_truth(x):
+    x1 = x[:, 0:1].squeeze(-1)
+    x2 = x[:, 1:2].squeeze(-1)
+    x3 = x[:, 2:3].squeeze(-1)
+    return  -0.6*x1*x3 + -1*x1 + -0.1*x2 + -3*x3 
+
+def FEX_model3_ground_truth(x):
+    x1 = x[:, 0:1].squeeze(-1)
+    x2 = x[:, 1:2].squeeze(-1)
+    x3 = x[:, 2:3].squeeze(-1)
+    return  -0.4*x1*x2 + 2*x1 + 3*x2 + -0.1*x3 
+
+def FEX_model_ground_truth(x):
+    return np.stack([FEX_model1_ground_truth(x), FEX_model2_ground_truth(x), FEX_model3_ground_truth(x)], axis=1)
+
+
+
+
+# Global cache for expressions to avoid reading file multiple times
+_expression_cache = {}
+
+def FEX_model_learned(x, 
+             model_name =  'MC_triad',
+             params_name = 'equipart',
+             noise_level = 1.0,
+             device = 'cpu'):
+    """
+    Create learned FEX model by reading final expressions from file.
+    
+    Args:
+        x: Input tensor of shape (batch_size, 3)
+        noise_level: Noise level to determine which file to read
+    
+    Returns:
+        Output tensor of shape (batch_size, 3) with learned expressions
+    """
+    import os
+    import re
+    
+    # Extract dimensions from input
+    x1 = x[:, 0:1].squeeze(-1)
+    x2 = x[:, 1:2].squeeze(-1)
+    x3 = x[:, 2:3].squeeze(-1)
+    
+    # Construct path to final_expressions.txt
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if device != 'cuda:0':
+        expr_file = os.path.join(base_dir, "Example", model_name, "Results", params_name, f"noise_{noise_level}", "final_expressions.txt")
+    else:
+        expr_file = os.path.join(base_dir, "Example", model_name, "Results", "Results", params_name, f"noise_{noise_level}", "final_expressions.txt")
+    
+    if not os.path.exists(expr_file):
+        raise FileNotFoundError(f"Final expressions file not found: {expr_file}")
+    
+    # Check if expressions are already cached for this configuration
+    cache_key = f"{model_name}_{params_name}_noise_{noise_level}"
+    if cache_key not in _expression_cache:
+        # Read the expressions from file
+        expressions = {}
+        with open(expr_file, 'r') as f:
+            lines = f.readlines()
+        
+        print(f"\n[INFO] Reading learned expressions from: {expr_file}")
+        print("="*60)
+        print("LEARNED FEX EXPRESSIONS:")
+        print("="*60)
+            
+        for line in lines:
+            if line.startswith('dimension_'):
+                # Parse dimension and expression
+                parts = line.strip().split(': ', 1)
+                if len(parts) == 2:
+                    dim_name = parts[0]
+                    expr_str = parts[1]
+                    expressions[dim_name] = expr_str
+                    print(f"{dim_name}: {expr_str}")
+        
+        print("="*60)
+        
+        if not expressions:
+            raise ValueError(f"No expressions found in {expr_file}")
+        
+        # Cache the expressions
+        _expression_cache[cache_key] = expressions
+    else:
+        # Use cached expressions (no printout)
+        expressions = _expression_cache[cache_key]
+    
+    # Create the learned model outputs
+    outputs = []
+    
+    # Process each dimension
+    for dim in range(1, 4):
+        dim_key = f'dimension_{dim}'
+        if dim_key not in expressions:
+            raise ValueError(f"Expression for {dim_key} not found in file")
+        
+        expr_str = expressions[dim_key]
+        
+        # Replace x1, x2, x3 with the actual tensor variables
+        # Note: We need to handle the expressions carefully to avoid tensor operations issues
+        expr_str = expr_str.replace('x1', 'x1_tensor')
+        expr_str = expr_str.replace('x2', 'x2_tensor') 
+        expr_str = expr_str.replace('x3', 'x3_tensor')
+        
+        # Create local variables for evaluation
+        x1_tensor = x1
+        x2_tensor = x2
+        x3_tensor = x3
+        
+        # Evaluate the expression
+        try:
+            # Use numpy operations for compatibility
+            x1_np = x1.detach().cpu().numpy() if hasattr(x1, 'detach') else x1
+            x2_np = x2.detach().cpu().numpy() if hasattr(x2, 'detach') else x2
+            x3_np = x3.detach().cpu().numpy() if hasattr(x3, 'detach') else x3
+            
+            # Replace variables in expression
+            expr_np = expr_str.replace('x1_tensor', 'x1_np')
+            expr_np = expr_np.replace('x2_tensor', 'x2_np')
+            expr_np = expr_np.replace('x3_tensor', 'x3_np')
+            
+            # Evaluate the expression
+            result = eval(expr_np)
+            
+            # Convert back to tensor if needed
+            if hasattr(x1, 'detach'):
+                result = torch.tensor(result, dtype=x1.dtype, device=x1.device)
+            
+            outputs.append(result)
+            
+        except Exception as e:
+            print(f"Error evaluating expression for {dim_key}: {expr_str}")
+            print(f"Error: {e}")
+            raise
+    
+    # Stack outputs to create (batch_size, 3) tensor
+    if hasattr(x1, 'detach'):
+        return torch.stack(outputs, dim=1)
+    else:
+        return np.stack(outputs, axis=1)
+
 
 if __name__ == "__main__":
     import os

@@ -295,8 +295,8 @@ class Config:
                             default = 2000,
                             help='Number of epochs for NN solver')
         
-        parser.add_argument('--NUM_SAMPLES',type=int,
-                            default = 10000,
+        parser.add_argument('--RESIDUAL_SAMPLES',type=int,
+                            default = 50000,
                             help='Number of samples for DM training.')
         
         parser.add_argument('--TRAIN_WORKING_DIM',type=int,

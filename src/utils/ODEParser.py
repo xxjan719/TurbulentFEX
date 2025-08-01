@@ -120,11 +120,30 @@ class FN_Net(nn.Module):
         self.output.weight.data = self.best_output_weight
         self.output.bias.data = self.best_output_bias
 
-def generate_rk4_residue(func, data, dt):
+def generate_euler_residue(func, data, dt):
     # Extract data dimensions - data shape is (MC_samples, 3, time_steps+1)
     dataset = data['dataset']  # Shape: (MC_samples, 3, time_steps+1)
     MC_samples, _, time_steps_plus_1 = dataset.shape
     time_steps = time_steps_plus_1 - 1
+    
+    # Filter out trajectories with NaN values
+    print(f"[INFO] Original dataset shape: {dataset.shape}")
+    print(f"[INFO] Checking for NaN values in trajectories...")
+    
+    # Find trajectories that contain any NaN values
+    nan_trajectories = np.any(np.isnan(dataset), axis=(1, 2))
+    valid_trajectories = ~nan_trajectories
+    
+    print(f"[INFO] Found {np.sum(nan_trajectories)} trajectories with NaN values")
+    print(f"[INFO] Using {np.sum(valid_trajectories)} valid trajectories")
+    
+    if np.sum(valid_trajectories) == 0:
+        raise RuntimeError("No valid trajectories found! All trajectories contain NaN values.")
+    
+    # Filter the dataset to only include valid trajectories
+    dataset = dataset[valid_trajectories]
+    MC_samples = dataset.shape[0]
+    print(f"[INFO] Filtered dataset shape: {dataset.shape}")
     
     # Initialize output arrays
     residuals = np.zeros((MC_samples, 3, time_steps))
@@ -142,25 +161,27 @@ def generate_rk4_residue(func, data, dt):
         # Store current state for output
         u_current_reshaped[:, :, t] = u_current
         
-        # RK4 steps for this time step
-        k1 = func(u_current)
-        k2 = func(u_current + 0.5 * dt * k1)
-        k3 = func(u_current + 0.5 * dt * k2)
-        k4 = func(u_current + dt * k3)
-        
-        # RK4 prediction
-        u_rk4_pred = u_current + dt * (k1 / 6 + k2 / 3 + k3 / 3 + k4 / 6)
+        # Euler prediction
+        func_output = func(u_current)
+        u_euler_pred = u_current + dt * func_output
         
         # Calculate residuals for this time step
-        residuals[:, :, t] = u_next - u_rk4_pred
+        residuals[:, :, t] = u_next - u_euler_pred
     
     # Calculate residual covariance for each time step
     residual_cov_time = np.zeros((time_steps, 3))
     
     for t in range(time_steps):
-        residual_cov_time[t, 0] = np.std(residuals[:, 0, t]) / np.sqrt(dt)
-        residual_cov_time[t, 1] = np.std(residuals[:, 1, t]) / np.sqrt(dt)
-        residual_cov_time[t, 2] = np.std(residuals[:, 2, t]) / np.sqrt(dt)
+        # Calculate standard deviations
+        std_0 = np.std(residuals[:, 0, t])
+        std_1 = np.std(residuals[:, 1, t])
+        std_2 = np.std(residuals[:, 2, t])
+        
+        # Calculate residual covariance
+        residual_cov_time[t, 0] = std_0 / np.sqrt(dt)
+        residual_cov_time[t, 1] = std_1 / np.sqrt(dt)
+        residual_cov_time[t, 2] = std_2 / np.sqrt(dt)
+        
         if t % 100 == 0:
             print(f"Time {t}: {residual_cov_time[t, 0]:.6f}, {residual_cov_time[t, 1]:.6f}, {residual_cov_time[t, 2]:.6f}")
 
@@ -218,26 +239,7 @@ def process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, x_sample, x
 
 
 
-def FEX_model1(x):
-    x1 = x[:, 0:1].squeeze(-1)
-    x2 = x[:, 1:2].squeeze(-1)
-    x3 = x[:, 2:3].squeeze(-1)
-    return -0.2*x1 + 1*x2*x3 + 1*x2 + -2*x3 
 
-def FEX_model2(x):
-    x1 = x[:, 0:1].squeeze(-1)
-    x2 = x[:, 1:2].squeeze(-1)
-    x3 = x[:, 2:3].squeeze(-1)
-    return  -0.6*x1*x3 + -1*x1 + -0.1*x2 + -3*x3 
-
-def FEX_model3(x):
-    x1 = x[:, 0:1].squeeze(-1)
-    x2 = x[:, 1:2].squeeze(-1)
-    x3 = x[:, 2:3].squeeze(-1)
-    return  -0.4*x1*x2 + 2*x1 + 3*x2 + -0.1*x3 
-
-def FEX_model_check(x):
-    return np.stack([FEX_model1(x), FEX_model2(x), FEX_model3(x)], axis=1)
 
 def process_chunk(it_n_index, it_size_x0train, short_size,x_sample, x0_train, train_size,x_dim):
     x0_train_index_initial = np.empty((train_size, short_size ), dtype=int)

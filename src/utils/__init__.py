@@ -2,8 +2,7 @@
 
 # Import specific utility functions for easy access
 # . before helper functions indicates that they are part of the same package where this file is located
-from .FEX import FEX
-from .FEXParser import MultiDimensionFEX
+from .FEX import (FEX,FEX_model_ground_truth,FEX_model_learned)
 from .controller import Controller
 from .ODEParser import (ODE_solver, FN_Net,process_chunk_faiss_cpu)
 from .Pool import Pool
@@ -25,8 +24,8 @@ __all__ = [
     "process_chunk_faiss_cpu", "ODE_solver", "FN_Net",
     "Pool", "Sampler", "Body4TrainIntegrationParams",
     "Body4TrainIntegrationArgs", "Body4TrainIntegrator", "Controller", 
-    "binary_ops", "unary_ops", "POOL_LIMIT", "MultiDimensionFEX", "get_coefficients", 
+    "binary_ops", "unary_ops", "POOL_LIMIT", "get_coefficients", 
     "get_score_expression_from_file", "check_allowed_terms", "plot_NOISE_LEVEL_EFFECT",
     "get_sequence_from_candidate", "coefficents_history", "extract_coefficients_from_expr",
-    "plot_training_progress_grid", "select_operator_sequence"
+    "plot_training_progress_grid", "select_operator_sequence","FEX_model_ground_truth","FEX_model_learned"
 ]
