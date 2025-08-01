@@ -67,12 +67,13 @@ print("2. Skip to calculate the measurements")
 print("3. Skip all and plot the results")
 print("="*60)
 
-#while True:
-choice = '1' #input("\nChoose option (1 or 2 or 3):").strip()
-    #if choice in ['1','2','3']:
-    #    break
-    #else:
-    #    print("Please enter '1' or '2' or '3'.")
+while True:
+#choice = '1' #
+    choice = input("\nChoose option (1 or 2 or 3):").strip()
+    if choice in ['1','2','3']:
+        break
+    else:
+        print("Please enter '1' or '2' or '3'.")
 
 if choice == '1':
     # Option 1: Train everything in second stage

@@ -520,6 +520,7 @@ else:
                     f.write(f"{dim}: {expr}\n")
                 f.write("\nTraining completed successfully!\n")
             print(f"[INFO] Final expressions saved to: {final_expr_save_path}")
+            print("[SUCCESS] First stage training completed successfully! you may need to do the second stage training")
             
 
 
