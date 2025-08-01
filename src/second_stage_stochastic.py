@@ -62,8 +62,8 @@ print("\n"+ "="*60)
 print("SECOND STAGE: STOCHASTIC OPTIONS")
 print("="*60)
 print("1. Train to learn stochastic part in noise level and num samples")
-print("2. Skip to calculate the measurements")
-print("3. Skip all and plot the results")
+print("2. Skip Training and generate the prediction results")
+print("3. Skip all and plot the results directly")
 print("="*60)
 
 while True:
@@ -101,16 +101,21 @@ if choice == '1':
                                  device=device)
     
     residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_wrapper, data, dt)
-
-#     np.save(os.path.join(save_dir,'residual_cov_truth.npy'), residual_cov_truth)
-#     print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
-#     scaler = np.ones(3) * args.DIFF_SCALE
-#     train_size = args.NUM_SAMPLES
-#     #===================================================================================
-#     ODE_Solution,ZT_Solution = generate_second_step(
-#         u_current, residuals, scaler, dt, train_size, device,
-#         num_time_points=101  # Only process 100 time points
-#     )
+    print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
+    np.save(os.path.join(save_dir,'residual_cov_truth.npy'), residual_cov_truth)
+    print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
+    scaler = np.ones(3) * args.DIFF_SCALE
+    train_size = args.RESIDUAL_SAMPLES
+    #===================================================================================
+    ODE_Solution,ZT_Solution = generate_second_step(
+        u_current, residuals, scaler, dt, train_size, device,
+        num_time_points=1001  # Only process 100 time points
+    )
+    print(f'[INFO] the ODE solution shape is: {ODE_Solution.shape}')
+    mean_value, std_value = generate_mean_and_std(ODE_Solution)
+    print(f'[INFO] this is print for mean and std: {mean_value.shape} {std_value.shape}')
+    
+    
 #     print(f'[INFO] the ODE solution shape is: {ODE_Solution.shape}')
 #     mean_value, std_value = generate_mean_and_std(ODE_Solution)
 #     print(f'[INFO] this is print for mean and std: {mean_value.shape} {std_value.shape}')
@@ -138,9 +143,9 @@ if choice == '1':
 #     print("="*60)
 #     print('[SUCCESS] training process finished.')
 
-# elif choice == '2':
-#     print("\n[INFO] Skip training and calculate the measurements...")
-#     # Load the data
+elif choice == '2':
+    print("\n[INFO] Skip training and deducing the performances...")
+    # Load the data
 #     data = np.load(os.path.join(save_dir,'simulation_data.npz'))
 #     dt = 0.01
 #     residuals, u_current, residual_cov_truth = generate_rk4_residue(FEX_model_check, data, dt)
@@ -160,11 +165,11 @@ if choice == '1':
 #     )
 #     print('[SUCCESS] Ensemble prediction completed.')
     
-# elif choice == '3':
-#     print("\n[INFO] Skip all and plot the results...")
-#     pass
+elif choice == '3':
+    print("\n[INFO] Skip all and plot the results...")
+    pass
 
-# #===========================Plotting Section==============================================
+#===========================Plotting Section==============================================
 # print("\n"+ "="*60)
 # print("[INFO] Creating plots and visualizations...")
 # print("="*60)
