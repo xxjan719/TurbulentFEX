@@ -111,16 +111,17 @@ if choice == '1':
         u_current, residuals, scaler, dt, train_size, device,
         num_time_points=1001  # Only process 100 time points
     )
+    
     print(f'[INFO] the ODE solution shape is: {ODE_Solution.shape}')
     mean_value, std_value = generate_mean_and_std(ODE_Solution)
     print(f'[INFO] this is print for mean and std: {mean_value.shape} {std_value.shape}')
-    
-    # Train ensemble models for better accuracy (only on selected time points)
-    train_FN_ensemble(
-        ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir,
-        num_time_points=1001,  # Only train on 100 time points
-        dt=dt
-    )
+    np.save(os.path.join(save_dir, "ODE_Solution.npy"), ODE_Solution)
+    # # Train ensemble models for better accuracy (only on selected time points)
+    # train_FN_ensemble(
+    #     ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir,
+    #     num_time_points=1001,  # Only train on 100 time points
+    #     dt=dt
+    # )
     
 #     print("\n"+ "="*60)
 #     print("\n[INFO] Testing ensemble predictions...")
