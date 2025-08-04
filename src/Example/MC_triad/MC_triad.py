@@ -191,6 +191,7 @@ def MC_triad_direct(params, m0, var0, method = 'RK4', noise_level = 1.0):
         
         # noise term
         SS = params['SS'] + params['tmS'][i - 1] ** 2 * (params['SSt'] - params['SS'])
+        print(SS)
         Winc = np.random.randn(MC, 3)  # shape (MC, 3)
         u = u + np.sqrt(Dt) * noise_level * (Winc @ SS)  # (MC,3) @ (3,3) → (MC,3)
         u_all[:, :, i] = u
@@ -436,10 +437,12 @@ if __name__ == "__main__":
     #params = params_init('equipart')
     #plot_latex_formula(params, model_path)
     # #print("Matrix coefficients extraction completed.")
+    noise_level = 2.0
     m0, var0 = MC_triad_initial_value()
     params = params_init('equipart')
-    data_save_path = Path(os.path.join(os.path.dirname(__file__), 'Results', 'equipart'))
-    dataset, mean_MC, cov_MC, moment3_MC, moment3_MC_norm,Energy_MC, Energy_dyn = MC_triad_direct(params, m0, var0)
+    data_save_path = Path(os.path.join(os.path.dirname(__file__), 'Results', 'equipart', f'noise_{noise_level}',f'simulation_results_noise_{noise_level}.npz'))
+    dataset, mean_MC, cov_MC, moment3_MC, moment3_MC_norm,Energy_MC, Energy_dyn = MC_triad_direct(params, m0, var0, noise_level=noise_level)
+    print(dataset.shape)
     np.savez(
     data_save_path,
     dataset=dataset,

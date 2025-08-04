@@ -23,7 +23,7 @@ args = parser.parse_args()
 if torch.cuda.is_available() and args.DEVICE.startswith('cuda'):
     DEVICE = torch.device(args.DEVICE)
     print(f"Using {args.DEVICE}")
-    base_path = os.path.join(DIR_EXAMPLE,args.Model,'Results','Results')
+    base_path = os.path.join(DIR_EXAMPLE,args.Model,'Results','Results1','Results')
 else:
     DEVICE = torch.device('cpu')
     print("CUDA is not available, using CPU instead")

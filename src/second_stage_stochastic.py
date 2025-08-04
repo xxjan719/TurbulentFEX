@@ -48,11 +48,11 @@ if args.Model == 'MC_triad':
     if os.path.exists(save_dir):   
         print('[INFO] Right now we use our own workspace path.') 
     else:
-        model_PATH = Path(os.path.join(config.DIR_TRIAD, 'Results', 'Results', args.params_name))
-        save_dir = os.path.join(config.DIR_TRIAD,'Results', 'Results',args.params_name,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}')
+        model_PATH = Path(os.path.join(config.DIR_TRIAD, 'Results', 'Results1', 'Results', args.params_name))
+        save_dir = os.path.join(config.DIR_TRIAD,'Results', 'Results1', 'Results',args.params_name,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}')
         print('[INFO] Right now we use hipergator workspace path.')
-os.makedirs(save_dir,exist_ok=True)
-print(f'[INFO] The save directory is {save_dir}')
+        os.makedirs(save_dir,exist_ok=True)
+    print(f'[INFO] The save directory is {save_dir}')
 print("="*60)
 #=================================================================================
 
@@ -66,13 +66,13 @@ print("2. Skip Training and generate the prediction results")
 print("3. Skip all and plot the results directly")
 print("="*60)
 
-#while True:
-choice = '1' #
-    # choice = input("\nChoose option (1 or 2 or 3):").strip()
-    # if choice in ['1','2','3']:
-    #     break
-    # else:
-    #     print("Please enter '1' or '2' or '3'.")
+while True:
+#choice = '1' #
+    choice = input("\nChoose option (1 or 2 or 3):").strip()
+    if choice in ['1','2','3']:
+        break
+    else:
+        print("Please enter '1' or '2' or '3'.")
 
 if choice == '1':
     # Option 1: Train everything in second stage
@@ -107,15 +107,23 @@ if choice == '1':
     scaler = np.ones(3) * args.DIFF_SCALE
     train_size = args.RESIDUAL_SAMPLES
     #===================================================================================
-    ODE_Solution,ZT_Solution = generate_second_step(
+    if not os.path.exists(os.path.join(save_dir,'ODE_Solution.npy')) and not os.path.exists(os.path.join(save_dir,'ZT_Solution.npy')):
+        ODE_Solution,ZT_Solution = generate_second_step(
         u_current, residuals, scaler, dt, train_size, device,
         num_time_points=1001  # Only process 100 time points
     )
-    
-    print(f'[INFO] the ODE solution shape is: {ODE_Solution.shape}')
-    mean_value, std_value = generate_mean_and_std(ODE_Solution)
-    print(f'[INFO] this is print for mean and std: {mean_value.shape} {std_value.shape}')
-    np.save(os.path.join(save_dir, "ODE_Solution.npy"), ODE_Solution)
+        print(f'[INFO] the ODE solution shape is: {ODE_Solution.shape}')
+        mean_value, std_value = generate_mean_and_std(ODE_Solution)
+        print(f'[INFO] this is print for mean and std: {mean_value.shape} {std_value.shape}')
+        np.save(os.path.join(save_dir, "ODE_Solution.npy"), ODE_Solution)
+        np.save(os.path.join(save_dir, "ZT_Solution.npy"), ZT_Solution)
+    else:
+        print('[INFO] the ODE solution has already been generated, skip the generation process.')
+        ODE_Solution = np.load(os.path.join(save_dir, "ODE_Solution.npy"))
+        mean_value, std_value = generate_mean_and_std(ODE_Solution)
+        print(f'[INFO] this is print for mean and std: {mean_value.shape} {std_value.shape}')
+        
+        
     # # Train ensemble models for better accuracy (only on selected time points)
     # train_FN_ensemble(
     #     ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir,
@@ -174,7 +182,7 @@ elif choice == '3':
 # # Auto-detect existing cases in equipart directory
 # equipart_dir = config.DIR_EQUIPART
 # if not os.path.exists(equipart_dir):
-#     equipart_dir = Path(os.path.join(config.DIR_TRIAD, 'Results', 'Results', 'equipart'))
+#     equipart_dir = Path(os.path.join(config.DIR_TRIAD, 'Results', 'Results1', 'Results', 'equipart'))
 
 # print(f"[INFO] Looking for cases in: {equipart_dir}")
 

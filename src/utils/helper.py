@@ -163,7 +163,7 @@ def get_coefficients(load_dir: str = "",
     
     # Define path to FINAL_EXPR.txt
     if DEVICE == "cuda:0":
-        file_path = os.path.join(load_dir, "Results", "Results", "equipart", "FINAL_EXPR.txt")
+        file_path = os.path.join(load_dir, "Results", "Results1", "Results", "equipart", "FINAL_EXPR.txt")
     else:
         file_path = os.path.join(load_dir, "Results", "equipart", "FINAL_EXPR.txt")
     
