@@ -11,6 +11,10 @@ import torch.optim as optim
 # Set environment variable to handle OpenMP runtime conflicts
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
+try:
+    from .FEX import FEX_model_ground_truth,FEX_model_learned
+except:
+    from FEX import FEX_model_ground_truth,FEX_model_learned
 # Add FAISS imports for CPU-based nearest neighbor search
 import faiss
     # FAISS_AVAILABLE = True
@@ -597,6 +601,8 @@ def predict_ensemble_residual_covariance(residuals: np.ndarray,
                                        save_dir: str,
                                        dt: float,
                                        scaler: np.ndarray,
+                                       u_current: np.ndarray = None,
+                                       fex_model_func = None,
                                        train_size: int = 1000,
                                        n_models: int = 5,
                                        device: str = 'cpu',
@@ -610,6 +616,8 @@ def predict_ensemble_residual_covariance(residuals: np.ndarray,
         save_dir (str): Directory containing saved ensemble models and normalization parameters
         dt (float): Time step size
         scaler (np.ndarray): Scaling factors for each dimension
+        u_current (np.ndarray, optional): Current states with shape (MC_samples, variables, time_steps)
+        fex_model_func (callable, optional): FEX model function to calculate deterministic part
         train_size (int): Number of test samples to generate
         n_models (int): Number of models in ensemble
         device (str): Device to run predictions on ('cpu' or 'cuda')
@@ -637,6 +645,16 @@ def predict_ensemble_residual_covariance(residuals: np.ndarray,
     for i, t in enumerate(selected_indices):
         z_test = np.random.randn(train_size, 3)
         z_test_tensor = torch.tensor(z_test, dtype=torch.float32).to(device)
+        
+        # Calculate FEX model prediction for current state
+        if fex_model_func is not None and u_current is not None:
+            # Get current state for this time step
+            current_state = u_current[:, :, t]  # Shape: (train_size, 3)
+            # Calculate FEX model prediction
+            fex_pred = fex_model_func(current_state)  # Should return shape (train_size, 3)
+            FEX_model_pred = np.mean(fex_pred, axis=0)  # Average across samples
+        else:
+            FEX_model_pred = np.zeros(3)  # Default if no FEX model provided
         
         for dim in range(1, 4):
             # Load normalization parameters
@@ -677,6 +695,8 @@ def predict_ensemble_residual_covariance(residuals: np.ndarray,
             
             # Scale back by scaler
             pred = pred / scaler[dim-1]
+            # Add FEX model prediction to get total prediction
+            pred = pred + FEX_model_pred[dim-1]
             residual_cov_pred[i, dim-1] = np.std(pred) / np.sqrt(dt)
             
             print(f"Time {selected_times[i]:.2f}s, Dimension {dim}: {np.std(pred)/np.sqrt(dt):.6f}")
@@ -701,6 +721,8 @@ def predict_single_model_residual_covariance(residuals: np.ndarray,
                                            save_dir: str,
                                            dt: float,
                                            scaler: np.ndarray,
+                                           u_current: np.ndarray = None,
+                                           fex_model_func = None,
                                            train_size: int = 1000,
                                            device: str = 'cpu',
                                            residual_cov_truth: np.ndarray = None,
@@ -713,6 +735,8 @@ def predict_single_model_residual_covariance(residuals: np.ndarray,
         save_dir (str): Directory containing saved models and normalization parameters
         dt (float): Time step size
         scaler (np.ndarray): Scaling factors for each dimension
+        u_current (np.ndarray, optional): Current states with shape (MC_samples, variables, time_steps)
+        fex_model_func (callable, optional): FEX model function to calculate deterministic part
         train_size (int): Number of test samples to generate
         device (str): Device to run predictions on ('cpu' or 'cuda')
         residual_cov_truth (np.ndarray, optional): Ground truth residual covariance for comparison
@@ -738,6 +762,16 @@ def predict_single_model_residual_covariance(residuals: np.ndarray,
     for i, t in enumerate(selected_indices):
         z_test = np.random.randn(train_size, 3)
         z_test_tensor = torch.tensor(z_test, dtype=torch.float32).to(device)
+        
+        # Calculate FEX model prediction for current state
+        if fex_model_func is not None and u_current is not None:
+            # Get current state for this time step
+            current_state = u_current[:, :, t]  # Shape: (train_size, 3)
+            # Calculate FEX model prediction
+            fex_pred = fex_model_func(current_state)  # Should return shape (train_size, 3)
+            FEX_model_pred = np.mean(fex_pred, axis=0)  # Average across samples
+        else:
+            FEX_model_pred = np.zeros(3)  # Default if no FEX model provided
         
         for dim in range(1, 4):
             # Load normalization parameters
@@ -770,6 +804,8 @@ def predict_single_model_residual_covariance(residuals: np.ndarray,
             
             # Scale back by scaler
             pred = pred / scaler[dim-1]
+            # Add FEX model prediction to get total prediction
+            pred = pred + FEX_model_pred[dim-1]
             residual_cov_pred[i, dim-1] = np.std(pred) / np.sqrt(dt)
             
             print(f"Time {selected_times[i]:.2f}s, Dimension {dim}: {np.std(pred)/np.sqrt(dt):.6f}")
@@ -804,7 +840,7 @@ if __name__ == "__main__":
     save_dir = os.path.join(os.getcwd(), 'src','Example','MC_triad','Results', 'equipart','FN_model')
     os.makedirs(save_dir,exist_ok=True)
     
-    residuals,u_current = generate_rk4_residue(FEX_model_check, data, dt)
+    residuals,u_current = generate_euler_residue(FEX_model_ground_truth, data, dt)
     print(residuals.shape,u_current.shape)
     
     scaler = np.array([20,20,20])

@@ -12,6 +12,8 @@ from utils.ODEParser import (
     generate_second_step, 
     generate_mean_and_std, 
     train_FN_each_dimension,
+    train_FN_ensemble,
+    predict_single_model_residual_covariance,
     predict_ensemble_residual_covariance
 )
 from utils.FEX import FEX_model_ground_truth,FEX_model_learned
@@ -44,12 +46,12 @@ print("\n"+ "="*60)
 print("\n[INFO] Setting up the path...")
 if args.Model == 'MC_triad':
     model_PATH = config.DIR_TRIAD
-    save_dir = os.path.join( model_PATH,'Results',args.params_name,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}')
+    save_dir = os.path.join( model_PATH,'Results',args.params_name,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}_single')
     if os.path.exists(save_dir):   
         print('[INFO] Right now we use our own workspace path.') 
     else:
         model_PATH = Path(os.path.join(config.DIR_TRIAD, 'Results', 'Results1', 'Results', args.params_name))
-        save_dir = os.path.join(config.DIR_TRIAD,'Results', 'Results1', 'Results',args.params_name,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}')
+        save_dir = os.path.join(config.DIR_TRIAD,'Results', 'Results1', 'Results',args.params_name,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}_single')
         print('[INFO] Right now we use hipergator workspace path.')
         os.makedirs(save_dir,exist_ok=True)
     print(f'[INFO] The save directory is set up successfully')
@@ -124,30 +126,62 @@ if choice == '1':
         print(f'[INFO] this is print for mean and std: {mean_value.shape} {std_value.shape}')
         ZT_Solution = np.load(os.path.join(save_dir, "ZT_Solution.npy"))
         
-        
-    # Train each dimension separately
-    train_FN_each_dimension(
-        ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir,
-        num_time_points=1001,  # Train on all time points
-        dt=dt
-    )
+    # Check if FN models exist for all dimensions and time points (0-999)
+    fn_models_exist = True
+    for dim in range(1, 4):  # dimensions 1, 2, 3
+        for t in range(1000):  # time points 0-999
+            fn_path = os.path.join(save_dir, f"FN_dim{dim}_t{t}.pth")
+            if not os.path.exists(fn_path):
+                fn_models_exist = False
+                break
+        if not fn_models_exist:
+            break
     
-#     print("\n"+ "="*60)
-#     print("\n[INFO] Testing ensemble predictions...")
-#     residual_cov_pred, selected_times = predict_ensemble_residual_covariance(
-#         residuals=residuals,
-#         save_dir=save_dir,
-#         dt=dt,
-#         scaler=scaler,
-#         train_size=train_size,
-#         n_models=5,
-#         device=device,
-#         residual_cov_truth=residual_cov_truth,
-#         num_time_points=101  # Only predict on 100 time points
-#     )
-#     print('[SUCCESS] Ensemble prediction completed.')
-#     print("="*60)
-#     print('[SUCCESS] training process finished.')
+    if not fn_models_exist:
+        print('[INFO] Training FN models for all dimensions and time points...')
+        # Train each dimension separately
+        # train_FN_each_dimension(
+        #     ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir,
+        #     num_time_points=1000,  # Train on time points 0-999
+        #     dt=dt
+        # )
+        train_FN_ensemble(
+            ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir,
+            num_time_points=1000,  # Train on time points 0-999
+            dt=dt
+        )
+    else:
+        print('[INFO] All FN models already exist, skipping training process.')
+        print(f'[INFO] Found models for dimensions 1-3,')  
+    
+    print("\n"+ "="*60)
+    print("\n[INFO] Testing ensemble predictions...")
+    predict_single_model_residual_covariance(
+         residuals=residuals,
+        save_dir=save_dir,
+        dt=dt,
+        scaler=scaler,
+        u_current=u_current,
+        fex_model_func = learned_model_wrapper,
+        train_size=train_size,
+        device=device,
+        residual_cov_truth=residual_cov_truth,
+        num_time_points=1001  # Only predict on 100 time points
+    )
+    # residual_cov_pred, selected_times = predict_ensemble_residual_covariance(
+    #     residuals=residuals,
+    #     save_dir=save_dir,
+    #     dt=dt,
+    #     scaler=scaler,
+    #     train_size=train_size,
+    #     n_models=5,
+    #     device=device,
+    #     residual_cov_truth=residual_cov_truth,
+    #     num_time_points=1001  # Only predict on 100 time points
+    # )
+    print('[SUCCESS] Ensemble prediction completed.')
+    print("="*60)
+    print('[SUCCESS] training process finished.')
 
 elif choice == '2':
     print("\n[INFO] Skip training and deducing the performances...")
