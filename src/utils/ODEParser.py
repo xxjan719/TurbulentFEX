@@ -404,7 +404,7 @@ def train_FN_each_dimension(ODE_Solution:np.ndarray,
             FN_dim = FN_Net(1,1,100).to(device)  # Increased hidden size from 50 to 100
             FN_dim.zero_grad()
             optimizer = optim.Adam(FN_dim.parameters(),lr = learning_rate,weight_decay = 1e-5)  # Reduced weight decay
-            scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=200, verbose=True)
+            scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=200)
             criterion = nn.MSELoss()
             
             # Get the mean and std for normalization
@@ -455,7 +455,9 @@ def train_FN_each_dimension(ODE_Solution:np.ndarray,
             FN_dim.final_update()
             if save_dir is not None:
                 FN_path = os.path.join(save_dir,f'FN_dim{x_dim}_t{t}.pth')
-                torch.save(FN_dim.state_dict(),FN_path)
+                # Save model parameters in CPU format regardless of training device
+                state_dict_cpu = {k: v.cpu() for k, v in FN_dim.state_dict().items()}
+                torch.save(state_dict_cpu, FN_path)
                 # Save normalization parameters
                 norm_params = {'mean': y_mean, 'std': y_std}
                 np.save(os.path.join(save_dir,f'norm_params_dim{x_dim}_t{t}.npy'), norm_params)
@@ -514,7 +516,7 @@ def train_FN_ensemble(ODE_Solution:np.ndarray,
                 FN_dim = FN_Net(1,1,100).to(device)
                 FN_dim.zero_grad()
                 optimizer = optim.Adam(FN_dim.parameters(), lr=0.001, weight_decay=1e-5)
-                scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=200, verbose=False)
+                scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=200)
                 criterion = nn.MSELoss()
                 
                 best_valid_loss = float('inf')
@@ -695,12 +697,104 @@ def predict_ensemble_residual_covariance(residuals: np.ndarray,
     
     return residual_cov_pred, selected_times
 
+def predict_single_model_residual_covariance(residuals: np.ndarray,
+                                           save_dir: str,
+                                           dt: float,
+                                           scaler: np.ndarray,
+                                           train_size: int = 1000,
+                                           device: str = 'cpu',
+                                           residual_cov_truth: np.ndarray = None,
+                                           num_time_points: int = 100):
+    """
+    Predict residual covariance using single trained neural networks from train_FN_each_dimension.
+    
+    Args:
+        residuals (np.ndarray): Residual data with shape (MC_samples, variables, time_steps)
+        save_dir (str): Directory containing saved models and normalization parameters
+        dt (float): Time step size
+        scaler (np.ndarray): Scaling factors for each dimension
+        train_size (int): Number of test samples to generate
+        device (str): Device to run predictions on ('cpu' or 'cuda')
+        residual_cov_truth (np.ndarray, optional): Ground truth residual covariance for comparison
+        num_time_points (int): Number of time points to process (regularly spaced)
+        
+    Returns:
+        tuple: (residual_cov_pred, selected_times) - Predicted covariance and corresponding times
+    """
+    total_time_steps = residuals.shape[2]
+    
+    # Select time points to process
+    selected_indices, selected_times = select_time_points(
+        total_time_steps, dt, num_time_points
+    )
+    
+    print(f"\n=== Single Model Prediction Results ===")
+    print(f"Processing {len(selected_indices)} time points out of {total_time_steps} total")
+    print(f"Time range: {selected_times[0]:.2f}s to {selected_times[-1]:.2f}s")
+    
+    residual_cov_pred = np.zeros((len(selected_indices), 3))
+    
+    # Load and use single model predictions for each selected time point
+    for i, t in enumerate(selected_indices):
+        z_test = np.random.randn(train_size, 3)
+        z_test_tensor = torch.tensor(z_test, dtype=torch.float32).to(device)
+        
+        for dim in range(1, 4):
+            # Load normalization parameters
+            norm_params_path = os.path.join(save_dir, f'norm_params_dim{dim}_t{t}.npy')
+            if not os.path.exists(norm_params_path):
+                print(f"Warning: Normalization parameters not found for dim{dim}_t{t}")
+                continue
+                
+            norm_params = np.load(norm_params_path, allow_pickle=True).item()
+            y_mean = norm_params['mean']
+            y_std = norm_params['std']
+            
+            # Load single model
+            model_path = os.path.join(save_dir, f'FN_dim{dim}_t{t}.pth')
+            if not os.path.exists(model_path):
+                print(f"Warning: Model not found: {model_path}")
+                continue
+                
+            FN_dim = FN_Net(1, 1, 100).to(device)
+            
+            # Load the CPU-saved model and move to target device
+            state_dict = torch.load(model_path, map_location=device)
+            FN_dim.load_state_dict(state_dict)
+            
+            # Make prediction
+            pred = (FN_dim(z_test_tensor[:, dim-1:dim].reshape(-1, 1))).cpu().detach().numpy()
+            
+            # Denormalize: pred * y_std + y_mean
+            pred = pred * y_std + y_mean
+            
+            # Scale back by scaler
+            pred = pred / scaler[dim-1]
+            residual_cov_pred[i, dim-1] = np.std(pred) / np.sqrt(dt)
+            
+            print(f"Time {selected_times[i]:.2f}s, Dimension {dim}: {np.std(pred)/np.sqrt(dt):.6f}")
+            
+            if residual_cov_truth is not None:
+                print(f"Comparison with Ground Truth: {residual_cov_truth[t, dim-1]:.6f}")
+    
+    print("\nExpected values should be close to original")
+    print("Single model method completed!")
+    
+    # Save predictions with time information
+    results = {
+        'residual_cov_pred': residual_cov_pred,
+        'selected_times': selected_times,
+        'selected_indices': selected_indices
+    }
+    np.save(os.path.join(save_dir, 'residual_cov_pred_single.npy'), results)
+    
+    return residual_cov_pred, selected_times
+
 
 
 
 
 if __name__ == "__main__":
-    print(os.getcwd())
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     torch.manual_seed(1234)
     np.random.seed(1234)

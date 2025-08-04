@@ -11,7 +11,7 @@ from utils.ODEParser import (
     generate_euler_residue, 
     generate_second_step, 
     generate_mean_and_std, 
-    train_FN_ensemble,
+    train_FN_each_dimension,
     predict_ensemble_residual_covariance
 )
 from utils.FEX import FEX_model_ground_truth,FEX_model_learned
@@ -52,7 +52,7 @@ if args.Model == 'MC_triad':
         save_dir = os.path.join(config.DIR_TRIAD,'Results', 'Results1', 'Results',args.params_name,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}')
         print('[INFO] Right now we use hipergator workspace path.')
         os.makedirs(save_dir,exist_ok=True)
-    print(f'[INFO] The save directory is {save_dir}')
+    print(f'[INFO] The save directory is set up successfully')
 print("="*60)
 #=================================================================================
 
@@ -122,14 +122,15 @@ if choice == '1':
         ODE_Solution = np.load(os.path.join(save_dir, "ODE_Solution.npy"))
         mean_value, std_value = generate_mean_and_std(ODE_Solution)
         print(f'[INFO] this is print for mean and std: {mean_value.shape} {std_value.shape}')
+        ZT_Solution = np.load(os.path.join(save_dir, "ZT_Solution.npy"))
         
         
-    # # Train ensemble models for better accuracy (only on selected time points)
-    # train_FN_ensemble(
-    #     ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir,
-    #     num_time_points=1001,  # Only train on 100 time points
-    #     dt=dt
-    # )
+    # Train each dimension separately
+    train_FN_each_dimension(
+        ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir,
+        num_time_points=1001,  # Train on all time points
+        dt=dt
+    )
     
 #     print("\n"+ "="*60)
 #     print("\n[INFO] Testing ensemble predictions...")
