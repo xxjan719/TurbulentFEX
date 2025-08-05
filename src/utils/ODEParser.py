@@ -473,13 +473,21 @@ def train_FN_ensemble(ODE_Solution:np.ndarray,
                       n_models:int=5,  # Number of ensemble models
                       save_dir:str=None,
                       num_time_points:int=None,
+                      time_range:tuple=None,  # New parameter: (start_idx, end_idx)
                       dt:float=0.01):
     """Train an ensemble of neural networks to reduce approximation error"""
     total_time_steps = ODE_Solution.shape[2]
     size = ODE_Solution.shape[0]
     
     # Select time points to train on
-    if num_time_points is not None:
+    if time_range is not None:
+        # Use specific time range
+        start_idx, end_idx = time_range
+        time_indices = range(start_idx, min(end_idx, total_time_steps))
+        selected_times = np.array([t * dt for t in time_indices])
+        print(f"Training on time range {start_idx}-{end_idx} ({len(time_indices)} time points)")
+        print(f"Time range: {selected_times[0]:.2f}s to {selected_times[-1]:.2f}s")
+    elif num_time_points is not None:
         selected_indices, selected_times = select_time_points(
             total_time_steps, dt, num_time_points
         )
@@ -498,16 +506,16 @@ def train_FN_ensemble(ODE_Solution:np.ndarray,
             print(f'this is {x_dim} dimension / overall {dim} dimensions')
             
             # Get the mean and std for normalization
-            y_data = ODE_Solution[0:NTrain,x_dim-1,t_idx]
+            y_data = ODE_Solution[0:NTrain,x_dim-1,t]
             y_mean = np.mean(y_data)
             y_std = np.std(y_data)
             
             # Prepare data
-            xTrain_normal = torch.tensor(ZT_Solution[0:NTrain,x_dim-1,t_idx], dtype=torch.float32).reshape(-1, 1).to(device)
+            xTrain_normal = torch.tensor(ZT_Solution[0:NTrain,x_dim-1,t], dtype=torch.float32).reshape(-1, 1).to(device)
             yTrain_normal = torch.tensor((y_data - y_mean) / y_std, dtype=torch.float32).reshape(-1, 1).to(device)
             
-            y_valid_data = ODE_Solution[NTrain:size,x_dim-1,t_idx]
-            xValid_normal = torch.tensor(ZT_Solution[NTrain:size,x_dim-1,t_idx], dtype=torch.float32).reshape(-1, 1).to(device)
+            y_valid_data = ODE_Solution[NTrain:size,x_dim-1,t]
+            xValid_normal = torch.tensor(ZT_Solution[NTrain:size,x_dim-1,t], dtype=torch.float32).reshape(-1, 1).to(device)
             yValid_normal = torch.tensor((y_valid_data - y_mean) / y_std, dtype=torch.float32).reshape(-1, 1).to(device)
             
             # Train ensemble of models
