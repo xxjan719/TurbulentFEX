@@ -5,27 +5,11 @@ from pathlib import Path
 # Add the src directory to the path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
-
+sys.path.append("../src/Example/MC_triad")
 import torch
-from utils.ODEParser import (
-    generate_euler_residue, 
-    generate_second_step, 
-    generate_mean_and_std, 
-    train_FN_each_dimension,
-    train_FN_ensemble,
-    predict_single_model_residual_covariance,
-    predict_ensemble_residual_covariance
-)
-from utils.FEX import FEX_model_ground_truth,FEX_model_learned
-from utils.plot import (
-    plot_residual_covariance_comparison,
-    plot_log10_error,
-    plot_multiple_residual_covariance,
-    plot_multiple_log10_error,
-    plot_time_selection_info
-)
+from utils import *
 
-from Example.MC_triad.MC_triad import params_init, MC_triad_direct, MC_triad_initial_value
+from Example.MC_triad.MC_triad import params_init, MC_triad_initial_value
 import config
 
 # Import specific functions from ODE Parser
@@ -650,33 +634,30 @@ if choice == '1':
     print("\n"+ "="*60)
     print("\n[INFO] Testing predictions...")
     
+    # Initialize trajectory predictor
+    predictor = TrajectoryPredictor(device=device, dt=dt, scaler=scaler)
+    
     if chosen_method == 'ensemble':
         print("[INFO] Using ensemble prediction method...")
-        residual_cov_pred, selected_times = predict_ensemble_residual_covariance(
+        residual_cov_pred, selected_times = predictor.predict_ensemble_residual_covariance(
             residuals=residuals,
             save_dir=model_save_dir,  # Use the model save directory
-            dt=dt,
-            scaler=scaler,
             u_current=u_current,
             fex_model_func=learned_model_wrapper,
             train_size=train_size,
             n_models=5,
-            device=device,
             residual_cov_truth=residual_cov_truth,
             num_time_points=1001  # Only predict on 1001 time points
         )
         print('[SUCCESS] Ensemble prediction completed.')
     else:
         print("[INFO] Using single model prediction method...")
-        predict_single_model_residual_covariance(
+        residual_cov_pred, selected_times = predictor.predict_single_model_residual_covariance(
             residuals=residuals,
             save_dir=model_save_dir,  # Use the model save directory
-            dt=dt,
-            scaler=scaler,
             u_current=u_current,
             fex_model_func=learned_model_wrapper,
             train_size=train_size,
-            device=device,
             residual_cov_truth=residual_cov_truth,
             num_time_points=1001  # Only predict on 1001 time points
         )
@@ -686,229 +667,307 @@ if choice == '1':
     print('[SUCCESS] training process finished.')
 
 elif choice == '2':
-    print("\n[INFO] Skip training and deducing the performances...")
-    # Load the data
-#     data = np.load(os.path.join(save_dir,'simulation_data.npz'))
-#     dt = 0.01
-#     residuals, u_current, residual_cov_truth = generate_rk4_residue(FEX_model_check, data, dt)
-#     scaler = np.ones(3) * args.DIFF_SCALE
-#     train_size = args.TRAIN_SIZE
+    print("\n[INFO] Skip training and doing the prediction...")
     
-#     residual_cov_pred, selected_times = predict_ensemble_residual_covariance(
-#         residuals=residuals,
-#         save_dir=save_dir,
-#         dt=dt,
-#         scaler=scaler,
-#         train_size=train_size,
-#         n_models=5,
-#         device=device,
-#         residual_cov_truth=residual_cov_truth,
-#         num_time_points=101  # Only predict on 100 time points
-#     )
-#     print('[SUCCESS] Ensemble prediction completed.')
+    # Add comprehensive testing section
+    print("\n" + "="*60)
+    print("COMPREHENSIVE TRAJECTORY TESTING FOR BOTH MODELS")
+    print("="*60)
     
-
-
-#===========================Plotting Section==============================================
-# print("\n"+ "="*60)
-# print("[INFO] Creating plots and visualizations...")
-# print("="*60)
-
-# # Auto-detect existing cases in equipart directory
-# equipart_dir = config.DIR_EQUIPART
-# if not os.path.exists(equipart_dir):
-#     equipart_dir = Path(os.path.join(config.DIR_TRIAD, 'Results', 'Results1', 'Results', 'equipart'))
-
-# print(f"[INFO] Looking for cases in: {equipart_dir}")
-
-# # Find all case directories
-# case_dirs = []
-# sample_sizes = []
-# for item in os.listdir(equipart_dir):
-#     if item.startswith('case_') and os.path.isdir(os.path.join(equipart_dir, item)):
-#         try:
-#             sample_size = int(item.split('_')[1])
-#             case_dirs.append(item)
-#             sample_sizes.append(sample_size)
-#             print(f"[INFO] Found case: {item} (sample size: {sample_size})")
-#         except (ValueError, IndexError):
-#             continue
-
-# if not case_dirs:
-#     print("[WARNING] No case directories found!")
-#     case_dirs = [f'case_{args.NUM_SAMPLES}']
-#     sample_sizes = [args.NUM_SAMPLES]
-
-# # Sort by sample size
-# sorted_cases = sorted(zip(sample_sizes, case_dirs), key=lambda x: x[0])
-# sample_sizes, case_dirs = zip(*sorted_cases)
-
-# print(f"[INFO] Found {len(case_dirs)} cases: {case_dirs}")
-
-# # Load data from each case
-# data_list = []
-# selected_times_list = []
-# labels = []
-
-# for sample_size, case_dir in zip(sample_sizes, case_dirs):
-#     case_path = os.path.join(equipart_dir, case_dir)
+    print("\n[INFO] Running comprehensive trajectory testing...")
+    m0,var0 = MC_triad_initial_value()
+    params = params_init('equipart')
+    FEX_model_check = FEX_model_learned
+    L = params['L']
+    G = params['G']
+    B = params['B']
     
-#     # Check if residual data exists
-#     residual_cov_truth_path = os.path.join(case_path, 'residual_cov_truth.npy')
-#     residual_cov_pred_path = os.path.join(case_path, 'residual_cov_pred.npy')
+    TIME_AMOUNT = 10
+    dt = 0.01
+    NPATH = 5000
+    initial_state = np.random.normal(loc=m0, scale=np.sqrt(var0), size=(NPATH, 3))    
+    x_pred_initial = torch.ones(NPATH, 3).to(device,dtype=torch.float32) * torch.tensor(m0).to(device,dtype=torch.float32)
+    scaler = args.DIFF_SCALE
+tmM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
+tmS = np.zeros(int(TIME_AMOUNT/dt), dtype=np.float32)
+mean_state_pred = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+mean_state_record = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+mean_state_record[:, 0] = np.mean(initial_state, axis=0)
+mean_state_pred[:, 0] = np.mean(initial_state, axis=0)
+
+# Add separate mean arrays for single and ensemble
+mean_state_single = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+mean_state_single[:, 0] = np.mean(initial_state, axis=0)
+mean_state_ensemble = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+mean_state_ensemble[:, 0] = np.mean(initial_state, axis=0)
+
+cov_state_pred = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+cov_state_record = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+cov_state_record[:, :, 0] = np.cov(initial_state, rowvar=False)
+cov_state_pred[:, :, 0] = np.cov(initial_state, rowvar=False)
+
+# Add separate covariance arrays for single and ensemble
+cov_state_single = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+cov_state_single[:, :, 0] = np.cov(initial_state, rowvar=False)
+cov_state_ensemble = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+cov_state_ensemble[:, :, 0] = np.cov(initial_state, rowvar=False)
+
+u_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+u_all[:,:,0] = initial_state
+u_pred_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+u_pred_all[:,:,0] = initial_state
+
+# Add separate arrays for single and ensemble predictions
+u_pred_single = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+u_pred_single[:,:,0] = initial_state
+u_pred_ensemble = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+u_pred_ensemble[:,:,0] = initial_state
+
+moment3_state_record = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+moment3_state_pred = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+moment3_first,_ = compute_third_order_moments(initial_state)
+moment3_state_record[:,:,:,0] = moment3_first
+moment3_state_pred[:,:,:,0] = moment3_first
+
+Energy_MC_all = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+Energy_MC_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+
+current_state = initial_state
+current_pred_state = initial_state
+
+Energy_update_record = np.zeros(4, dtype=np.float32)
+Energy_update_pred = np.zeros(4, dtype=np.float32)
+Energy_dyn_record = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+Energy_dyn_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+
+# At t=0
+Energy_update_pred[:] = [
+    0.5 * np.sum(mean_state_pred[:, 0] ** 2) + 0.5 * np.trace(cov_state_pred[:, :, 0]),
+    0.5 * (mean_state_pred[0, 0] ** 2 + cov_state_pred[0, 0, 0]),
+    0.5 * (mean_state_pred[1, 0] ** 2 + cov_state_pred[1, 1, 0]),
+    0.5 * (mean_state_pred[2, 0] ** 2 + cov_state_pred[2, 2, 0]),
+]
+Energy_dyn_pred[:, 0] = Energy_update_pred
+
+Energy_update_record[:] = [
+    0.5 * np.sum(mean_state_record[:, 0] ** 2) + 0.5 * np.trace(cov_state_record[:, :, 0]),
+    0.5 * (mean_state_record[0, 0] ** 2 + cov_state_record[0, 0, 0]),
+    0.5 * (mean_state_record[1, 0] ** 2 + cov_state_record[1, 1, 0]),
+    0.5 * (mean_state_record[2, 0] ** 2 + cov_state_record[2, 2, 0]),
+]
+Energy_dyn_record[:, 0] = Energy_update_record
+
+# Load neural network models once at the beginning
+print("Loading neural network models...")
+single_models = {}
+single_norms = {}
+ensemble_models = {}
+ensemble_norms = {}
+
+
+if device == 'cuda:0':
+    save_dir_single = '../src/Example/MC_triad/Results/Results1/Results/equipart/noise_1.0/second_stage_10000_single'
+    save_dir_ensemble = '../src/Example/MC_triad/Results/Results1/Results/equipart/noise_1.0/second_stage_10000'
+else:
+    save_dir_single = '../src/Example/MC_triad/Results/equipart/noise_1.0/second_stage_10000_single'
+    save_dir_ensemble = '../src/Example/MC_triad/Results/equipart/noise_1.0/second_stage_10000'
+
+
+
+tM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
+for idx in range(1,int(TIME_AMOUNT/dt)+1):
+    # RK4 integration
+    k1 = (L @ current_state.T).T - current_state @ G + Buu(B, current_state, current_state) + np.ones((NPATH, 1)) * tmM[idx - 1, :]
+    u1 = current_state + dt * k1
+    k2 = (L @ u1.T).T - u1 @ G + Buu(B, u1, u1) + np.ones((NPATH, 1)) * tmM[idx - 1, :]
+    next_state = current_state + dt * (k1 + k2) / 2
+    SS = params['SS'] + tmS[idx - 1] ** 2 * (params['SSt'] - params['SS'])
+    Winc = np.random.randn(NPATH, 3)  # shape (MC, 3)
+    next_state = next_state + np.sqrt(dt) * (Winc @ SS)  # (MC,3) @ (3,3) → (MC,3)
+    u_all[:, :, idx] = next_state
+
     
-#     if os.path.exists(residual_cov_truth_path) and os.path.exists(residual_cov_pred_path):
-#         print(f"[INFO] Loading data from {case_dir}...")
+    mean_state_record[:,idx] = np.mean(next_state, axis=0)
+    cov_state_record[:,:,idx] = np.cov(next_state, rowvar=False)
+    moment3_state_record[:,:,:,idx],_ = compute_third_order_moments(next_state)
+    Energy_MC_all[0, idx] = 0.5 * np.sum(mean_state_record[:,idx] ** 2) + 0.5 * np.trace(cov_state_record[:,:,idx])
+    Energy_MC_all[1, idx] = 0.5 * (mean_state_record[0,idx] ** 2 + cov_state_record[0,0,idx])
+    Energy_MC_all[2, idx] = 0.5 * (mean_state_record[1,idx] ** 2 + cov_state_record[1,1,idx])
+    Energy_MC_all[3, idx] = 0.5 * (mean_state_record[2,idx] ** 2 + cov_state_record[2,2,idx])
+    diag_G = np.diag(G)
+    damp1 = np.max(diag_G)
+    damp2 = max(np.min(diag_G), 0)
+    damp3 = np.mean(diag_G)
+    SS_sq_diag = np.diag(SS @ SS.T)
+    Energy_update_record[0] += dt * (
+            -np.sum(diag_G * (mean_state_record[:, idx] ** 2 + np.diag(cov_state_record[:, :, idx]))) +
+             np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) +
+             0.5 * np.sum(SS_sq_diag)
+        )
+    Energy_update_record[1] += dt * (-2 * damp1 * Energy_update_record[1] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+    Energy_update_record[2] += dt * (-2 * damp2 * Energy_update_record[2] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+    Energy_update_record[3] += dt * (-2 * damp3 * Energy_update_record[3] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+    
+    # u_pred_all[:,:,idx] = current_pred_state
+    current_state = next_state
+
+    current_tensor = torch.tensor(current_pred_state, dtype=torch.float32)
+    
+    # RK4 for the deterministic part (FEX model)
+    # Step 1
+    # Step 1
+    k1_det = FEX_model_check(current_tensor) * dt
+    k1_det_np = k1_det.cpu().detach().numpy()
+    u1 = current_tensor +  k1_det
+
+    # Step 2
+    k2_det = FEX_model_check(u1) * dt
+    k2_det_np = k2_det.cpu().detach().numpy()
+    u2 = current_tensor +  k2_det
+    
+    # Final RK4 update
+    
+    
+    # RK4 update for deterministic part
+    det_update = (k1_det_np+k2_det_np)/2
+    
+    # Generate stochastic component (just once per step)
+    Npath = current_pred_state.shape[0]
+    dim = current_pred_state.shape[1]
+    Winc_tensor = torch.Tensor(Winc).to(device, dtype=torch.float32)
+    
+    # Use the simple step update function for neural networks
+    from utils.ODEParser import simple_step_update
+    
+    # Try both single and ensemble neural networks
+    stoch_update_single = simple_step_update(
+        Winc_tensor=Winc_tensor,
+        device=device,
+        idx=idx,
+        save_dir_single=save_dir_single,
+        save_dir_ensemble=save_dir_ensemble,
+        model_type='single',
+        scaler=scaler
+    )
+    
+    stoch_update_ensemble = simple_step_update(
+        Winc_tensor=Winc_tensor,
+        device=device,
+        idx=idx,
+        save_dir_single=save_dir_single,
+        save_dir_ensemble=save_dir_ensemble,
+        model_type='ensemble',
+        scaler=scaler
+    )
+    
+    # Simple noise for comparison
+    simple_noise = np.sqrt(dt) * (Winc @ SS)
+    
+    # Print comparison every 50 steps
+    if idx % 50 == 0:
+        print(f"\nStep {idx}: Model Comparison")
+        print("-" * 50)
         
-#         # Load residual covariance data
-#         residual_cov_truth = np.load(residual_cov_truth_path)
-#         residual_cov_pred_data = np.load(residual_cov_pred_path, allow_pickle=True).item()
-#         residual_cov_pred = residual_cov_pred_data['residual_cov_pred']
-#         selected_times = residual_cov_pred_data['selected_times']
+        if stoch_update_single is not None:
+            print(f"Single NN - Mean: {np.mean(stoch_update_single, axis=0)}")
+            print(f"Single NN - Std:  {np.std(stoch_update_single, axis=0)}")
+        else:
+            print("Single NN - Not available")
+            
+        if stoch_update_ensemble is not None:
+            print(f"Ensemble NN - Mean: {np.mean(stoch_update_ensemble, axis=0)}")
+            print(f"Ensemble NN - Std:  {np.std(stoch_update_ensemble, axis=0)}")
+        else:
+            print("Ensemble NN - Not available")
+            
+        print(f"Simple Noise - Mean: {np.mean(simple_noise, axis=0)}")
+        print(f"Simple Noise - Std:  {np.std(simple_noise, axis=0)}")
+    
+    # Choose which model to use (priority: ensemble > single > simple noise)
+    if stoch_update_ensemble is not None:
+        stoch_update = stoch_update_ensemble
+        model_used = "Ensemble"
+    elif stoch_update_single is not None:
+        stoch_update = stoch_update_single
+        model_used = "Single"
+    else:
+        # Fallback to simple noise
+        stoch_update = simple_noise
+        model_used = "Simple"
+    
+    # Compute both single and ensemble predictions
+    if stoch_update_single is not None:
+        next_pred_single = current_pred_state + det_update + stoch_update_single
+    else:
+        next_pred_single = current_pred_state + det_update + simple_noise
         
-#         print(f"  - Ground truth shape: {residual_cov_truth.shape}")
-#         print(f"  - Predicted shape: {residual_cov_pred.shape}")
-#         print(f"  - Time points: {len(selected_times)}")
-        
-#         # Add to data lists
-#         data_list.append({
-#             'residual_cov_pred': residual_cov_pred,
-#             'residual_cov_truth': residual_cov_truth,
-#             'selected_times': selected_times,
-#             'sample_size': sample_size,
-#             'case_dir': case_dir
-#         })
-#         selected_times_list.append(selected_times)
-#         labels.append(f'Sample Size {sample_size}')
-        
-#     else:
-#         print(f"[WARNING] Missing residual data in {case_dir}")
-#         if not os.path.exists(residual_cov_truth_path):
-#             print(f"  - Missing: {residual_cov_truth_path}")
-#         if not os.path.exists(residual_cov_pred_path):
-#             print(f"  - Missing: {residual_cov_pred_path}")
-
-# if not data_list:
-#     print("[ERROR] No valid residual data found in any case!")
-#     print("[INFO] Creating plots with current data only...")
+    if stoch_update_ensemble is not None:
+        next_pred_ensemble = current_pred_state + det_update + stoch_update_ensemble
+    else:
+        next_pred_ensemble = current_pred_state + det_update + simple_noise
     
-#     # Fallback to current data if available
-#     if 'residual_cov_pred' in locals() and 'residual_cov_truth' in locals():
-#         data_list = [{
-#             'residual_cov_pred': residual_cov_pred,
-#             'residual_cov_truth': residual_cov_truth,
-#             'selected_times': selected_times,
-#             'sample_size': args.NUM_SAMPLES,
-#             'case_dir': f'case_{args.NUM_SAMPLES}'
-#         }]
-#         selected_times_list = [selected_times]
-#         labels = ['Current Method']
-#     else:
-#         print("[ERROR] No data available for plotting!")
-#         exit(1)
-
-# # Create plots directory
-# plots_dir = os.path.join(save_dir, 'plots')
-# os.makedirs(plots_dir, exist_ok=True)
-
-# print(f"\n[INFO] Creating plots with {len(data_list)} datasets: {labels}")
-
-# # 1. Multiple dataset comparison (3×1 Layout)
-# print("\n[INFO] Creating multiple dataset comparison plots...")
-
-# # Plot multiple residual covariance comparison
-# plot_multiple_residual_covariance(
-#     data_list, selected_times_list, plots_dir, labels
-# )
-
-# # Plot multiple log10 error comparison
-# plot_multiple_log10_error(
-#     data_list, selected_times_list, plots_dir, labels
-# )
-
-# # 2. Individual plots for each dataset
-# print("\n[INFO] Creating individual comparison plots...")
-# for i, (data, label) in enumerate(zip(data_list, labels)):
-#     print(f"[INFO] Creating plots for {label}...")
+    # Use the selected model for the main prediction (for backward compatibility)
+    next_pred_state = current_pred_state + det_update + stoch_update
     
-#     # Create subdirectory for this dataset
-#     dataset_plots_dir = os.path.join(plots_dir, f'dataset_{i+1}_{label.replace(" ", "_")}')
-#     os.makedirs(dataset_plots_dir, exist_ok=True)
+    # Store results for all three predictions
+    u_pred_all[:,:,idx] = next_pred_state
+    u_pred_single[:,:,idx] = next_pred_single
+    u_pred_ensemble[:,:,idx] = next_pred_ensemble
     
-#     # Basic residual covariance comparison
-#     plot_residual_covariance_comparison(
-#         data['residual_cov_pred'], data['residual_cov_truth'], 
-#         data['selected_times'], dataset_plots_dir
-#     )
+    # Update statistics for all three predictions
+    mean_state_pred[:,idx] = np.mean(next_pred_state, axis=0)
+    mean_state_single[:,idx] = np.mean(next_pred_single, axis=0)
+    mean_state_ensemble[:,idx] = np.mean(next_pred_ensemble, axis=0)
     
-#     # Log10 error plot
-#     plot_log10_error(
-#         data['residual_cov_pred'], data['residual_cov_truth'], 
-#         data['selected_times'], dataset_plots_dir
-#     )
+    cov_state_pred[:,:,idx] = np.cov(next_pred_state, rowvar=False)
+    cov_state_single[:,:,idx] = np.cov(next_pred_single, rowvar=False)
+    cov_state_ensemble[:,:,idx] = np.cov(next_pred_ensemble, rowvar=False)
 
-# # 3. Time selection information (use first dataset as reference)
-# print("\n[INFO] Creating time selection information plot...")
-# if data_list:
-#     first_data = data_list[0]
-#     selected_times = first_data['selected_times']
-#     dt = selected_times[1] - selected_times[0] if len(selected_times) > 1 else 0.01
-#     total_time_steps = int(selected_times[-1] / dt) + 1
-#     selected_indices = np.round(selected_times / dt).astype(int)
+    Energy_update_pred[0] += dt * (
+            -np.sum(diag_G * (mean_state_pred[:, idx] ** 2 + np.diag(cov_state_pred[:, :, idx]))) +
+             np.sum(tmM[idx - 1, :] * mean_state_pred[:, idx]) +
+             0.5 * np.sum(SS_sq_diag)
+        )
+    Energy_update_pred[1] += dt * (-2 * damp1 * Energy_update_pred[1] + np.sum(tmM[idx - 1, :] * mean_state_pred[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+    Energy_update_pred[2] += dt * (-2 * damp2 * Energy_update_pred[2] + np.sum(tmM[idx - 1, :] * mean_state_pred[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+    Energy_update_pred[3] += dt * (-2 * damp3 * Energy_update_pred[3] + np.sum(tmM[idx - 1, :] * mean_state_pred[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+    # Update current state
+    current_pred_state = next_pred_state
+
+np.random.seed(0)
+Time_record = np.arange(int(TIME_AMOUNT/dt)+1)
+
+# Print final summary
+print("\n" + "="*80)
+print("SIMULATION SUMMARY")
+print("="*80)
+print(f"Model used for stochastic component: {model_used}")
+print(f"Simulation time: {TIME_AMOUNT}")
+print(f"Time step: {dt}")
+print(f"Number of paths: {NPATH}")
+print(f"Total steps: {int(TIME_AMOUNT/dt)}")
+
+print("="*80)
+
+# Generate plots
+print("\nGenerating comparison plots...")
+
+# Create save directory for plots
+import os
+save_dir = f"../src/Example/MC_triad/Results/equipart/noise_1.0/plots"
+os.makedirs(save_dir, exist_ok=True)
+print(f"Saving plots to: {save_dir}")
+
+plot_mean_comparison(mean_state_record, mean_state_single, Time_record, 
+                    save_path=save_dir, title_suffix=" - FEX-framework")
+plot_covariance_comparison(cov_state_record, cov_state_single, Time_record, 
+                          save_path=save_dir, title_suffix=" - FEX-framework")
+
+print("[INFO] Plots saved successfully!")
+print("\n")
+print("[SUCCESS] have already finished prediction! Now you finish the work!")
     
-#     plot_time_selection_info(
-#         total_time_steps, selected_indices, selected_times, dt, plots_dir
-#     )
-
-# # 4. Save comprehensive results summary
-# print("\n[INFO] Saving comprehensive results summary...")
-# results_summary = {
-#     'datasets': data_list,
-#     'labels': labels,
-#     'sample_sizes': sample_sizes,
-#     'case_dirs': case_dirs
-# }
-
-# # Calculate error statistics for each dataset
-# error_stats_list = []
-# for i, (data, label) in enumerate(zip(data_list, labels)):
-#     if data['residual_cov_truth'] is not None:
-#         truth_data = data['residual_cov_truth']
-#         selected_times = data['selected_times']
-#         N_truth = truth_data.shape[0]
-#         truth_times = np.linspace(selected_times[0], selected_times[-1], N_truth)
-#         indices = np.searchsorted(np.round(truth_times, 8), np.round(selected_times, 8))
-#         truth_selected = truth_data[indices, :]
-#         error = np.abs(data['residual_cov_pred'] - truth_selected)
-#         log10_error = np.log10(error + 1e-12)
-#         error_stats = {
-#             'dataset': label,
-#             'sample_size': sample_sizes[i],
-#             'mean_error': np.mean(error, axis=0),
-#             'std_error': np.std(error, axis=0),
-#             'mean_log10_error': np.mean(log10_error, axis=0),
-#             'std_log10_error': np.std(log10_error, axis=0),
-#             'max_error': np.max(error, axis=0),
-#             'min_error': np.min(error, axis=0)
-#         }
-#         error_stats_list.append(error_stats)
-#         print(f"\n=== Error Statistics for {label} ===")
-#         dimensions = ['x1', 'x2', 'x3']
-#         for dim in range(3):
-#             print(f"Dimension {dim+1} ({dimensions[dim]}):")
-#             print(f"  Mean Error: {error_stats['mean_error'][dim]:.6f}")
-#             print(f"  Std Error: {error_stats['std_error'][dim]:.6f}")
-#             print(f"  Mean Log10 Error: {error_stats['mean_log10_error'][dim]:.3f}")
-#             print(f"  Max Error: {error_stats['max_error'][dim]:.6f}")
-
-# results_summary['error_stats'] = error_stats_list
-
-# np.save(os.path.join(plots_dir, 'comprehensive_results_summary.npy'), results_summary)
-
-# print("\n"+ "="*60)
-# print("[SUCCESS] All plots and analysis completed!")
-# print(f"[INFO] Results saved in: {plots_dir}")
-# print(f"[INFO] Created {len(data_list)} dataset comparisons")
-# print("="*60)
+    
+    
     
     

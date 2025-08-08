@@ -657,3 +657,274 @@ def plot_training_progress_grid(loss_history, coeff_history, final_expr, noise_l
     plt.show()
     
     
+
+def plot_trajectory_comparison(mean_state_record, mean_state_pred, Time_record, save_path, 
+                              method_name="FEX-framework", component_names=None):
+    """
+    Create comprehensive trajectory comparison plots.
+    
+    Args:
+        mean_state_record (np.ndarray): Ground truth mean states (3, time_steps)
+        mean_state_pred (np.ndarray): Predicted mean states (3, time_steps)
+        Time_record (np.ndarray): Time points
+        save_path (str): Path to save the plot
+        method_name (str): Name of the prediction method (e.g., "Single Model", "Ensemble")
+        component_names (list): Names for the components (default: ['u1', 'u2', 'u3'])
+    """
+    if component_names is None:
+        component_names = ['u1', 'u2', 'u3']
+    
+    # Color & Style Setup
+    colors = {'Ground-Truth': 'black', 'Prediction': 'orange'}
+    linestyles = {'Ground-Truth': ':', 'Prediction': '-'}
+    markers = {'Prediction': 'o'}
+    
+    # Create subplots
+    fig, axs = plt.subplots(3, 1, figsize=(12, 15), sharex=True)
+    
+    for i in range(3):
+        # True values
+        mask_true = mean_state_record[i] != 0
+        axs[i].plot(Time_record[mask_true], mean_state_record[i][mask_true], 
+                    linestyle=linestyles['Ground-Truth'], color=colors['Ground-Truth'], 
+                    linewidth=3, label=fr'Ground Truth $\langle u_{i+1} \rangle$')
+        
+        # Predicted values
+        mask_pred = mean_state_pred[i] != 0
+        axs[i].plot(Time_record[mask_pred], mean_state_pred[i][mask_pred], 
+                   linestyle=linestyles['Prediction'], color=colors['Prediction'], 
+                   linewidth=3, marker=markers['Prediction'], markersize=5, alpha=0.7,
+                   label=fr'{method_name} $\langle u_{i+1} \rangle$')
+        
+        axs[i].set_ylabel(fr'Mean $u_{i+1}$', fontsize=15)
+        axs[i].set_title(f'Component {i+1}', fontsize=18)
+        axs[i].legend(loc='upper right', frameon=False, fontsize=12)
+        axs[i].tick_params(axis='both', labelsize=12)
+    
+    axs[2].set_xlabel('Time', fontsize=15)
+    plt.tight_layout()
+    plt.suptitle(f'Mean Values of Components Over Time - {method_name}', fontsize=20, y=1.02)
+    plt.subplots_adjust(top=0.9)
+    
+    # Save and show
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    return fig
+
+def plot_covariance_comparison(cov_state_record, cov_state_pred, Time_record, save_path=None, 
+                              title_suffix="FEX-framework"):
+    """
+    Plot covariance comparison between ground truth and prediction.
+    
+    Args:
+        cov_state_record (np.ndarray): Ground truth covariance (3, 3, time_steps)
+        cov_state_pred (np.ndarray): Predicted covariance (3, 3, time_steps)
+        Time_record (np.ndarray): Time points
+        save_path (str): Path to save the plot
+        title_suffix (str): Suffix for the title
+    """
+    fig, axs = plt.subplots(3, 3, figsize=(15, 15))
+    
+    colors = {'Ground-Truth': 'black', 'Prediction': 'orange'}
+    linestyles = {'Ground-Truth': ':', 'Prediction': '-'}
+    markers = {'Prediction': 'o'}
+    
+    for i in range(3):
+        for j in range(3):
+            # Ground truth
+            mask_true = cov_state_record[i, j] != 0
+            axs[i, j].plot(Time_record[mask_true], cov_state_record[i, j][mask_true], 
+                          linestyle=linestyles['Ground-Truth'], color=colors['Ground-Truth'], 
+                          linewidth=2, label='Ground Truth')
+            
+            # Prediction
+            mask_pred = cov_state_pred[i, j] != 0
+            axs[i, j].plot(Time_record[mask_pred], cov_state_pred[i, j][mask_pred], 
+                         linestyle=linestyles['Prediction'], color=colors['Prediction'], 
+                         linewidth=2, marker=markers['Prediction'], markersize=4, alpha=0.7,
+                         label=f'Prediction {title_suffix}')
+            
+            axs[i, j].set_title(f'Cov(u{i+1}, u{j+1})', fontsize=12)
+            axs[i, j].set_xlabel('Time', fontsize=10)
+            axs[i, j].set_ylabel('Covariance', fontsize=10)
+            axs[i, j].legend(frameon=False, fontsize=8)
+            axs[i, j].tick_params(axis='both', labelsize=8)
+    
+    plt.tight_layout()
+    plt.suptitle(f'Covariance Comparison {title_suffix}', fontsize=16, y=1.02)
+    plt.subplots_adjust(top=0.9)
+    if save_path:
+        plt.savefig(os.path.join(save_path, 'covariance_comparison.pdf'), dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    return fig
+    
+def plot_mean_comparison(mean_state_record, mean_state_pred, Time_record, save_path=None, 
+                              title_suffix="FEX-framework"):
+    """
+    Plot mean comparison between ground truth and prediction.
+    
+    Args:
+        mean_state_record (np.ndarray): Ground truth mean (3, time_steps)
+        mean_state_pred (np.ndarray): Predicted mean (3, time_steps)
+        Time_record (np.ndarray): Time points
+        save_path (str): Path to save the plot
+        title_suffix (str): Suffix for the title
+    """
+    
+    # Plot each component separately
+    component_names = ['u1', 'u2', 'u3']
+    fig, axs = plt.subplots(3, 1, figsize=(12, 15), sharex=True)
+
+    # Color & Style Setup
+    colors = {'Ground-Truth': 'black', 'Prediction': 'orange'}
+    linestyles = {'Ground-Truth': ':', 'Prediction': '-'}
+    markers = {'Prediction': 'o'}
+
+    for i in range(3):
+        # True values
+        mask_true = mean_state_record[i] != 0
+        axs[i].plot(Time_record[mask_true], mean_state_record[i][mask_true], 
+                linestyle=linestyles['Ground-Truth'], color=colors['Ground-Truth'], linewidth=3,
+                label=fr'Ground Truth $\langle u_{i+1} \rangle$')
+    
+        # Predicted values
+        mask_pred = mean_state_pred[i] != 0
+        axs[i].plot(Time_record[mask_pred], mean_state_pred[i][mask_pred], 
+               linestyle=linestyles['Prediction'], color=colors['Prediction'], 
+               linewidth=3, marker=markers['Prediction'], markersize=5, alpha=0.7,
+               label=fr'Prediction {title_suffix} $\langle u_{i+1} \rangle$')
+    
+        axs[i].set_ylabel(fr'Mean $u_{i+1}$', fontsize=15)
+        axs[i].set_title(f'Component {i+1}', fontsize=18)
+        axs[i].legend(loc='upper right', frameon=False, fontsize=12)
+        axs[i].tick_params(axis='both', labelsize=12)
+
+    axs[2].set_xlabel('Time', fontsize=15)
+    plt.tight_layout()
+    plt.suptitle(f'Mean Values of Components Over Time {title_suffix}', fontsize=20, y=1.02)
+    plt.subplots_adjust(top=0.9)  # Adjust top to make room for the title
+    if save_path:
+        plt.savefig(os.path.join(save_path, 'mean_components_over_time.pdf'), dpi=300, bbox_inches='tight')
+    plt.show()
+    return fig
+    
+
+def plot_mean_comparison_ensemble(mean_state_record, mean_state_pred_single, mean_state_pred_ensemble, Time_record, save_path=None, 
+                              title_suffix="FEX-framework"):
+    """
+    Plot mean comparison between ground truth, single NN, and ensemble NN predictions together.
+    
+    Args:
+        mean_state_record (np.ndarray): Ground truth mean (3, time_steps)
+        mean_state_pred_single (np.ndarray): Single NN predicted mean (3, time_steps)
+        mean_state_pred_ensemble (np.ndarray): Ensemble NN predicted mean (3, time_steps)
+        Time_record (np.ndarray): Time points
+        save_path (str): Path to save the plot
+        title_suffix (str): Suffix for the title
+    """
+    
+    # Plot each component separately
+    component_names = ['u1', 'u2', 'u3']
+    fig, axs = plt.subplots(3, 1, figsize=(12, 15), sharex=True)
+
+    # Color & Style Setup - using the requested color scheme
+    colors = {'Ground-Truth': 'black', 'Single Neural Network': 'orange', 'Ensemble Neural Network': 'blue'}
+    linestyles = {'Ground-Truth': ':', 'Single Neural Network': '-', 'Ensemble Neural Network': '-'}
+    markers = {'Single Neural Network': 'o', 'Ensemble Neural Network': 's'}
+
+    for i in range(3):
+        # True values
+        mask_true = mean_state_record[i] != 0
+        axs[i].plot(Time_record[mask_true], mean_state_record[i][mask_true], 
+                linestyle=linestyles['Ground-Truth'], color=colors['Ground-Truth'], linewidth=3,
+                label=fr'Ground Truth $\langle u_{i+1} \rangle$')
+    
+        # Single NN predicted values
+        mask_pred_single = mean_state_pred_single[i] != 0
+        axs[i].plot(Time_record[mask_pred_single], mean_state_pred_single[i][mask_pred_single], 
+               linestyle=linestyles['Single Neural Network'], color=colors['Single Neural Network'], 
+               linewidth=2, marker=markers['Single Neural Network'], markersize=4, alpha=0.7,
+               label=fr'Single NN $\langle u_{i+1} \rangle$')
+        
+        # Ensemble NN predicted values
+        mask_pred_ensemble = mean_state_pred_ensemble[i] != 0
+        axs[i].plot(Time_record[mask_pred_ensemble], mean_state_pred_ensemble[i][mask_pred_ensemble], 
+               linestyle=linestyles['Ensemble Neural Network'], color=colors['Ensemble Neural Network'], 
+               linewidth=2, marker=markers['Ensemble Neural Network'], markersize=4, alpha=0.7,
+               label=fr'Ensemble NN $\langle u_{i+1} \rangle$')
+    
+        axs[i].set_ylabel(fr'Mean $u_{i+1}$', fontsize=15)
+        axs[i].set_title(f'Component {i+1}', fontsize=18)
+        axs[i].legend(loc='upper right', frameon=False, fontsize=12)
+        axs[i].tick_params(axis='both', labelsize=12)
+
+    axs[2].set_xlabel('Time', fontsize=15)
+    plt.tight_layout()
+    plt.suptitle(f'Mean Values Comparison {title_suffix}', fontsize=20, y=1.02)
+    plt.subplots_adjust(top=0.9)  # Adjust top to make room for the title
+    if save_path:
+        plt.savefig(os.path.join(save_path, 'mean_components_comparison.pdf'), dpi=300, bbox_inches='tight')
+    plt.show()
+    return fig
+
+
+def plot_covariance_comparison_ensemble(cov_state_record, cov_state_pred_single, cov_state_pred_ensemble, Time_record, save_path=None, 
+                              title_suffix="FEX-framework"):
+    """
+    Plot covariance comparison between ground truth, single NN, and ensemble NN predictions together.
+    
+    Args:
+        cov_state_record (np.ndarray): Ground truth covariance (3, 3, time_steps)
+        cov_state_pred_single (np.ndarray): Single NN predicted covariance (3, 3, time_steps)
+        cov_state_pred_ensemble (np.ndarray): Ensemble NN predicted covariance (3, 3, time_steps)
+        Time_record (np.ndarray): Time points
+        save_path (str): Path to save the plot
+        title_suffix (str): Suffix for the title
+    """
+    fig, axs = plt.subplots(3, 3, figsize=(15, 15))
+    
+    colors = {'Ground-Truth': 'black', 'Single Neural Network': 'orange', 'Ensemble Neural Network': 'blue'}
+    linestyles = {'Ground-Truth': ':', 'Single Neural Network': '-', 'Ensemble Neural Network': '-'}
+    markers = {'Single Neural Network': 'o', 'Ensemble Neural Network': 's'}
+    
+    for i in range(3):
+        for j in range(3):
+            # Ground truth
+            mask_true = cov_state_record[i, j] != 0
+            axs[i, j].plot(Time_record[mask_true], cov_state_record[i, j][mask_true], 
+                          linestyle=linestyles['Ground-Truth'], color=colors['Ground-Truth'], 
+                          linewidth=2, label='Ground Truth')
+            
+            # Single NN prediction
+            mask_pred_single = cov_state_pred_single[i, j] != 0
+            axs[i, j].plot(Time_record[mask_pred_single], cov_state_pred_single[i, j][mask_pred_single], 
+                         linestyle=linestyles['Single Neural Network'], color=colors['Single Neural Network'], 
+                         linewidth=2, marker=markers['Single Neural Network'], markersize=3, alpha=0.7,
+                         label='Single NN')
+            
+            # Ensemble NN prediction
+            mask_pred_ensemble = cov_state_pred_ensemble[i, j] != 0
+            axs[i, j].plot(Time_record[mask_pred_ensemble], cov_state_pred_ensemble[i, j][mask_pred_ensemble], 
+                         linestyle=linestyles['Ensemble Neural Network'], color=colors['Ensemble Neural Network'], 
+                         linewidth=2, marker=markers['Ensemble Neural Network'], markersize=3, alpha=0.7,
+                         label='Ensemble NN')
+            
+            axs[i, j].set_title(f'Cov(u{i+1}, u{j+1})', fontsize=12)
+            axs[i, j].set_xlabel('Time', fontsize=10)
+            axs[i, j].set_ylabel('Covariance', fontsize=10)
+            axs[i, j].legend(frameon=False, fontsize=8)
+            axs[i, j].tick_params(axis='both', labelsize=8)
+    
+    plt.tight_layout()
+    plt.suptitle(f'Covariance Comparison {title_suffix}', fontsize=16, y=1.02)
+    plt.subplots_adjust(top=0.9)
+    
+    if save_path:
+        plt.savefig(os.path.join(save_path, 'covariance_comparison.pdf'), dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    return fig
+    
+    

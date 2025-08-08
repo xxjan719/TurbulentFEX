@@ -605,235 +605,153 @@ def select_time_points(total_time_steps: int, dt: float, num_points: int = 100):
     
     return np.array(unique_indices), np.array(unique_times)
 
-def predict_ensemble_residual_covariance(residuals: np.ndarray,
-                                       save_dir: str,
-                                       dt: float,
-                                       scaler: np.ndarray,
-                                       u_current: np.ndarray = None,
-                                       fex_model_func = None,
-                                       train_size: int = 1000,
-                                       n_models: int = 5,
-                                       device: str = 'cpu',
-                                       residual_cov_truth: np.ndarray = None,
-                                       num_time_points: int = 100):
-    """
-    Predict residual covariance using ensemble of trained neural networks.
-    
-    Args:
-        residuals (np.ndarray): Residual data with shape (MC_samples, variables, time_steps)
-        save_dir (str): Directory containing saved ensemble models and normalization parameters
-        dt (float): Time step size
-        scaler (np.ndarray): Scaling factors for each dimension
-        u_current (np.ndarray, optional): Current states with shape (MC_samples, variables, time_steps)
-        fex_model_func (callable, optional): FEX model function to calculate deterministic part
-        train_size (int): Number of test samples to generate
-        n_models (int): Number of models in ensemble
-        device (str): Device to run predictions on ('cpu' or 'cuda')
-        residual_cov_truth (np.ndarray, optional): Ground truth residual covariance for comparison
-        num_time_points (int): Number of time points to process (regularly spaced)
-        
-    Returns:
-        tuple: (residual_cov_pred, selected_times) - Predicted covariance and corresponding times
-    """
-    total_time_steps = residuals.shape[2]
-    
-    # Select time points to process
-    selected_indices, selected_times = select_time_points(
-        total_time_steps, dt, num_time_points
-    )
-    selected_indices = np.arange(num_time_points)
-    
-    print(f"\n=== Ensemble Prediction Results ===")
-    print(f"Processing {len(selected_indices)} time points out of {total_time_steps} total")
-    print(f"Time range: {selected_times[0]:.2f}s to {selected_times[-1]:.2f}s")
-    
-    residual_cov_pred = np.zeros((len(selected_indices), 3))
-    
-    # Load and use ensemble predictions for each selected time point
-    for i, t in enumerate(selected_indices):
-        z_test = np.random.randn(train_size, 3)
-        z_test_tensor = torch.tensor(z_test, dtype=torch.float32).to(device)
-        
-        # Calculate FEX model prediction for current state
-        if fex_model_func is not None and u_current is not None:
-            # Get current state for this time step
-            current_state = u_current[:, :, t]  # Shape: (train_size, 3)
-            # Calculate FEX model prediction
-            fex_pred = fex_model_func(current_state)  # Should return shape (train_size, 3)
-            FEX_model_pred = np.mean(fex_pred, axis=0)  # Average across samples
-        else:
-            FEX_model_pred = np.zeros(3)  # Default if no FEX model provided
-        
-        for dim in range(1, 4):
-            # Load normalization parameters
-            norm_params_path = os.path.join(save_dir, f'norm_params_dim{dim}_t{t}.npy')
-            if not os.path.exists(norm_params_path):
-                print(f"Warning: Normalization parameters not found for dim{dim}_t{t}")
-                continue
-                
-            norm_params = np.load(norm_params_path, allow_pickle=True).item()
-            y_mean = norm_params['mean']
-            y_std = norm_params['std']
-            
-            # Ensemble prediction
-            ensemble_predictions = []
-            
-            for model_idx in range(n_models):
-                model_path = os.path.join(save_dir, f'FN_dim{dim}_t{t}_model{model_idx}.pth')
-                if not os.path.exists(model_path):
-                    print(f"Warning: Model not found: {model_path}")
-                    continue
-                    
-                FN_dim = FN_Net(1, 1, 100).to(device)
-                FN_dim.load_state_dict(torch.load(model_path, weights_only=True))
-                
-                # Make prediction
-                pred = (FN_dim(z_test_tensor[:, dim-1:dim].reshape(-1, 1))).cpu().detach().numpy()
-                ensemble_predictions.append(pred)
-            
-            if not ensemble_predictions:
-                print(f"Warning: No valid predictions for dim{dim}_t{t}")
-                continue
-                
-            # Average ensemble predictions
-            pred = np.mean(ensemble_predictions, axis=0)
-            
-            # Denormalize: pred * y_std + y_mean
-            pred = pred * y_std + y_mean
-            
-            # Scale back by scaler
-            pred = pred / scaler[dim-1]
-            # Add FEX model prediction to get total prediction
-            pred = pred + FEX_model_pred[dim-1]
-            residual_cov_pred[i, dim-1] = np.std(pred) / np.sqrt(dt)
-            
-            print(f"Time {selected_times[i]:.2f}s, Dimension {dim}: {np.std(pred)/np.sqrt(dt):.6f}")
-            
-            if residual_cov_truth is not None:
-                print(f"Comparison with Ground Truth: {residual_cov_truth[t, dim-1]:.6f}")
-    
-    print("\nExpected values should be close to original")
-    print("Ensemble method should provide more accurate results!")
-    
-    # Save predictions with time information
-    results = {
-        'residual_cov_pred': residual_cov_pred,
-        'selected_times': selected_times,
-        'selected_indices': selected_indices
-    }
-    np.save(os.path.join(save_dir, 'residual_cov_pred.npy'), results)
-    
-    return residual_cov_pred, selected_times
 
-def predict_single_model_residual_covariance(residuals: np.ndarray,
-                                           save_dir: str,
-                                           dt: float,
-                                           scaler: np.ndarray,
-                                           u_current: np.ndarray = None,
-                                           fex_model_func = None,
-                                           train_size: int = 1000,
-                                           device: str = 'cpu',
-                                           residual_cov_truth: np.ndarray = None,
-                                           num_time_points: int = 100):
+
+def FN_single_update(Winc_tensor:torch.Tensor,
+                     device:str,
+                     idx:int,
+                     save_dir_single:str,
+                     dim:int=3,
+                     scaler:float=20.0):
     """
-    Predict residual covariance using single trained neural networks from train_FN_each_dimension.
-    
-    Args:
-        residuals (np.ndarray): Residual data with shape (MC_samples, variables, time_steps)
-        save_dir (str): Directory containing saved models and normalization parameters
-        dt (float): Time step size
-        scaler (np.ndarray): Scaling factors for each dimension
-        u_current (np.ndarray, optional): Current states with shape (MC_samples, variables, time_steps)
-        fex_model_func (callable, optional): FEX model function to calculate deterministic part
-        train_size (int): Number of test samples to generate
-        device (str): Device to run predictions on ('cpu' or 'cuda')
-        residual_cov_truth (np.ndarray, optional): Ground truth residual covariance for comparison
-        num_time_points (int): Number of time points to process (regularly spaced)
-        
-    Returns:
-        tuple: (residual_cov_pred, selected_times) - Predicted covariance and corresponding times
+    Simple step update function for single neural network model
+
     """
-    total_time_steps = residuals.shape[2]
+    stoch_update = np.zeros((Winc_tensor.shape[0], dim), dtype=np.float32)
+    neural_network_used = False
     
-    # Select time points to process
-    selected_indices, selected_times = select_time_points(
-        total_time_steps, dt, num_time_points
-    )
-    
-    print(f"\n=== Single Model Prediction Results ===")
-    print(f"Processing {len(selected_indices)} time points out of {total_time_steps} total")
-    print(f"Time range: {selected_times[0]:.2f}s to {selected_times[-1]:.2f}s")
-    
-    residual_cov_pred = np.zeros((len(selected_indices), 3))
-    
-    # Load and use single model predictions for each selected time point
-    for i, t in enumerate(selected_indices):
-        z_test = np.random.randn(train_size, 3)
-        z_test_tensor = torch.tensor(z_test, dtype=torch.float32).to(device)
-        
-        # Calculate FEX model prediction for current state
-        if fex_model_func is not None and u_current is not None:
-            # Get current state for this time step
-            current_state = u_current[:, :, t]  # Shape: (train_size, 3)
-            # Calculate FEX model prediction
-            fex_pred = fex_model_func(current_state)  # Should return shape (train_size, 3)
-            FEX_model_pred = np.mean(fex_pred, axis=0)  # Average across samples
-        else:
-            FEX_model_pred = np.zeros(3)  # Default if no FEX model provided
-        
-        for dim in range(1, 4):
-            # Load normalization parameters
-            norm_params_path = os.path.join(save_dir, f'norm_params_dim{dim}_t{t}.npy')
-            if not os.path.exists(norm_params_path):
-                print(f"Warning: Normalization parameters not found for dim{dim}_t{t}")
-                continue
+    for dim_idx in range(1, dim+1):
+        # Load normalization parameters
+        norm_params_path = os.path.join(save_dir_single, f'norm_params_dim{dim_idx}_t{idx-1}.npy')
+        if not os.path.exists(norm_params_path):
+            continue
                 
+        norm_params = np.load(norm_params_path, allow_pickle=True).item()
+        y_mean = norm_params['mean']
+        y_std = norm_params['std']
+            
+        # Load single model
+        model_path = os.path.join(save_dir_single, f'FN_dim{dim_idx}_t{idx-1}.pth')
+        if not os.path.exists(model_path):
+            continue
+                
+        FN_dim = FN_Net(1, 1, 100).to(device)
+            
+        # Load the CPU-saved model and move to target device
+        state_dict = torch.load(model_path, map_location=device)
+        FN_dim.load_state_dict(state_dict)
+        FN_dim.eval()
+            
+        # Make prediction
+        with torch.no_grad():
+            pred = (FN_dim(Winc_tensor[:, dim_idx-1:dim_idx].reshape(-1, 1))).cpu().detach().numpy()
+            
+        # Denormalize: pred * y_std + y_mean
+        pred = pred * y_std + y_mean
+            
+        # Scale back by scaler
+        pred = pred / scaler
+        
+        # Use neural network prediction as stochastic update for this dimension
+        stoch_update[:, dim_idx-1] = pred.flatten()
+        neural_network_used = True
+    
+    return stoch_update if neural_network_used else None
+
+
+def FN_ensemble_update(Winc_tensor:torch.Tensor,
+                       device:str,
+                       idx:int,
+                       save_dir_ensemble:str,
+                       dim:int=3,
+                       scaler:float=20.0,
+                       n_models:int=5):
+    """
+    Simple step update function for ensemble neural network models
+
+    """
+    stoch_update = np.zeros((Winc_tensor.shape[0], dim), dtype=np.float32)
+    neural_network_used = False
+    
+    for dim_idx in range(1, dim+1):
+        ensemble_predictions = []
+        
+        # Try to load all ensemble models for this dimension
+        for model_idx in range(n_models):
+            # Load normalization parameters
+            norm_params_path = os.path.join(save_dir_ensemble, f'norm_params_dim{dim_idx}_t{idx-1}.npy')
+            if not os.path.exists(norm_params_path):
+                continue
+                    
             norm_params = np.load(norm_params_path, allow_pickle=True).item()
             y_mean = norm_params['mean']
             y_std = norm_params['std']
-            
-            # Load single model
-            model_path = os.path.join(save_dir, f'FN_dim{dim}_t{t}.pth')
-            if not os.path.exists(model_path):
-                print(f"Warning: Model not found: {model_path}")
-                continue
                 
+            # Load ensemble model
+            model_path = os.path.join(save_dir_ensemble, f'FN_dim{dim_idx}_t{idx-1}_model{model_idx}.pth')
+            if not os.path.exists(model_path):
+                continue
+                    
             FN_dim = FN_Net(1, 1, 100).to(device)
-            
+                
             # Load the CPU-saved model and move to target device
             state_dict = torch.load(model_path, map_location=device)
             FN_dim.load_state_dict(state_dict)
-            
+            FN_dim.eval()
+                
             # Make prediction
-            pred = (FN_dim(z_test_tensor[:, dim-1:dim].reshape(-1, 1))).cpu().detach().numpy()
-            
+            with torch.no_grad():
+                pred = (FN_dim(Winc_tensor[:, dim_idx-1:dim_idx].reshape(-1, 1))).cpu().detach().numpy()
+                
             # Denormalize: pred * y_std + y_mean
             pred = pred * y_std + y_mean
-            
+                
             # Scale back by scaler
-            pred = pred / scaler[dim-1]
-            # Add FEX model prediction to get total prediction
-            pred = pred + FEX_model_pred[dim-1]
-            residual_cov_pred[i, dim-1] = np.std(pred) / np.sqrt(dt)
+            pred = pred / scaler
             
-            print(f"Time {selected_times[i]:.2f}s, Dimension {dim}: {np.std(pred)/np.sqrt(dt):.6f}")
-            
-            if residual_cov_truth is not None:
-                print(f"Comparison with Ground Truth: {residual_cov_truth[t, dim-1]:.6f}")
+            ensemble_predictions.append(pred.flatten())
+        
+        # Average ensemble predictions if any models were loaded
+        if ensemble_predictions:
+            avg_pred = np.mean(ensemble_predictions, axis=0)
+            stoch_update[:, dim_idx-1] = avg_pred
+            neural_network_used = True
     
-    print("\nExpected values should be close to original")
-    print("Single model method completed!")
-    
-    # Save predictions with time information
-    results = {
-        'residual_cov_pred': residual_cov_pred,
-        'selected_times': selected_times,
-        'selected_indices': selected_indices
-    }
-    np.save(os.path.join(save_dir, 'residual_cov_pred_single.npy'), results)
-    
-    return residual_cov_pred, selected_times
+    return stoch_update if neural_network_used else None
 
+
+def simple_step_update(Winc_tensor:torch.Tensor,
+                      device:str,
+                      idx:int,
+                      save_dir_single:str,
+                      save_dir_ensemble:str,
+                      model_type:str='single',
+                      dim:int=3,
+                      scaler:float=20.0,
+                      n_models:int=5):
+    """
+    Simple step update function that can use either single or ensemble models
+    
+    Args:
+        Winc_tensor: Input noise tensor (NPATH, dim)
+        device: Device to run on ('cpu' or 'cuda')
+        idx: Current time step index
+        save_dir_single: Directory containing single model files
+        save_dir_ensemble: Directory containing ensemble model files
+        model_type: 'single' or 'ensemble' (default 'single')
+        dim: Number of dimensions (default 3)
+        scaler: Scaling factor for denormalization (default 20.0)
+        n_models: Number of ensemble models (default 5)
+    
+    Returns:
+        stoch_update: Stochastic update array (NPATH, dim) or None if models not found
+    """
+    if model_type.lower() == 'single':
+        return FN_single_update(Winc_tensor, device, idx, save_dir_single, dim, scaler)
+    elif model_type.lower() == 'ensemble':
+        return FN_ensemble_update(Winc_tensor, device, idx, save_dir_ensemble, dim, scaler, n_models)
+    else:
+        raise ValueError(f"Invalid model_type: {model_type}. Must be 'single' or 'ensemble'")
 
 
 
@@ -867,16 +785,4 @@ if __name__ == "__main__":
         ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=save_dir,
         num_time_points=100,  # Only train on 100 time points
         dt=dt
-    )
-    
-    # Test predictions with ensemble
-    residual_cov_pred, selected_times = predict_ensemble_residual_covariance(
-        residuals=residuals,
-        save_dir=save_dir,
-        dt=dt,
-        scaler=scaler,
-        train_size=1000,
-        n_models=5,
-        device=device,
-        num_time_points=100  # Only predict on 100 time points
     )
