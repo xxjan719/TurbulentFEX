@@ -923,14 +923,16 @@ for idx in range(1,int(TIME_AMOUNT/dt)+1):
     cov_state_single[:,:,idx] = np.cov(next_pred_single, rowvar=False)
     cov_state_ensemble[:,:,idx] = np.cov(next_pred_ensemble, rowvar=False)
 
-    Energy_update_pred[0] += dt * (
-            -np.sum(diag_G * (mean_state_pred[:, idx] ** 2 + np.diag(cov_state_pred[:, :, idx]))) +
-             np.sum(tmM[idx - 1, :] * mean_state_pred[:, idx]) +
-             0.5 * np.sum(SS_sq_diag)
-        )
-    Energy_update_pred[1] += dt * (-2 * damp1 * Energy_update_pred[1] + np.sum(tmM[idx - 1, :] * mean_state_pred[:, idx]) + 0.5 * np.sum(SS_sq_diag))
-    Energy_update_pred[2] += dt * (-2 * damp2 * Energy_update_pred[2] + np.sum(tmM[idx - 1, :] * mean_state_pred[:, idx]) + 0.5 * np.sum(SS_sq_diag))
-    Energy_update_pred[3] += dt * (-2 * damp3 * Energy_update_pred[3] + np.sum(tmM[idx - 1, :] * mean_state_pred[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+    # Calculate energy directly from mean and covariance (same as ground truth)
+    Energy_MC_pred[0, idx] = 0.5 * np.sum(mean_state_pred[:, idx] ** 2) + 0.5 * np.trace(cov_state_pred[:, :, idx])
+    Energy_MC_pred[1, idx] = 0.5 * (mean_state_pred[0, idx] ** 2 + cov_state_pred[0, 0, idx])
+    Energy_MC_pred[2, idx] = 0.5 * (mean_state_pred[1, idx] ** 2 + cov_state_pred[1, 1, idx])
+    Energy_MC_pred[3, idx] = 0.5 * (mean_state_pred[2, idx] ** 2 + cov_state_pred[2, 2, idx])
+    
+    # Calculate third-order moments for prediction
+    moment3_pred, _ = compute_third_order_moments(next_pred_state)
+    moment3_state_pred[:, :, :, idx] = moment3_pred
+    
     # Update current state
     current_pred_state = next_pred_state
 
@@ -954,16 +956,32 @@ print("\nGenerating comparison plots...")
 
 # Create save directory for plots
 import os
-save_dir = f"../src/Example/MC_triad/Results/equipart/noise_1.0/plots"
+save_dir = f"../src/Example/MC_triad/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/plots"
 os.makedirs(save_dir, exist_ok=True)
 print(f"Saving plots to: {save_dir}")
 
+# Import plotting functions
+from utils.plot import plot_mean_comparison, plot_covariance_comparison, plot_energy_comparison, plot_third_order_moments, plot_probability_distributions
+
+# Plot mean and covariance comparisons
 plot_mean_comparison(mean_state_record, mean_state_single, Time_record, 
                     save_path=save_dir, title_suffix=" - FEX-framework")
 plot_covariance_comparison(cov_state_record, cov_state_single, Time_record, 
                           save_path=save_dir, title_suffix=" - FEX-framework")
 
-print("[INFO] Plots saved successfully!")
+# Plot energy comparison
+plot_energy_comparison(Energy_MC_all, Energy_MC_pred, Time_record, 
+                      save_path=save_dir, title_suffix=" - FEX-framework")
+
+# Plot third-order moments
+plot_third_order_moments(moment3_state_record, moment3_state_pred, Time_record, 
+                        save_path=save_dir, title_suffix=" - FEX-framework")
+
+# Plot probability distributions
+plot_probability_distributions(u_all, u_pred_all, Time_record, 
+                              save_path=save_dir, title_suffix=" - FEX-framework")
+
+print("[INFO] All plots saved successfully!")
 print("\n")
 print("[SUCCESS] have already finished prediction! Now you finish the work!")
     

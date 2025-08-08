@@ -928,3 +928,191 @@ def plot_covariance_comparison_ensemble(cov_state_record, cov_state_pred_single,
     return fig
     
     
+def plot_energy_comparison(Energy_MC_all, Energy_MC_pred, Time_record, save_path=None, title_suffix="FEX-framework"):
+    """
+    Plot energy comparison between ground truth and prediction.
+    
+    Args:
+        Energy_MC_all (np.ndarray): Ground truth energy (4, time_steps)
+        Energy_MC_pred (np.ndarray): Predicted energy (4, time_steps)
+        Time_record (np.ndarray): Time points
+        save_path (str): Path to save the plot
+        title_suffix (str): Suffix for the title
+    """
+    fig, axs = plt.subplots(2, 2, figsize=(14, 10), sharex=True)
+    energy_labels = ['Total', 'Mode 1', 'Mode 2', 'Mode 3']
+    energy_keys = ['total', 'u1', 'u2', 'u3']
+    colors = {'Ground-Truth': 'black', 'Prediction': 'orange'}
+
+    for idx, (label, key) in enumerate(zip(energy_labels, energy_keys)):
+        ax = axs[idx // 2, idx % 2]
+        mask_truth = Energy_MC_all[idx] != 0
+        mask_pred = Energy_MC_pred[idx] != 0
+        ax.plot(Time_record[mask_truth], Energy_MC_all[idx][mask_truth], 
+                color=colors['Ground-Truth'], label=f'{label} (Truth)', linewidth=2)
+        ax.plot(Time_record[mask_pred], Energy_MC_pred[idx][mask_pred], 
+                color=colors['Prediction'], label=f'{label} (Prediction)', 
+                linestyle='--', linewidth=2)
+        ax.set_title(label)
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Energy')
+        ax.legend(frameon=False)
+    
+    plt.tight_layout()
+    plt.suptitle(f'Energy Comparison {title_suffix}', fontsize=16, y=1.02)
+    plt.subplots_adjust(top=0.9)
+    
+    if save_path:
+        plt.savefig(os.path.join(save_path, 'energy_comparison.pdf'), dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    return fig
+
+
+def plot_third_order_moments(moment3_state_record, moment3_state_pred, Time_record, save_path=None, title_suffix="FEX-framework"):
+    """
+    Plot third-order moments comparison between ground truth and prediction.
+    
+    Args:
+        moment3_state_record (np.ndarray): Ground truth 3rd moments (3, 3, 3, time_steps)
+        moment3_state_pred (np.ndarray): Predicted 3rd moments (3, 3, 3, time_steps)
+        Time_record (np.ndarray): Time points
+        save_path (str): Path to save the plot
+        title_suffix (str): Suffix for the title
+    """
+    fig, axs = plt.subplots(4, 1, figsize=(12, 20), sharex=True)
+    moment_indices = [(0, 1, 2), (0, 1, 1), (0, 2, 2), (1, 1, 2)]
+    moment_labels = [r'$\langle M_{123} \rangle$', r'$\langle M_{122} \rangle$', 
+                    r'$\langle M_{133} \rangle$', r'$\langle M_{223} \rangle$']
+
+    # Color & Style Setup
+    colors = {'Ground-Truth': 'black', 'Prediction': 'orange'}
+    linestyles = {'Ground-Truth': ':', 'Prediction': '-'}
+    markers = {'Prediction': 'o'}
+
+    for idx, (i, j, k) in enumerate(moment_indices):
+        # True 3rd-order moment values
+        mask_true = moment3_state_record[i, j, k, :] != 0
+        axs[idx].plot(Time_record[mask_true], moment3_state_record[i, j, k, mask_true], 
+                     linestyle=linestyles['Ground-Truth'], color=colors['Ground-Truth'], linewidth=3,
+                     label=f'Ground Truth {moment_labels[idx]}')
+        
+        # Predicted 3rd-order moment values
+        mask_pred = moment3_state_pred[i, j, k, :] != 0
+        axs[idx].plot(Time_record[mask_pred], moment3_state_pred[i, j, k, mask_pred], 
+                     linestyle=linestyles['Prediction'], color=colors['Prediction'], 
+                     linewidth=3, marker=markers['Prediction'], markersize=5, alpha=0.7,
+                     label=f'{title_suffix} {moment_labels[idx]}')
+        
+        axs[idx].set_ylabel(f'3rd Moment', fontsize=15)
+        axs[idx].set_title(f'{moment_labels[idx]}', fontsize=18)
+        axs[idx].legend(loc='upper right', frameon=False, fontsize=12)
+        axs[idx].tick_params(axis='both', labelsize=12)
+
+    axs[3].set_xlabel('Time', fontsize=15)
+    plt.tight_layout()
+    plt.suptitle(f'Third-Order Moments Over Time {title_suffix}', fontsize=20, y=1.02)
+    plt.subplots_adjust(top=0.95)
+    
+    if save_path:
+        plt.savefig(os.path.join(save_path, 'third_order_moments_over_time.pdf'), dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    return fig
+    
+    
+def plot_probability_distributions(u_all, u_pred, Time_record, save_path=None, title_suffix="FEX-framework"):
+    """
+    Plot probability distributions and joint distributions comparing ground truth and prediction.
+    
+    Args:
+        u_all (np.ndarray): Ground truth trajectories (NPATH, 3, time_steps)
+        u_pred (np.ndarray): Predicted trajectories (NPATH, 3, time_steps)
+        Time_record (np.ndarray): Time points
+        save_path (str): Path to save the plot
+        title_suffix (str): Suffix for the title
+    """
+    fig, axs = plt.subplots(2, 3, figsize=(18, 12))
+    
+    # Select a time point for analysis (e.g., middle of simulation)
+    time_idx = len(Time_record) // 2
+    print(f"Plotting distributions at time step {time_idx} (t = {Time_record[time_idx]:.2f})")
+    
+    # Extract data at the selected time point
+    u1_truth = u_all[:, 0, time_idx]
+    u2_truth = u_all[:, 1, time_idx]
+    u3_truth = u_all[:, 2, time_idx]
+    
+    u1_pred = u_pred[:, 0, time_idx]
+    u2_pred = u_pred[:, 1, time_idx]
+    u3_pred = u_pred[:, 2, time_idx]
+    
+    # Top row: Probability distributions for each mode
+    mode_data = [(u1_truth, u1_pred, 'u1'), (u2_truth, u2_pred, 'u2'), (u3_truth, u3_pred, 'u3')]
+    
+    for idx, (truth_data, pred_data, mode_name) in enumerate(mode_data):
+        ax = axs[0, idx]
+        
+        # Create histogram bins
+        all_data = np.concatenate([truth_data, pred_data])
+        bins = np.linspace(np.min(all_data), np.max(all_data), 50)
+        
+        # Plot histograms
+        hist_truth, bin_edges = np.histogram(truth_data, bins=bins, density=True)
+        hist_pred, _ = np.histogram(pred_data, bins=bins, density=True)
+        
+        # Plot with log scale
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        
+        ax.semilogy(bin_centers, hist_truth, 'b-', linewidth=2, label=f'Ground Truth {mode_name}')
+        ax.semilogy(bin_centers, hist_pred, 'k--', linewidth=2, label=f'Prediction {mode_name}')
+        
+        # Remove grid and clean up styling
+        ax.grid(False)
+        ax.set_xlabel('')
+        ax.set_ylabel('Probability Density')
+        ax.set_title('')
+        ax.legend(frameon=False)
+        
+        # Set y-axis limits similar to the image
+        ax.set_ylim(1e-2, 3e-01)
+        ax.set_xlim(-5, 5)
+        # Remove top and right spines
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+    
+    # Bottom row: Joint distributions (scatter plots)
+    joint_pairs = [(u1_truth, u2_truth, u1_pred, u2_pred, 'u1', 'u2'),
+                   (u1_truth, u3_truth, u1_pred, u3_pred, 'u1', 'u3'),
+                   (u2_truth, u3_truth, u2_pred, u3_pred, 'u2', 'u3')]
+    
+    for idx, (x_truth, y_truth, x_pred, y_pred, x_label, y_label) in enumerate(joint_pairs):
+        ax = axs[1, idx]
+        
+        # Plot ground truth (blue dots only, like in the reference image)
+        ax.scatter(x_truth, y_truth, c='blue', s=1, alpha=0.6, label='Ground Truth')
+        
+        ax.set_xlabel('')
+        ax.set_ylabel(y_label)
+        ax.set_title('')
+        
+        # Remove grid and clean up styling
+        ax.grid(False)
+        
+        # Remove top and right spines
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        
+        # Set equal aspect ratio for better visualization
+        ax.set_aspect('equal', adjustable='box')
+    
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.95, bottom=0.1, left=0.1, right=0.95)
+    
+    if save_path:
+        plt.savefig(os.path.join(save_path, 'probability_distributions.pdf'), dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    return fig
+    
+    

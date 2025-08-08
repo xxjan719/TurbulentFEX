@@ -19,7 +19,8 @@ from .helper import (Buu, compute_third_order_moments,
                      check_allowed_terms,get_sequence_from_candidate,extract_coefficients_from_expr,
                      select_operator_sequence)
 from .plot import (plot_NOISE_LEVEL_EFFECT,plot_training_progress_grid,
-                   plot_mean_comparison,plot_covariance_comparison)
+                   plot_mean_comparison,plot_covariance_comparison,
+                   plot_energy_comparison,plot_third_order_moments)
 
 __all__ = [
     "FEX", "Buu",'compute_third_order_moments',
@@ -33,5 +34,6 @@ __all__ = [
     "get_sequence_from_candidate", "coefficents_history", "extract_coefficients_from_expr",
     "plot_training_progress_grid", "select_operator_sequence","FEX_model_ground_truth","FEX_model_learned",
     "plot_mean_comparison","plot_covariance_comparison","train_FN_each_dimension","train_FN_ensemble",
-    "generate_euler_residue","generate_second_step","generate_mean_and_std","simple_step_update"
+    "generate_euler_residue","generate_second_step","generate_mean_and_std","simple_step_update",
+    "plot_energy_comparison","plot_third_order_moments"
 ]
