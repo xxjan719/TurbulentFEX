@@ -147,7 +147,7 @@ def find_nearest_neighbors(distances, short_size):
 
 
 def get_coefficients(load_dir: str = "", 
-                     noise_levels: list = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+                     noise_levels: list = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8],
                      DEVICE: str = "cpu")->dict:
     """
     Extract coefficients from FINAL_EXPR.txt file.
@@ -191,9 +191,13 @@ def get_coefficients(load_dir: str = "",
         if noise_level == 0.0:
             noise_pattern = r'NOISE 0\.0 ODE\s*#=+\s*(.*?)(?=\n\nNOISE|\n\nNoise|\Z)'
         elif noise_level == 1.0:
-            noise_pattern = r'Noise 1\.0 total noise\s*#=+\s*(.*?)(?=\Z)'
+            noise_pattern = r'Noise 1\.0 total noise\s*#.*?\n(.*?)(?=\n\nNOISE|\Z)'
+        elif noise_level == 1.8:
+            # Special case for the last section (1.8)
+            noise_pattern = rf'NOISE {noise_level}\s*=+\s*(.*?)(?=\Z)'
         else:
-            noise_pattern = rf'NOISE {noise_level}\s*#=+\s*(.*?)(?=\n\nNOISE|\n\nNoise|\Z)'
+            # Handle both formats: with #= and with ==, and ensure we capture the last section
+            noise_pattern = rf'NOISE {noise_level}\s*(?:#=+|=+)\s*(.*?)(?=\n\nNOISE|\n\nNoise|\Z)'
         
         noise_match = re.search(noise_pattern, content, re.DOTALL)
         if noise_match:

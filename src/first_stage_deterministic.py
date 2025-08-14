@@ -479,7 +479,7 @@ else:
         # Call backward only once after all dimensions are processed
         total_pred_loss.backward(retain_graph=True)
         model_optim.step()
-
+        
         with torch.no_grad():
             if train_idx % 50 == 0:
                 loss_history.append(total_pred_loss.item())

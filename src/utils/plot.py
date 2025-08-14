@@ -519,7 +519,7 @@ def plot_multiple_log10_error(data_list, selected_times_list, save_dir=None, lab
     plt.show()
 
 
-def plot_NOISE_LEVEL_EFFECT(coeff: dict, noise_levels: list = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0], save_dir: str = ""):
+def plot_NOISE_LEVEL_EFFECT(coeff: dict, noise_levels: list = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6], save_dir: str = ""):
     """
     Plot the effect of noise level on coefficients across dimensions.
     
@@ -1114,5 +1114,76 @@ def plot_probability_distributions(u_all, u_pred, Time_record, save_path=None, t
     plt.show()
     
     return fig
+
+
+
+
+
+def plot_energy_conservation(coefficients, noise_levels=None, save_dir=None):
+    """
+    Plot the sum of cross-terms (x1x2 + x2x3 + x1x3) for different noise levels.
     
+    Args:
+        coefficients (dict): Dictionary containing coefficients for each dimension
+        noise_levels (list): List of noise levels (optional, will be inferred from data)
+        save_path (str): Path to save the plot
+    """
+    # Set publication style
+    mpl.rcParams.update({
+        "font.family": "serif",
+        "font.size": 12,
+        "axes.labelsize": 12,
+        "legend.fontsize": 11,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "axes.grid": False,
+        "figure.dpi": 100,
+    })
     
+    # Extract cross-terms from each dimension
+    x2x3_values = coefficients['dim_1']['x2x3']  # From dimension 1
+    x1x3_values = coefficients['dim_2']['x1x3']  # From dimension 2  
+    x1x2_values = coefficients['dim_3']['x1x2']  # From dimension 3
+    
+    # Calculate the sum
+    cross_terms_sum = [x2x3 + x1x3 + x1x2 for x2x3, x1x3, x1x2 in zip(x2x3_values, x1x3_values, x1x2_values)]
+    
+    # If noise_levels not provided, create default range
+    if noise_levels is None:
+        noise_levels = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8][:len(cross_terms_sum)]
+    
+    # Create the plot
+    fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+    set_figure_position(x=100, y=100, width=1000, height=600)
+    
+    # Plot the sum of cross-terms
+    ax.plot(noise_levels, cross_terms_sum, 'o-', color='#2171B5', linewidth=3, markersize=8, 
+            label='x1x2 + x2x3 + x1x3')
+    
+   
+    
+    # Add value annotations
+    for i, (x, y) in enumerate(zip(noise_levels, cross_terms_sum)):
+        ax.annotate(f'{y:.4f}', (x, y), textcoords="offset points", 
+                   xytext=(0,10), ha='center', fontsize=9)
+    
+    ax.set_xlabel('Noise Level', fontsize=14)
+    ax.set_ylabel('Cross-terms Sum', fontsize=14)
+    ax.set_title('Sum of Cross-terms vs Noise Level', fontsize=16)
+    ax.legend(loc='upper right', frameon=False)
+    ax.grid(True, alpha=0.3)
+    
+    # Set x-axis limits to show full range
+    ax.set_xlim(min(noise_levels) - 0.1, max(noise_levels) + 0.1)
+    
+    plt.tight_layout()
+    
+    if save_dir:
+        plt.savefig(os.path.join(save_dir, 'Energy_conservation_sum.pdf'), dpi=300, bbox_inches='tight')
+        print(f"Cross-terms sum plot saved to {os.path.join(save_dir, 'Energy_conservation_sum.pdf')}")
+    
+    plt.show()
+    
+    return fig

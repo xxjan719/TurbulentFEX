@@ -4,11 +4,11 @@ import os
 import re
 import matplotlib.pyplot as plt
 from config import DIR_EXAMPLE, create_main_parser
-from utils.plot import plot_NOISE_LEVEL_EFFECT
+from utils.plot import plot_NOISE_LEVEL_EFFECT, plot_energy_conservation
 from utils.helper import get_coefficients
 
 # Hardcode DIR_TRIAD for this test
-DIR_TRIAD = "src/Example/MC_triad"
+DIR_TRIAD = "Example/MC_triad"
 
 parser = create_main_parser()
 args = parser.parse_args()
@@ -29,7 +29,7 @@ print("args.DEVICE:", args.DEVICE)
 print("args.Model:", args.Model)
 
 # Get coefficients
-coefficients = get_coefficients(load_dir=DIR_TRIAD, DEVICE=args.DEVICE)
+coefficients = get_coefficients(load_dir="Example/MC_triad", DEVICE=args.DEVICE)
 
 # Print out all coefficients for each dimension and term
 print("\n=== Coefficient Values by Noise Level ===")
@@ -42,9 +42,12 @@ for dim_key, dim_data in coefficients.items():
 os.makedirs(args.LOG_SAVE_PATH, exist_ok=True)
 
 # Plot the results
-plot_NOISE_LEVEL_EFFECT(coefficients, save_dir=args.LOG_SAVE_PATH)
+plot_NOISE_LEVEL_EFFECT(coefficients, noise_levels=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8], save_dir=args.LOG_SAVE_PATH)
 
 
+# Plot the energy conservation
+# Plot the sum of cross-terms
+plot_energy_conservation(coefficients, noise_levels=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8], save_dir=args.LOG_SAVE_PATH)
 
 
 
