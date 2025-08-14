@@ -632,36 +632,8 @@ if choice == '1':
                 print('[WARNING] Time range configuration file not found')  
     
     print("\n"+ "="*60)
-    print("\n[INFO] Testing predictions...")
+    print("\n[INFO] Testing predictions in choice 2...")
     
-    # Initialize trajectory predictor
-    predictor = TrajectoryPredictor(device=device, dt=dt, scaler=scaler)
-    
-    if chosen_method == 'ensemble':
-        print("[INFO] Using ensemble prediction method...")
-        residual_cov_pred, selected_times = predictor.predict_ensemble_residual_covariance(
-            residuals=residuals,
-            save_dir=model_save_dir,  # Use the model save directory
-            u_current=u_current,
-            fex_model_func=learned_model_wrapper,
-            train_size=train_size,
-            n_models=5,
-            residual_cov_truth=residual_cov_truth,
-            num_time_points=1001  # Only predict on 1001 time points
-        )
-        print('[SUCCESS] Ensemble prediction completed.')
-    else:
-        print("[INFO] Using single model prediction method...")
-        residual_cov_pred, selected_times = predictor.predict_single_model_residual_covariance(
-            residuals=residuals,
-            save_dir=model_save_dir,  # Use the model save directory
-            u_current=u_current,
-            fex_model_func=learned_model_wrapper,
-            train_size=train_size,
-            residual_cov_truth=residual_cov_truth,
-            num_time_points=1001  # Only predict on 1001 time points
-        )
-        print('[SUCCESS] Single model prediction completed.')
     
     print("="*60)
     print('[SUCCESS] training process finished.')
@@ -678,6 +650,7 @@ elif choice == '2':
     m0,var0 = MC_triad_initial_value()
     params = params_init('equipart')
     FEX_model_check = FEX_model_learned
+
     L = params['L']
     G = params['G']
     B = params['B']
@@ -688,159 +661,163 @@ elif choice == '2':
     initial_state = np.random.normal(loc=m0, scale=np.sqrt(var0), size=(NPATH, 3))    
     x_pred_initial = torch.ones(NPATH, 3).to(device,dtype=torch.float32) * torch.tensor(m0).to(device,dtype=torch.float32)
     scaler = args.DIFF_SCALE
-tmM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
-tmS = np.zeros(int(TIME_AMOUNT/dt), dtype=np.float32)
-mean_state_pred = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-mean_state_record = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-mean_state_record[:, 0] = np.mean(initial_state, axis=0)
-mean_state_pred[:, 0] = np.mean(initial_state, axis=0)
+    
+    tmM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
+    tmS = np.zeros(int(TIME_AMOUNT/dt), dtype=np.float32)
+    mean_state_pred = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    mean_state_record = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    mean_state_record[:, 0] = np.mean(initial_state, axis=0)
+    mean_state_pred[:, 0] = np.mean(initial_state, axis=0)
 
-# Add separate mean arrays for single and ensemble
-mean_state_single = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-mean_state_single[:, 0] = np.mean(initial_state, axis=0)
-mean_state_ensemble = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-mean_state_ensemble[:, 0] = np.mean(initial_state, axis=0)
+    # Add separate mean arrays for single and ensemble
+    mean_state_single = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    mean_state_single[:, 0] = np.mean(initial_state, axis=0)
+    mean_state_ensemble = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    mean_state_ensemble[:, 0] = np.mean(initial_state, axis=0)
 
-cov_state_pred = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-cov_state_record = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-cov_state_record[:, :, 0] = np.cov(initial_state, rowvar=False)
-cov_state_pred[:, :, 0] = np.cov(initial_state, rowvar=False)
+    cov_state_pred = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    cov_state_record = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    cov_state_record[:, :, 0] = np.cov(initial_state, rowvar=False)
+    cov_state_pred[:, :, 0] = np.cov(initial_state, rowvar=False)
 
-# Add separate covariance arrays for single and ensemble
-cov_state_single = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-cov_state_single[:, :, 0] = np.cov(initial_state, rowvar=False)
-cov_state_ensemble = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-cov_state_ensemble[:, :, 0] = np.cov(initial_state, rowvar=False)
+    # Add separate covariance arrays for single and ensemble
+    cov_state_single = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    cov_state_single[:, :, 0] = np.cov(initial_state, rowvar=False)
+    cov_state_ensemble = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    cov_state_ensemble[:, :, 0] = np.cov(initial_state, rowvar=False)
 
-u_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-u_all[:,:,0] = initial_state
-u_pred_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-u_pred_all[:,:,0] = initial_state
+    u_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_all[:,:,0] = initial_state
+    u_pred_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_pred_all[:,:,0] = initial_state
 
-# Add separate arrays for single and ensemble predictions
-u_pred_single = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-u_pred_single[:,:,0] = initial_state
-u_pred_ensemble = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-u_pred_ensemble[:,:,0] = initial_state
+    # Add separate arrays for single and ensemble predictions
+    u_pred_single = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_pred_single[:,:,0] = initial_state
+    u_pred_ensemble = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_pred_ensemble[:,:,0] = initial_state
 
-moment3_state_record = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-moment3_state_pred = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-moment3_first,_ = compute_third_order_moments(initial_state)
-moment3_state_record[:,:,:,0] = moment3_first
-moment3_state_pred[:,:,:,0] = moment3_first
+    moment3_state_record = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    moment3_state_pred = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    moment3_first,_ = compute_third_order_moments(initial_state)
+    moment3_state_record[:,:,:,0] = moment3_first
+    moment3_state_pred[:,:,:,0] = moment3_first
 
-Energy_MC_all = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-Energy_MC_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_MC_all = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_MC_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
 
-current_state = initial_state
-current_pred_state = initial_state
+    current_state = initial_state
+    current_pred_state = initial_state
 
-Energy_update_record = np.zeros(4, dtype=np.float32)
-Energy_update_pred = np.zeros(4, dtype=np.float32)
-Energy_dyn_record = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-Energy_dyn_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_update_record = np.zeros(4, dtype=np.float32)
+    Energy_update_pred = np.zeros(4, dtype=np.float32)
+    Energy_dyn_record = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_dyn_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
 
-# At t=0
-Energy_update_pred[:] = [
-    0.5 * np.sum(mean_state_pred[:, 0] ** 2) + 0.5 * np.trace(cov_state_pred[:, :, 0]),
-    0.5 * (mean_state_pred[0, 0] ** 2 + cov_state_pred[0, 0, 0]),
-    0.5 * (mean_state_pred[1, 0] ** 2 + cov_state_pred[1, 1, 0]),
-    0.5 * (mean_state_pred[2, 0] ** 2 + cov_state_pred[2, 2, 0]),
-]
-Energy_dyn_pred[:, 0] = Energy_update_pred
+    # At t=0
+    Energy_update_pred[:] = [
+        0.5 * np.sum(mean_state_pred[:, 0] ** 2) + 0.5 * np.trace(cov_state_pred[:, :, 0]),
+        0.5 * (mean_state_pred[0, 0] ** 2 + cov_state_pred[0, 0, 0]),
+        0.5 * (mean_state_pred[1, 0] ** 2 + cov_state_pred[1, 1, 0]),
+        0.5 * (mean_state_pred[2, 0] ** 2 + cov_state_pred[2, 2, 0]),
+    ]
+    Energy_dyn_pred[:, 0] = Energy_update_pred
 
-Energy_update_record[:] = [
-    0.5 * np.sum(mean_state_record[:, 0] ** 2) + 0.5 * np.trace(cov_state_record[:, :, 0]),
-    0.5 * (mean_state_record[0, 0] ** 2 + cov_state_record[0, 0, 0]),
-    0.5 * (mean_state_record[1, 0] ** 2 + cov_state_record[1, 1, 0]),
-    0.5 * (mean_state_record[2, 0] ** 2 + cov_state_record[2, 2, 0]),
-]
-Energy_dyn_record[:, 0] = Energy_update_record
+    Energy_update_record[:] = [
+        0.5 * np.sum(mean_state_record[:, 0] ** 2) + 0.5 * np.trace(cov_state_record[:, :, 0]),
+        0.5 * (mean_state_record[0, 0] ** 2 + cov_state_record[0, 0, 0]),
+        0.5 * (mean_state_record[1, 0] ** 2 + cov_state_record[1, 1, 0]),
+        0.5 * (mean_state_record[2, 0] ** 2 + cov_state_record[2, 2, 0]),
+    ]
+    Energy_dyn_record[:, 0] = Energy_update_record
 
-# Load neural network models once at the beginning
-print("Loading neural network models...")
-single_models = {}
-single_norms = {}
-ensemble_models = {}
-ensemble_norms = {}
+    # Load neural network models once at the beginning
+    print("Loading neural network models...")
+    single_models = {}
+    single_norms = {}
+    ensemble_models = {}
+    ensemble_norms = {}
 
+    if device == 'cuda:0':
+        save_dir_single = '../src/Example/MC_triad/Results/Results1/Results/equipart/noise_1.0/second_stage_10000_single'
+        save_dir_ensemble = '../src/Example/MC_triad/Results/Results1/Results/equipart/noise_1.0/second_stage_10000'
+    else:
+        save_dir_single = '../src/Example/MC_triad/Results/equipart/noise_1.0/second_stage_10000_single'
+        save_dir_ensemble = '../src/Example/MC_triad/Results/equipart/noise_1.0/second_stage_10000'
 
-if device == 'cuda:0':
-    save_dir_single = '../src/Example/MC_triad/Results/Results1/Results/equipart/noise_1.0/second_stage_10000_single'
-    save_dir_ensemble = '../src/Example/MC_triad/Results/Results1/Results/equipart/noise_1.0/second_stage_10000'
-else:
-    save_dir_single = '../src/Example/MC_triad/Results/equipart/noise_1.0/second_stage_10000_single'
-    save_dir_ensemble = '../src/Example/MC_triad/Results/equipart/noise_1.0/second_stage_10000'
-
-
-
-tM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
-for idx in range(1,int(TIME_AMOUNT/dt)+1):
-    # RK4 integration
-    k1 = (L @ current_state.T).T - current_state @ G + Buu(B, current_state, current_state) + np.ones((NPATH, 1)) * tmM[idx - 1, :]
-    u1 = current_state + dt * k1
-    k2 = (L @ u1.T).T - u1 @ G + Buu(B, u1, u1) + np.ones((NPATH, 1)) * tmM[idx - 1, :]
-    next_state = current_state + dt * (k1 + k2) / 2
-    SS = params['SS'] + tmS[idx - 1] ** 2 * (params['SSt'] - params['SS'])
-    Winc = np.random.randn(NPATH, 3)  # shape (MC, 3)
-    next_state = next_state + np.sqrt(dt) * (Winc @ SS)  # (MC,3) @ (3,3) → (MC,3)
-    u_all[:, :, idx] = next_state
+    tM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
+    for idx in range(1,int(TIME_AMOUNT/dt)+1):
+        # RK4 integration
+        k1 = (L @ current_state.T).T - current_state @ G + Buu(B, current_state, current_state) + np.ones((NPATH, 1)) * tmM[idx - 1, :]
+        u1 = current_state + dt * k1
+        k2 = (L @ u1.T).T - u1 @ G + Buu(B, u1, u1) + np.ones((NPATH, 1)) * tmM[idx - 1, :]
+        next_state = current_state + dt * (k1 + k2) / 2
+        SS = params['SS'] + tmS[idx - 1] ** 2 * (params['SSt'] - params['SS'])
+        Winc = np.random.randn(NPATH, 3)  # shape (MC, 3)
+        next_state = next_state + np.sqrt(dt) * (Winc @ SS)  # (MC,3) @ (3,3) → (MC,3)
+        u_all[:, :, idx] = next_state
 
     
-    mean_state_record[:,idx] = np.mean(next_state, axis=0)
-    cov_state_record[:,:,idx] = np.cov(next_state, rowvar=False)
-    moment3_state_record[:,:,:,idx],_ = compute_third_order_moments(next_state)
-    Energy_MC_all[0, idx] = 0.5 * np.sum(mean_state_record[:,idx] ** 2) + 0.5 * np.trace(cov_state_record[:,:,idx])
-    Energy_MC_all[1, idx] = 0.5 * (mean_state_record[0,idx] ** 2 + cov_state_record[0,0,idx])
-    Energy_MC_all[2, idx] = 0.5 * (mean_state_record[1,idx] ** 2 + cov_state_record[1,1,idx])
-    Energy_MC_all[3, idx] = 0.5 * (mean_state_record[2,idx] ** 2 + cov_state_record[2,2,idx])
-    diag_G = np.diag(G)
-    damp1 = np.max(diag_G)
-    damp2 = max(np.min(diag_G), 0)
-    damp3 = np.mean(diag_G)
-    SS_sq_diag = np.diag(SS @ SS.T)
-    Energy_update_record[0] += dt * (
+        mean_state_record[:,idx] = np.mean(next_state, axis=0)
+        cov_state_record[:,:,idx] = np.cov(next_state, rowvar=False)
+        moment3_state_record[:,:,:,idx],_ = compute_third_order_moments(next_state)
+        Energy_MC_all[0, idx] = 0.5 * np.sum(mean_state_record[:,idx] ** 2) + 0.5 * np.trace(cov_state_record[:,:,idx])
+        Energy_MC_all[1, idx] = 0.5 * (mean_state_record[0,idx] ** 2 + cov_state_record[0,0,idx])
+        Energy_MC_all[2, idx] = 0.5 * (mean_state_record[1,idx] ** 2 + cov_state_record[1,1,idx])
+        Energy_MC_all[3, idx] = 0.5 * (mean_state_record[2,idx] ** 2 + cov_state_record[2,2,idx])
+        
+      
+        diag_G = np.diag(G)
+        damp1 = np.max(diag_G)
+        damp2 = max(np.min(diag_G), 0)
+        damp3 = np.mean(diag_G)
+        SS_sq_diag = np.diag(SS @ SS.T)
+        
+      
+        Energy_update_record[0] += dt * (
             -np.sum(diag_G * (mean_state_record[:, idx] ** 2 + np.diag(cov_state_record[:, :, idx]))) +
              np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) +
              0.5 * np.sum(SS_sq_diag)
         )
-    Energy_update_record[1] += dt * (-2 * damp1 * Energy_update_record[1] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
-    Energy_update_record[2] += dt * (-2 * damp2 * Energy_update_record[2] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
-    Energy_update_record[3] += dt * (-2 * damp3 * Energy_update_record[3] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+        Energy_update_record[1] += dt * (-2 * damp1 * Energy_update_record[1] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+        Energy_update_record[2] += dt * (-2 * damp2 * Energy_update_record[2] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+        Energy_update_record[3] += dt * (-2 * damp3 * Energy_update_record[3] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
     
-    # u_pred_all[:,:,idx] = current_pred_state
-    current_state = next_state
+        # u_pred_all[:,:,idx] = current_pred_state
+        current_state = next_state
 
-    current_tensor = torch.tensor(current_pred_state, dtype=torch.float32)
+        current_tensor = torch.tensor(current_pred_state, dtype=torch.float32)
     
-    # RK4 for the deterministic part (FEX model)
-    # Step 1
-    # Step 1
-    k1_det = FEX_model_check(current_tensor) * dt
-    k1_det_np = k1_det.cpu().detach().numpy()
-    u1 = current_tensor +  k1_det
+        # RK4 for the deterministic part (FEX model)
+        # Step 1
+        # Step 1
+        k1_det = FEX_model_check(current_tensor) * dt
+        k1_det_np = k1_det.cpu().detach().numpy()
+        u1 = current_tensor +  k1_det
 
-    # Step 2
-    k2_det = FEX_model_check(u1) * dt
-    k2_det_np = k2_det.cpu().detach().numpy()
-    u2 = current_tensor +  k2_det
+      
+
+         # Step 2
+        k2_det = FEX_model_check(u1) * dt
+        k2_det_np = k2_det.cpu().detach().numpy()
+        u2 = current_tensor +  k2_det
     
-    # Final RK4 update
+        # Final RK4 update
     
     
-    # RK4 update for deterministic part
-    det_update = (k1_det_np+k2_det_np)/2
+        # RK4 update for deterministic part
+        det_update = (k1_det_np+k2_det_np)/2
     
-    # Generate stochastic component (just once per step)
-    Npath = current_pred_state.shape[0]
-    dim = current_pred_state.shape[1]
-    Winc_tensor = torch.Tensor(Winc).to(device, dtype=torch.float32)
+        # Generate stochastic component (just once per step)
+        Npath = current_pred_state.shape[0]
+        dim = current_pred_state.shape[1]
+        Winc_tensor = torch.Tensor(Winc).to(device, dtype=torch.float32)
     
-    # Use the simple step update function for neural networks
-    from utils.ODEParser import simple_step_update
+        # Use the simple step update function for neural networks
+        from utils.ODEParser import simple_step_update
     
-    # Try both single and ensemble neural networks
-    stoch_update_single = simple_step_update(
+        # Try both single and ensemble neural networks
+        stoch_update_single = simple_step_update(
         Winc_tensor=Winc_tensor,
         device=device,
         idx=idx,
@@ -848,9 +825,9 @@ for idx in range(1,int(TIME_AMOUNT/dt)+1):
         save_dir_ensemble=save_dir_ensemble,
         model_type='single',
         scaler=scaler
-    )
+        )
     
-    stoch_update_ensemble = simple_step_update(
+        stoch_update_ensemble = simple_step_update(
         Winc_tensor=Winc_tensor,
         device=device,
         idx=idx,
@@ -858,132 +835,135 @@ for idx in range(1,int(TIME_AMOUNT/dt)+1):
         save_dir_ensemble=save_dir_ensemble,
         model_type='ensemble',
         scaler=scaler
-    )
+        )
     
-    # Simple noise for comparison
-    simple_noise = np.sqrt(dt) * (Winc @ SS)
+        # Simple noise for comparison
+        simple_noise = np.sqrt(dt) * (Winc @ SS)
     
-    # Print comparison every 50 steps
-    if idx % 50 == 0:
-        print(f"\nStep {idx}: Model Comparison")
-        print("-" * 50)
+        # Print comparison every 50 steps
+        if idx % 50 == 0:
+            print(f"\nStep {idx}: Model Comparison")
+            print("=" * 50)
         
-        if stoch_update_single is not None:
-            print(f"Single NN - Mean: {np.mean(stoch_update_single, axis=0)}")
-            print(f"Single NN - Std:  {np.std(stoch_update_single, axis=0)}")
+            if stoch_update_single is not None:
+                print(f"Single NN - Mean: {np.mean(stoch_update_single, axis=0)}")
+                print(f"Single NN - Std:  {np.std(stoch_update_single, axis=0)}")
+            else:
+                print("Single NN - Not available")
+            
+            if stoch_update_ensemble is not None:
+                print(f"Ensemble NN - Mean: {np.mean(stoch_update_ensemble, axis=0)}")
+                print(f"Ensemble NN - Std:  {np.std(stoch_update_ensemble, axis=0)}")
+            else:
+                print("Ensemble NN - Not available")
+            
+            print(f"Simple Noise - Mean: {np.mean(simple_noise, axis=0)}")
+            print(f"Simple Noise - Std:  {np.std(simple_noise, axis=0)}")
+            print("=" * 50)
+    
+        # Choose which model to use (priority: ensemble > single > simple noise)
+        if stoch_update_ensemble is not None:
+            stoch_update = stoch_update_ensemble
+            model_used = "Ensemble"
+        elif stoch_update_single is not None:
+            stoch_update = stoch_update_single
+            model_used = "Single"
         else:
             print("Single NN - Not available")
             
-        if stoch_update_ensemble is not None:
-            print(f"Ensemble NN - Mean: {np.mean(stoch_update_ensemble, axis=0)}")
-            print(f"Ensemble NN - Std:  {np.std(stoch_update_ensemble, axis=0)}")
-        else:
-            print("Ensemble NN - Not available")
-            
-        print(f"Simple Noise - Mean: {np.mean(simple_noise, axis=0)}")
-        print(f"Simple Noise - Std:  {np.std(simple_noise, axis=0)}")
-    
-    # Choose which model to use (priority: ensemble > single > simple noise)
-    if stoch_update_ensemble is not None:
-        stoch_update = stoch_update_ensemble
-        model_used = "Ensemble"
-    elif stoch_update_single is not None:
-        stoch_update = stoch_update_single
-        model_used = "Single"
-    else:
         # Fallback to simple noise
         stoch_update = simple_noise
         model_used = "Simple"
     
-    # Compute both single and ensemble predictions
-    if stoch_update_single is not None:
-        next_pred_single = current_pred_state + det_update + stoch_update_single
-    else:
-        next_pred_single = current_pred_state + det_update + simple_noise
+        # Compute both single and ensemble predictions
+        if stoch_update_single is not None:
+            next_pred_single = current_pred_state + det_update + stoch_update_single
+        else:
+            next_pred_single = current_pred_state + det_update + simple_noise
         
-    if stoch_update_ensemble is not None:
-        next_pred_ensemble = current_pred_state + det_update + stoch_update_ensemble
-    else:
-        next_pred_ensemble = current_pred_state + det_update + simple_noise
+        if stoch_update_ensemble is not None:
+            next_pred_ensemble = current_pred_state + det_update + stoch_update_ensemble
+        else:
+            next_pred_ensemble = current_pred_state + det_update + simple_noise
     
-    # Use the selected model for the main prediction (for backward compatibility)
-    next_pred_state = current_pred_state + det_update + stoch_update
+        # Use the selected model for the main prediction (for backward compatibility)
+        next_pred_state = current_pred_state + det_update + stoch_update
     
-    # Store results for all three predictions
-    u_pred_all[:,:,idx] = next_pred_state
-    u_pred_single[:,:,idx] = next_pred_single
-    u_pred_ensemble[:,:,idx] = next_pred_ensemble
+        # Store results for all three predictions
+        u_pred_all[:,:,idx] = next_pred_state
+        u_pred_single[:,:,idx] = next_pred_single
+        u_pred_ensemble[:,:,idx] = next_pred_ensemble
     
-    # Update statistics for all three predictions
-    mean_state_pred[:,idx] = np.mean(next_pred_state, axis=0)
-    mean_state_single[:,idx] = np.mean(next_pred_single, axis=0)
-    mean_state_ensemble[:,idx] = np.mean(next_pred_ensemble, axis=0)
+        # Update statistics for all three predictions
+        mean_state_pred[:,idx] = np.mean(next_pred_state, axis=0)
+        mean_state_single[:,idx] = np.mean(next_pred_single, axis=0)
+        mean_state_ensemble[:,idx] = np.mean(next_pred_ensemble, axis=0)
     
-    cov_state_pred[:,:,idx] = np.cov(next_pred_state, rowvar=False)
-    cov_state_single[:,:,idx] = np.cov(next_pred_single, rowvar=False)
-    cov_state_ensemble[:,:,idx] = np.cov(next_pred_ensemble, rowvar=False)
+        cov_state_pred[:,:,idx] = np.cov(next_pred_state, rowvar=False)
+        cov_state_single[:,:,idx] = np.cov(next_pred_single, rowvar=False)
+        cov_state_ensemble[:,:,idx] = np.cov(next_pred_ensemble, rowvar=False)
 
-    # Calculate energy directly from mean and covariance (same as ground truth)
-    Energy_MC_pred[0, idx] = 0.5 * np.sum(mean_state_pred[:, idx] ** 2) + 0.5 * np.trace(cov_state_pred[:, :, idx])
-    Energy_MC_pred[1, idx] = 0.5 * (mean_state_pred[0, idx] ** 2 + cov_state_pred[0, 0, idx])
-    Energy_MC_pred[2, idx] = 0.5 * (mean_state_pred[1, idx] ** 2 + cov_state_pred[1, 1, idx])
-    Energy_MC_pred[3, idx] = 0.5 * (mean_state_pred[2, idx] ** 2 + cov_state_pred[2, 2, idx])
+        # Calculate energy directly from mean and covariance (same as ground truth)
+        Energy_MC_pred[0, idx] = 0.5 * np.sum(mean_state_pred[:, idx] ** 2) + 0.5 * np.trace(cov_state_pred[:, :, idx])
+        Energy_MC_pred[1, idx] = 0.5 * (mean_state_pred[0, idx] ** 2 + cov_state_pred[0, 0, idx])
+        Energy_MC_pred[2, idx] = 0.5 * (mean_state_pred[1, idx] ** 2 + cov_state_pred[1, 1, idx])
+        Energy_MC_pred[3, idx] = 0.5 * (mean_state_pred[2, idx] ** 2 + cov_state_pred[2, 2, idx])
     
-    # Calculate third-order moments for prediction
-    moment3_pred, _ = compute_third_order_moments(next_pred_state)
-    moment3_state_pred[:, :, :, idx] = moment3_pred
+        # Calculate third-order moments for prediction
+        moment3_pred, _ = compute_third_order_moments(next_pred_state)
+        moment3_state_pred[:, :, :, idx] = moment3_pred
     
-    # Update current state
-    current_pred_state = next_pred_state
+        # Update current state
+        current_pred_state = next_pred_state
 
-np.random.seed(0)
-Time_record = np.arange(int(TIME_AMOUNT/dt)+1)
+    np.random.seed(0)
+    Time_record = np.arange(int(TIME_AMOUNT/dt)+1)
 
-# Print final summary
-print("\n" + "="*80)
-print("SIMULATION SUMMARY")
-print("="*80)
-print(f"Model used for stochastic component: {model_used}")
-print(f"Simulation time: {TIME_AMOUNT}")
-print(f"Time step: {dt}")
-print(f"Number of paths: {NPATH}")
-print(f"Total steps: {int(TIME_AMOUNT/dt)}")
+    # Print final summary
+    print("\n" + "="*80)
+    print("SIMULATION SUMMARY")
+    print("="*80)
+    print(f"Model used for stochastic component: {model_used}")
+    print(f"Simulation time: {TIME_AMOUNT}")
+    print(f"Time step: {dt}")
+    print(f"Number of paths: {NPATH}")
+    print(f"Total steps: {int(TIME_AMOUNT/dt)}")
 
-print("="*80)
+    print("="*80)
 
-# Generate plots
-print("\nGenerating comparison plots...")
+    # Generate plots
+    print("\nGenerating comparison plots...")
 
-# Create save directory for plots
-import os
-save_dir = f"../src/Example/MC_triad/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/plots"
-os.makedirs(save_dir, exist_ok=True)
-print(f"Saving plots to: {save_dir}")
+    # Create save directory for plots
+    import os
+    save_dir = f"../src/Example/MC_triad/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/plots"
+    os.makedirs(save_dir, exist_ok=True)
+    print(f"Saving plots to: {save_dir}")
 
-# Import plotting functions
-from utils.plot import plot_mean_comparison, plot_covariance_comparison, plot_energy_comparison, plot_third_order_moments, plot_probability_distributions
+    # Import plotting functions
+    from utils.plot import plot_mean_comparison, plot_covariance_comparison, plot_energy_comparison, plot_third_order_moments, plot_probability_distributions
 
-# Plot mean and covariance comparisons
-plot_mean_comparison(mean_state_record, mean_state_single, Time_record, 
+    # Plot mean and covariance comparisons
+    plot_mean_comparison(mean_state_record, mean_state_single, Time_record, 
                     save_path=save_dir, title_suffix=" - FEX-framework")
-plot_covariance_comparison(cov_state_record, cov_state_single, Time_record, 
+    plot_covariance_comparison(cov_state_record, cov_state_single, Time_record, 
                           save_path=save_dir, title_suffix=" - FEX-framework")
 
-# Plot energy comparison
-plot_energy_comparison(Energy_MC_all, Energy_MC_pred, Time_record, 
+    # Plot energy comparison
+    plot_energy_comparison(Energy_MC_all, Energy_MC_pred, Time_record, 
                       save_path=save_dir, title_suffix=" - FEX-framework")
 
-# Plot third-order moments
-plot_third_order_moments(moment3_state_record, moment3_state_pred, Time_record, 
+    # Plot third-order moments
+    plot_third_order_moments(moment3_state_record, moment3_state_pred, Time_record, 
                         save_path=save_dir, title_suffix=" - FEX-framework")
 
-# Plot probability distributions
-plot_probability_distributions(u_all, u_pred_all, Time_record, 
+    # Plot probability distributions
+    plot_probability_distributions(u_all, u_pred_all, Time_record, 
                               save_path=save_dir, title_suffix=" - FEX-framework")
 
-print("[INFO] All plots saved successfully!")
-print("\n")
-print("[SUCCESS] have already finished prediction! Now you finish the work!")
+    print("[INFO] All plots saved successfully!")
+    print("\n")
+    print("[SUCCESS] have already finished prediction! Now you finish the work!")
     
     
     

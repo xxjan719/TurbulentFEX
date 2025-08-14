@@ -42,12 +42,12 @@ for dim_key, dim_data in coefficients.items():
 os.makedirs(args.LOG_SAVE_PATH, exist_ok=True)
 
 # Plot the results
-plot_NOISE_LEVEL_EFFECT(coefficients, noise_levels=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8], save_dir=args.LOG_SAVE_PATH)
+plot_NOISE_LEVEL_EFFECT(coefficients, noise_levels=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0], save_dir=args.LOG_SAVE_PATH)
 
 
 # Plot the energy conservation
 # Plot the sum of cross-terms
-plot_energy_conservation(coefficients, noise_levels=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8], save_dir=args.LOG_SAVE_PATH)
+plot_energy_conservation(coefficients, noise_levels=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0], save_dir=args.LOG_SAVE_PATH)
 
 
 
