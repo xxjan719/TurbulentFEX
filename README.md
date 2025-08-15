@@ -8,6 +8,7 @@ TurbulentFEX/
 │   ├── __init__.py                    # Make src a Python package
 │   ├── first_stage_deterministic.py   # First stage: FEX learning drift term
 │   ├── second_stage_stochastic.py     # Second stage: Learning diffusion term
+│   ├── small_test.py                  # Small test script for testing functions
 │   ├── config.py                      # Central configuration management
 │   ├── utils/
 │   │   ├── __init__.py                # Make utils a Python package
@@ -18,226 +19,128 @@ TurbulentFEX/
 │   │   ├── Pool.py                    # Candidate pool management
 │   │   ├── Sampler.py                 # Sampling utilities
 │   │   ├── constant.py                # Constants and operations
-│   │   └── helper.py                  # Helper functions
+│   │   ├── helper.py                  # Helper functions
+│   │   └── plot.py                    # Plotting utilities
 │   ├── Example/
 │   │   └── MC_triad/                  # Example: Monte Carlo triad system
 │   │       ├── MC_triad.py            # Main triad system definition
-│   │       ├── prediction.ipynb       # Prediction and evaluation notebook
 │   │       └── Results/               # Output directories for results
 │   │           ├── equipart/          # Equipartition results
 │   │           └── cascade/           # Cascade results
 │   └── README.md                      # Detailed usage documentation
 │
-└── .gitignore
+├── turbulentfex_env/                  # Python virtual environment
+├── environment.yml                     # Conda environment specification
+└── .gitignore                         # Git ignore file
 ```
 
-## Issues
+## Current File Structure (Actual)
 
+The project has evolved from the original structure. Here's what actually exists:
+
+### Main Scripts
+- **`first_stage_deterministic.py`**: FEX learning for drift terms (27KB, 573 lines)
+- **`second_stage_stochastic.py`**: Neural network training for diffusion terms (50KB, 1073 lines)
+- **`small_test.py`**: Testing script for various functions (1.6KB, 56 lines)
+- **`config.py`**: Configuration management (18KB, 448 lines)
+
+### Utility Modules (`src/utils/`)
+- **`ODEParser.py`**: ODE solving and neural network training (33KB, 801 lines)
+- **`plot.py`**: Comprehensive plotting utilities (51KB, 1189 lines)
+- **`FEX.py`**: Functional Expansion implementation (15KB, 424 lines)
+- **`helper.py`**: Helper functions (18KB, 474 lines)
+- **`Train_Integrator.py`**: Training integration (3.1KB, 92 lines)
+- **`Pool.py`**: Candidate pool management (1.3KB, 51 lines)
+- **`Sampler.py`**: Sampling utilities (1.3KB, 37 lines)
+- **`controller.py`**: Neural controller (1.2KB, 43 lines)
+- **`constant.py`**: Constants and operations (367B, 15 lines)
+
+### Example Implementation (`src/Example/MC_triad/`)
+- **`MC_triad.py`**: Monte Carlo triad system definition (18KB, 455 lines)
+- **Results structure**:
+  - `equipart/`: Equipartition parameter results
+  - `cascade/`: Cascade parameter results
+    - `noise_0.2/`: Results for 0.2 noise level
+    - `noise_1.0/`: Results for 1.0 noise level (main focus)
+      - `second_stage_10000/`: Ensemble neural network models
+      - `second_stage_10000_single/`: Single neural network models
+      - `second_stage_10000_common/`: Shared data and ODE solutions
+      - `plots/`: Generated comparison plots
+      - `final_expressions.txt`: Learned FEX expressions
+      - `simulation_results_noise_1.0.npz`: Simulation data (230MB)
 
 ## Recent Updates
 
-### File Reorganization (2025-01-XX)
-- **Renamed main files for clarity**:
-  - `main.py` → `first_stage_deterministic.py` (FEX learning drift)
-  - `small_test.py` → `second_stage_stochastic.py` (learning diffusion)
-- **Fixed import issues**: Resolved all relative import problems
-- **Improved configuration**: Enhanced config.py with lazy loading and better error handling
-- **Updated documentation**: Added comprehensive README in src/ directory
+### Neural Network Training (Current Focus)
+- **Second stage training**: Successfully implemented neural network training for stochastic components
+- **Time range training**: Added support for training specific time ranges (0-250, 250-500, 500-750, 750-1000)
+- **Method selection**: Support for both single neural network and ensemble methods
+- **Model saving**: Fixed issues with model saving and added debug output
 
-### Need to Update (2025-06-15 - 2025-06-22)
-- print all the dataset performance in `prediction.py`
+### FEX Learning (First Stage)
+- **Drift term discovery**: Functional Expansion for learning deterministic dynamics
+- **Coefficient optimization**: Two-phase training with LBFGS refinement
+- **Expression learning**: Automatic discovery of mathematical expressions
 
-### Updates (2025-06-09 - 2025-06-15)
-1. **Coefficient Training and Refinement**
-   - Implemented a two-phase coefficient training process:
-     - Phase 1: Initial FEX training to get approximate coefficients
-     - Phase 2: Coefficient acceleration step to refine values closer to targets
-   - Added coefficient constraints to prevent drift:
-     - Parameters are clamped to be within ±0.1 of target values
-     - Strong L1 and L2 penalties for deviation from targets
-     - Learning rate scheduling for stable convergence
-
-2. **Drift Term Improvements**
-   - Fixed issues with linear, nonlinear, and force terms in drift calculations
-   - Implemented separate handling for different term types:
-     - Linear terms (x1, x2, x3): Direct coefficient optimization
-     - Interaction terms (x1*x2, x1*x3, x2*x3): Special handling for cross-term effects
-     - Constant terms: Preserved original values
-   - Added coefficient verification to ensure physical consistency
-
-3. **Interaction Term Optimization**
-   - Developed new approach for handling interaction terms (cov(u1,u2)):
-     - Interaction terms now depend on linear coefficient performance
-     - Added coefficient acceleration step to improve accuracy
-     - Implemented special handling for terms close to integer values
-   - Results show improved accuracy in cross-term predictions
-
-4. **Energy Conservation and Dissipation**
-   - Implemented new approach for energy conservation:
-     - First train with given dissipation coefficient
-     - Then apply coefficient acceleration
-     - Results show better stability than direct energy conservation enforcement
-   - Added verification of energy conservation properties
-
-5. **Performance Monitoring**
-   - Added comprehensive performance tracking:
-     - Coefficient convergence monitoring
-     - Loss tracking (prediction and coefficient losses)
-     - Final expression accuracy verification
-   - Results available in prediction.ipynb with detailed metrics
-
-6. **Code Improvements**
-   - Enhanced coefficient training process:
-     - Added parameter constraints
-     - Implemented adaptive learning rates
-     - Added early stopping for stable convergence
-   - Improved expression formatting and output
-   - Added detailed logging of training progress
-
-### Updates (2025-06-08)
-- Added `MultiDimFEX` class for unified 3D FEX prediction: loads all three FEX models (one per dimension) and returns a 3D result for input data.
-- Improved plotting utilities to filter out nearly-constant lines and only plot meaningful data.
-- Enhanced code structure for easier model loading and prediction.
-
-
-### Updates (2025-06-06 - 2025-06-07)
-- Complete implementation of `ODEParser.py` with score-based ODE solver and neural network components
-- Implement FEX expression optimization system with best score tracking and expression selection capabilities
-- Add comprehensive dataset performance evaluation in `prediction.py` with metrics and visualizations
-- Optimize memory usage in batch processing and fix shape mismatch issues
-- Add error handling for NaN values in LBFGS optimization
-
-### Updates (2025-06-05)
-1. **Matrix Coefficient Extraction**
-   - Implement coefficient extraction for L, G, and B terms
-   - Add coefficient verification and debugging output
-
-2. **LaTeX Visualization**
-   - Add equation visualization with ground truth comparison
-   - Improve mathematical notation formatting
-
-3. **Training Process**
-   - Add ground truth training support
-   - Switch to Integration-based method from Derivative-based
-   - Integrate LBFGS into training pipeline
-   - Update argument parser and stage control logic
-
-### Updates (2025-06-04)
-1. **Optimization**
-   - Add two-phase optimization (Adam + LBFGS)
-   - Optimize LBFGS parameters for efficiency
-   - Add NaN detection and handling
-
-2. **Code Structure**
-   - Update paths and simplify visualization code
-   - Improve results organization
-
-3. **Scoring System**
-   - Implement direct loss-based scoring
-   - Use unified scoring formula: 1/(1 + loss)
-
-### Dependencies
-
-All dependencies are specified in `environment.yml` for easy setup. Key dependencies include:
-
-- **torch (2.0.0)**: Deep learning framework
-- **sympy (1.12)**: Symbolic mathematics
-- **numpy (1.21.0)**: Numerical computations
-- **matplotlib (3.7.0)**: Plotting and visualization
-- **latex2sympy2 (1.8.3)**: LaTeX parsing
-- **pandas (1.3.0)**: Data manipulation
-- **scipy**: Scientific computing
-- **scikit-learn**: Machine learning utilities
-- **jupyter**: Interactive notebooks
-- **Additional packages**: tqdm, seaborn, plotly, wandb for enhanced functionality
+### Code Improvements
+- **Modular structure**: Separated training and prediction logic
+- **Error handling**: Added comprehensive error checking and debugging
+- **Configuration**: Centralized parameter management
+- **Documentation**: Enhanced code comments and structure
 
 ## Usage
 
 ### Environment Setup
+```bash
+python config.py
 
-1. **Create and activate the conda environment**:
-   ```bash
-   # Create the environment from the yml file
-   conda env create -f environment.yml
-   
-   # Activate the environment
-   conda activate turbulentfex
-   ```
-
-2. **Alternative: Manual installation** (if conda is not available):
-   ```bash
-   # Create a virtual environment
-   python -m venv turbulentfex_env
-   
-   # Activate the virtual environment
-   # On macOS/Linux:
-   source turbulentfex_env/bin/activate
-   # On Windows:
-   turbulentfex_env\Scripts\activate
-   
-   # Install dependencies
-   pip install torch==2.0.0 torchvision torchaudio
-   pip install numpy==1.21.0 matplotlib==3.7.0 pandas==1.3.0
-   pip install sympy==1.12 scipy scikit-learn
-   pip install latex2sympy2==1.8.3 tqdm seaborn plotly wandb
-   pip install jupyter ipykernel
-   ```
-
-3. **Verify installation**:
-   ```bash
-   # Test that PyTorch is working
-   python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
-   
-   # Test that CUDA is available (if you have a GPU)
-   python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
-   ```
+```
 
 ### Two-Stage Training Workflow
 
 1. **First Stage (Drift Learning)**:
    ```bash
    cd src
-   python first_stage_deterministic.py --params_name equipart --DEVICE cuda:0
+   python first_stage_deterministic.py --params_name cascade --DEVICE cpu
    ```
-   - Trains FEX models to discover the deterministic part of the dynamics
-   - Uses Functional Expansion to learn the drift term
-   - Outputs trained models and optimal operator sequences
 
 2. **Second Stage (Diffusion Learning)**:
    ```bash
    cd src
    python second_stage_stochastic.py
+   # Choose option 1 for training
+   # Choose training method (1 for single, 2 for ensemble)
    ```
-   - Trains neural networks to model the stochastic noise component
-   - Uses the drift models from first stage
-   - Learns the diffusion term for complete stochastic modeling
 
-### Configuration Options
+### Testing and Development
+```bash
+# Test plotting functions
+python src/small_test.py
 
-**First Stage Parameters**:
-- `--params_name`: Choose between 'equipart' or 'cascade'
-- `--DEVICE`: Choose device ('cpu', 'cuda:0', 'auto')
-- `--SEED`: Random seed for reproducibility
-- `--FEX_LR`: Learning rate for FEX training
-- `--TRAIN_EPOCHS_FIRST`: Number of training epochs
-
-**Second Stage Parameters**:
-- `--NUM_SAMPLES`: Number of samples for stochastic training
-- `--DEVICE`: Choose device for training
-
-### Legacy Usage (for reference)
-```python
-# Training with ground truth
-python src/first_stage_deterministic.py --TRAIN_GROUND_TRUTH True --SECOND_STAGE_OPEN_BOOL False
-
-# Two-stage training
-python src/first_stage_deterministic.py --TRAIN_GROUND_TRUTH False --SECOND_STAGE_OPEN_BOOL True
+# Test specific utilities
+python -c "from src.utils.plot import plot_NOISE_LEVEL_EFFECT; print('Import successful')"
 ```
 
-## Comments
-- Variable names: Follow Python naming conventions
-- Code structure: Modular design with clear separation of concerns
-- Documentation: Comprehensive docstrings and comments
-- Configuration: Centralized argument parsing and model settings
-- Error handling: Robust error checking and debugging output
-- Results organization: Structured output directory for equations, coefficients, and plots
+## Current Status
+
+- **First stage**: Complete - FEX learning for drift terms working
+- **Second stage**: In progress - Neural network training implemented, needs testing
+- **Plotting**: Enhanced with noise level effect analysis and cross-term visualization
+- **Structure**: Cleaner, more modular code organization
+
+## Next Steps
+
+1. **Test neural network training** with the restructured second stage
+2. **Verify model saving** and loading functionality
+3. **Complete prediction pipeline** for trained models
+4. **Add comprehensive testing** for all components
+5. **Document API** for each module
+
+## Dependencies
+
+Key dependencies (see `environment.yml`):
+- **torch**: Deep learning framework
+- **numpy**: Numerical computations
+- **matplotlib**: Plotting and visualization
+- **scipy**: Scientific computing
+- **Additional**: sympy, pandas, scikit-learn, jupyter

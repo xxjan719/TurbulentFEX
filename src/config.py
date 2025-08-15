@@ -217,7 +217,7 @@ class Config:
         # Case selection
         parser.add_argument('--params_name', type=str, 
                             choices = ['cascade', 'equipart'],
-                            default='cascade',
+                            default='equipart',
                             help='Case to use')
         # Seed
         parser.add_argument('--SEED', type=int, 

@@ -535,12 +535,18 @@ def plot_NOISE_LEVEL_EFFECT(coeff: dict, noise_levels: list = [0.0, 0.2, 0.4, 0.
         'dim_3': ['x1', 'x2', 'x3', 'x1x2']
     }
     
+    # Ground truth coefficients for each dimension
+    ground_truth_coeffs = {
+        'dim_1': {'x1': -0.2, 'x2': 1.0, 'x3': 2.0, 'x2x3': 1.0},
+        'dim_2': {'x1': 1.0, 'x2': 0.1, 'x3': 3.0, 'x1x3': -0.6},
+        'dim_3': {'x1': 2.0, 'x2': 3.0, 'x3': 0.1, 'x1x2': -0.4},
+    }
     # Define row labels for the 4 rows
     row_labels = ['x1', 'x2', 'x3', 'Cross-term']
     
     # Create figure with 3 columns (dimensions) and 4 rows (terms), make it tall
     fig, axes = plt.subplots(4, 3, figsize=(20, 10), constrained_layout=True)
-    fig.suptitle("Coefficient vs Noise Level for Each Dimension", fontsize=20)
+    fig.suptitle("Log10(Error) vs Noise Level for Each Dimension", fontsize=20)
     set_figure_position(x=100, y=100, width=1500, height=1600)
     
     # Color palette for different terms
@@ -563,19 +569,25 @@ def plot_NOISE_LEVEL_EFFECT(coeff: dict, noise_levels: list = [0.0, 0.2, 0.4, 0.
             if has_data:
                 coeff_values = dim_data[term]
                 plot_noise_levels = noise_levels[:len(coeff_values)]
-                ax.plot(plot_noise_levels, coeff_values, 'o-', 
+                
+                # Calculate errors and convert to log10
+                ground_truth = ground_truth_coeffs[dim_key][term]
+                errors = [abs(learned - ground_truth) for learned in coeff_values]
+                log_errors = [np.log10(max(error, 1e-16)) for error in errors]  # Avoid log(0)
+                
+                ax.plot(plot_noise_levels, log_errors, 'o-', 
                         color=colors[row], linewidth=2, markersize=6, 
                         label=f'{term}')
-                ax.grid(True, alpha=0.3)
+                #ax.grid(True, alpha=0.3)
                 ax.set_xlabel('Noise Level')
-                ax.set_ylabel('Coefficient Value')
+                ax.set_ylabel('Log10(Error)')
                 # Use only the term as the subplot title
                 if row < 3:
                     ax.set_title(f'{term}')
                 else:
                     ax.set_title(f'{cross_term_name}')
-                for i, (x, y) in enumerate(zip(plot_noise_levels, coeff_values)):
-                    ax.annotate(f'{y:.6f}', (x, y), textcoords="offset points", 
+                for i, (x, y) in enumerate(zip(plot_noise_levels, log_errors)):
+                    ax.annotate(f'{y:.3f}', (x, y), textcoords="offset points", 
                                 xytext=(0,10), ha='center', fontsize=8)
             else:
                 ax.text(0.5, 0.5, f'No data for {term}', 
