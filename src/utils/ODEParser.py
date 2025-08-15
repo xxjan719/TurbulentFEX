@@ -384,12 +384,20 @@ def train_FN_each_dimension(ODE_Solution:np.ndarray,
                              best_valid_err:float=5.0,
                              save_dir:str=None,
                              num_time_points:int=None,
+                             time_range:tuple=None,  # New parameter: (start_idx, end_idx)
                              dt:float=0.01):
     total_time_steps = ODE_Solution.shape[2]
     size = ODE_Solution.shape[0]
     
     # Select time points to train on
-    if num_time_points is not None:
+    if time_range is not None:
+        # Use specific time range
+        start_idx, end_idx = time_range
+        time_indices = range(start_idx, min(end_idx, total_time_steps))
+        selected_times = np.array([t * dt for t in time_indices])
+        print(f"Training on time range {start_idx}-{min(end_idx, total_time_steps)} ({len(time_indices)} time points)")
+        print(f"Time range: {selected_times[0]:.2f}s to {selected_times[-1]:.2f}s")
+    elif num_time_points is not None:
         selected_indices, selected_times = select_time_points(
             total_time_steps, dt, num_time_points
         )
@@ -462,9 +470,14 @@ def train_FN_each_dimension(ODE_Solution:np.ndarray,
                 # Save model parameters in CPU format regardless of training device
                 state_dict_cpu = {k: v.cpu() for k, v in FN_dim.state_dict().items()}
                 torch.save(state_dict_cpu, FN_path)
+                print(f'[SAVE] Saved model to: {FN_path}')
                 # Save normalization parameters
                 norm_params = {'mean': y_mean, 'std': y_std}
-                np.save(os.path.join(save_dir,f'norm_params_dim{x_dim}_t{t}.npy'), norm_params)
+                norm_path = os.path.join(save_dir,f'norm_params_dim{x_dim}_t{t}.npy')
+                np.save(norm_path, norm_params)
+                print(f'[SAVE] Saved normalization params to: {norm_path}')
+            else:
+                print(f'[WARNING] save_dir is None, not saving model for dim{x_dim}_t{t}')
 
 def train_FN_ensemble(ODE_Solution:np.ndarray,
                       ZT_Solution:np.ndarray,

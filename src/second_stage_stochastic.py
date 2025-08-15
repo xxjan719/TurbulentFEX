@@ -28,17 +28,17 @@ else:
 #===========================Path part==============================================
 print("\n"+ "="*60)
 print("\n[INFO] Setting up the path...")
-if args.Model == 'MC_triad':
-    model_PATH = config.DIR_TRIAD
+if str(device) == 'cpu':
+    model_PATH =Path(os.path.join(config.DIR_TRIAD, 'Results', args.params_name))
     # Default save directory (will be updated based on method choice)
-    save_dir = os.path.join( model_PATH,'Results',args.params_name,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}_single')
-    if os.path.exists(save_dir):   
-        print('[INFO] Right now we use our own workspace path.') 
-    else:
-        model_PATH = Path(os.path.join(config.DIR_TRIAD, 'Results', 'Results1', 'Results', args.params_name))
-        save_dir = os.path.join(config.DIR_TRIAD,'Results', 'Results1', 'Results',args.params_name,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}_single')
-        print('[INFO] Right now we use hipergator workspace path.')
-        os.makedirs(save_dir,exist_ok=True)
+    save_dir = os.path.join( model_PATH, f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}_single')
+    os.makedirs(save_dir,exist_ok=True)
+    print('[INFO] Right now we use our own workspace path.') 
+else:
+    model_PATH = Path(os.path.join(config.DIR_TRIAD, 'Results', 'Results1', 'Results', args.params_name))
+    save_dir = os.path.join(config.DIR_TRIAD,'Results', 'Results1', 'Results',args.params_name,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}_single')
+    print('[INFO] Right now we use hipergator workspace path.')
+    os.makedirs(save_dir,exist_ok=True)
     print(f'[INFO] The save directory is set up successfully')
 print("="*60)
 #=================================================================================
@@ -177,6 +177,108 @@ if choice == '1':
             print('[INFO] No normalization files found either. Starting from beginning.')
             time_steps = set()
             training_method = 'unknown'
+            
+            # Choose training method (always ask, regardless of existing models)
+            print("\n" + "="*60)
+            print("NEURAL NETWORK TRAINING METHOD SELECTION")
+            print("="*60)
+            print("1. Single Neural Network (train_FN_each_dimension)")
+            print("2. Ensemble Method (train_FN_ensemble)")
+            print("="*60)
+            
+            while True:
+                method_choice = input("\nChoose training method (1 or 2): ").strip()
+                if method_choice in ['1', '2']:
+                    break
+                else:
+                    print("Please enter '1' or '2'.")
+            
+            # Update save directory based on method choice
+            if method_choice == '1':
+                # Single neural network method
+                model_save_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}_single')
+                chosen_method = 'single'
+            else:
+                # Ensemble method
+                model_save_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}')
+                chosen_method = 'ensemble'
+            
+            # Create model directory if it doesn't exist
+            os.makedirs(model_save_dir, exist_ok=True)
+            print(f'[INFO] Using model save directory: {model_save_dir}')
+            
+            # Create time ranges for starting from beginning
+            total_time_steps = ODE_Solution.shape[2]
+            steps_per_range = total_time_steps // 4
+            extra_steps = total_time_steps % 4
+            
+            time_ranges = []
+            current_start = 0
+            
+            for i in range(4):
+                # Add extra steps to first few ranges if needed
+                current_steps = steps_per_range + (1 if i < extra_steps else 0)
+                current_end = min(current_start + current_steps, total_time_steps)
+                time_ranges.append((current_start, current_end))
+                current_start = current_end
+                
+                # Stop if we've reached the end
+                if current_end >= total_time_steps:
+                    break
+            
+            print(f'[INFO] No existing models found, created 4 initial ranges: {time_ranges}')
+            print(f'[INFO] Will start training from time step 0 to {total_time_steps}')
+            
+            # Since we're starting from beginning, all ranges are incomplete
+            incomplete_ranges = time_ranges.copy()
+            fn_models_exist = False
+            
+            print(f'[INFO] All ranges are incomplete, will train: {incomplete_ranges}')
+            print(f'[DEBUG] fn_models_exist: {fn_models_exist}')
+            
+            # Train the models for all ranges
+            print('[INFO] Training FN models for all time ranges...')
+            
+            # Save time range configuration
+            time_range_config_path = os.path.join(model_save_dir, 'time_range_config.npy')
+            time_range_config = {
+                'time_ranges': time_ranges,
+                'total_time_steps': ODE_Solution.shape[2],
+                'dt': dt,
+                'num_models_per_ensemble': 5 if method_choice == '2' else 1,
+                'num_dimensions': 3,
+                'training_method': 'ensemble' if method_choice == '2' else 'single'
+            }
+            np.save(time_range_config_path, time_range_config)
+            print(f'[INFO] Time range configuration saved to: {time_range_config_path}')
+            
+            # Train all ranges
+            for start_idx, end_idx in incomplete_ranges:
+                print(f"\n[INFO] Training for time range {start_idx}-{end_idx}...")
+                
+                if method_choice == '1':
+                    # Single neural network method
+                    print(f"[INFO] Using single neural network method...")
+                    # For single method, we need to calculate num_time_points from the range
+                    num_time_points = end_idx - start_idx
+                    train_FN_each_dimension(
+                        ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=model_save_dir,
+                        time_range=(start_idx, end_idx),  # Use specific time range
+                        dt=dt
+                    )
+                else:
+                    # Ensemble method
+                    print(f"[INFO] Using ensemble method...")
+                    train_FN_ensemble(
+                        ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=model_save_dir,
+                        time_range=(start_idx, end_idx),  # Use specific time range
+                        dt=dt
+                    )
+            
+            print('\n[INFO] Training completed successfully!')
+            print("\n"+ "="*60)
+            print('[SUCCESS] Training process completed successfully!')
+            print("="*60)
     else:
         # Extract time steps from model files and detect method
         time_steps = set()
