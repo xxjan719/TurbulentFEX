@@ -83,7 +83,7 @@ if choice == '1':
     data = np.load(os.path.join(common_save_dir,'..',f'simulation_results_noise_{args.NOISE_LEVEL}.npz'))
     dt = 0.01
     # ground truth
-    # residuals, u_current, residual_cov_truth = generate_euler_residue(FEX_model_ground_truth, data, dt)
+    # residuals, u_current, residual_cov_truth = generate_euler_residue(FEX_model_ground_truth_equipart, data, dt)
     def learned_model_wrapper(x):
         return FEX_model_learned(x, 
                                  model_name = args.Model,
@@ -750,7 +750,7 @@ elif choice == '2':
     
     print("\n[INFO] Running comprehensive trajectory testing...")
     m0,var0 = MC_triad_initial_value()
-    params = params_init('equipart')
+    params = params_init(args.params_name)
     FEX_model_check = FEX_model_learned
 
     L = params['L']
@@ -841,11 +841,11 @@ elif choice == '2':
     ensemble_norms = {}
 
     if device == 'cuda:0':
-        save_dir_single = '../src/Example/MC_triad/Results/Results1/Results/equipart/noise_1.0/second_stage_10000_single'
-        save_dir_ensemble = '../src/Example/MC_triad/Results/Results1/Results/equipart/noise_1.0/second_stage_10000'
+        save_dir_single = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_1.0/second_stage_10000_single'
+        save_dir_ensemble = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_1.0/second_stage_10000'
     else:
-        save_dir_single = '../src/Example/MC_triad/Results/equipart/noise_1.0/second_stage_10000_single'
-        save_dir_ensemble = '../src/Example/MC_triad/Results/equipart/noise_1.0/second_stage_10000'
+        save_dir_single = f'../src/Example/MC_triad/Results/{args.params_name}/noise_1.0/second_stage_10000_single'
+        save_dir_ensemble = f'../src/Example/MC_triad/Results/{args.params_name}/noise_1.0/second_stage_10000'
 
     tM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
     for idx in range(1,int(TIME_AMOUNT/dt)+1):
@@ -893,14 +893,14 @@ elif choice == '2':
         # RK4 for the deterministic part (FEX model)
         # Step 1
         # Step 1
-        k1_det = FEX_model_check(current_tensor) * dt
+        k1_det = FEX_model_check(current_tensor,params_name=args.params_name) * dt
         k1_det_np = k1_det.cpu().detach().numpy()
         u1 = current_tensor +  k1_det
 
       
 
          # Step 2
-        k2_det = FEX_model_check(u1) * dt
+        k2_det = FEX_model_check(u1,params_name=args.params_name) * dt
         k2_det_np = k2_det.cpu().detach().numpy()
         u2 = current_tensor +  k2_det
     

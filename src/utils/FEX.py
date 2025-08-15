@@ -225,27 +225,49 @@ class FEX(nn.Module):
         print("Rounded expression:", rounded_expr)
 
 
-def FEX_model1_ground_truth(x):
+def FEX_model1_ground_truth_equipart(x):
     x1 = x[:, 0:1].squeeze(-1)
     x2 = x[:, 1:2].squeeze(-1)
     x3 = x[:, 2:3].squeeze(-1)
     return -0.2*x1 + 1*x2*x3 + 1*x2 + -2*x3 
 
-def FEX_model2_ground_truth(x):
+def FEX_model2_ground_truth_equipart(x):
     x1 = x[:, 0:1].squeeze(-1)
     x2 = x[:, 1:2].squeeze(-1)
     x3 = x[:, 2:3].squeeze(-1)
     return  -0.6*x1*x3 + -1*x1 + -0.1*x2 + -3*x3 
 
-def FEX_model3_ground_truth(x):
+def FEX_model3_ground_truth_equipart(x):
     x1 = x[:, 0:1].squeeze(-1)
     x2 = x[:, 1:2].squeeze(-1)
     x3 = x[:, 2:3].squeeze(-1)
     return  -0.4*x1*x2 + 2*x1 + 3*x2 + -0.1*x3 
 
-def FEX_model_ground_truth(x):
-    return np.stack([FEX_model1_ground_truth(x), FEX_model2_ground_truth(x), FEX_model3_ground_truth(x)], axis=1)
+def FEX_model_ground_truth_equipart(x):
+    return np.stack([FEX_model1_ground_truth_equipart(x), FEX_model2_ground_truth_equipart(x), FEX_model3_ground_truth_equipart(x)], axis=1)
 
+
+def FEX_model1_ground_truth_cascade(x):
+    x1 = x[:, 0:1].squeeze(-1)
+    x2 = x[:, 1:2].squeeze(-1)
+    x3 = x[:, 2:3].squeeze(-1)
+    return -1*x1 + 2*x2*x3 + 0*x2 + 0*x3
+
+def FEX_model2_ground_truth_cascade(x):
+    x1 = x[:, 0:1].squeeze(-1)
+    x2 = x[:, 1:2].squeeze(-1)
+    x3 = x[:, 2:3].squeeze(-1)
+    return -1*x1*x3 + 0*x1-2*x2 + 0*x3
+
+
+def FEX_model3_ground_truth_cascade(x):
+    x1 = x[:, 0:1].squeeze(-1)
+    x2 = x[:, 1:2].squeeze(-1)
+    x3 = x[:, 2:3].squeeze(-1)
+    return 0*x1 -1*x1*x2 + 0*x2-2*x3
+ 
+def FEX_model_ground_truth_cascade(x):
+    return np.stack([FEX_model1_ground_truth_cascade(x), FEX_model2_ground_truth_cascade(x), FEX_model3_ground_truth_cascade(x)], axis=1)
 
 
 

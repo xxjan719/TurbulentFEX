@@ -1075,7 +1075,7 @@ def plot_probability_distributions(u_all, u_pred, Time_record, save_path=None, t
         ax.legend(frameon=False)
         
         # Set y-axis limits similar to the image
-        ax.set_ylim(1e-2, 3e-01)
+        ax.set_ylim(1e-2, 10) # 10 for cascade, 3e-01 for equipart
         ax.set_xlim(-5, 5)
         # Remove top and right spines
         ax.spines['top'].set_visible(False)

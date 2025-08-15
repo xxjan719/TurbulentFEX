@@ -12,9 +12,9 @@ import torch.optim as optim
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 try:
-    from .FEX import FEX_model_ground_truth,FEX_model_learned
+    from .FEX import FEX_model_ground_truth_equipart,FEX_model_learned
 except:
-    from FEX import FEX_model_ground_truth,FEX_model_learned
+    from FEX import FEX_model_ground_truth_equipart,FEX_model_learned
 # Add FAISS imports for CPU-based nearest neighbor search
 import faiss
     # FAISS_AVAILABLE = True
@@ -779,7 +779,7 @@ if __name__ == "__main__":
     save_dir = os.path.join(os.getcwd(), 'src','Example','MC_triad','Results', 'equipart','FN_model')
     os.makedirs(save_dir,exist_ok=True)
     
-    residuals,u_current = generate_euler_residue(FEX_model_ground_truth, data, dt)
+    residuals,u_current = generate_euler_residue(FEX_model_ground_truth_equipart, data, dt)
     print(residuals.shape,u_current.shape)
     
     scaler = np.array([20,20,20])

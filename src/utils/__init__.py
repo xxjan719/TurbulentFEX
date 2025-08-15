@@ -2,7 +2,7 @@
 
 # Import specific utility functions for easy access
 # . before helper functions indicates that they are part of the same package where this file is located
-from .FEX import (FEX,FEX_model_ground_truth,FEX_model_learned)
+from .FEX import (FEX,FEX_model_ground_truth_equipart,FEX_model_learned)
 from .controller import Controller
 from .ODEParser import (ODE_solver, FN_Net,process_chunk_faiss_cpu,
                         train_FN_each_dimension,train_FN_ensemble,generate_euler_residue, 
@@ -32,7 +32,7 @@ __all__ = [
     "binary_ops", "unary_ops", "POOL_LIMIT", "get_coefficients", 
     "get_score_expression_from_file", "check_allowed_terms", "plot_NOISE_LEVEL_EFFECT",
     "get_sequence_from_candidate", "coefficents_history", "extract_coefficients_from_expr",
-    "plot_training_progress_grid", "select_operator_sequence","FEX_model_ground_truth","FEX_model_learned",
+    "plot_training_progress_grid", "select_operator_sequence","FEX_model_ground_truth_equipart","FEX_model_learned",
     "plot_mean_comparison","plot_covariance_comparison","train_FN_each_dimension","train_FN_ensemble",
     "generate_euler_residue","generate_second_step","generate_mean_and_std","simple_step_update",
     "plot_energy_comparison","plot_third_order_moments","plot_energy_conservation"
