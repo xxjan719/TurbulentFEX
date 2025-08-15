@@ -71,7 +71,7 @@ if choice == '1':
     print("="*60)
    
     # Set up common directory for shared files
-    common_save_dir = os.path.join(model_PATH, 'Results', args.params_name, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}_common')
+    common_save_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}_common')
     os.makedirs(common_save_dir, exist_ok=True)
     print(f'[INFO] Using common save directory for shared files: {common_save_dir}')
    
@@ -119,9 +119,9 @@ if choice == '1':
     training_method = 'unknown'  # Will be detected from file patterns
     
     # Scan both directories to detect existing models and method
-    ensemble_dir = os.path.join(model_PATH, 'Results', args.params_name, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}')
-    single_dir = os.path.join(model_PATH, 'Results', args.params_name, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}_single')
-    
+    ensemble_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}')
+    single_dir = os.path.join(model_PATH,  f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}_single')
+    os.makedirs(ensemble_dir, exist_ok=True)
     print(f'[DEBUG] Scanning ensemble directory: {ensemble_dir}')
     print(f'[DEBUG] Scanning single directory: {single_dir}')
     
@@ -370,11 +370,11 @@ if choice == '1':
         # Update save directory based on method choice
         if method_choice == '1':
             # Single neural network method
-            model_save_dir = os.path.join(model_PATH, 'Results', args.params_name, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}_single')
+            model_save_dir = os.path.join(model_PATH, f'second_stage_{args.RESIDUAL_SAMPLES}_single')
             chosen_method = 'single'
         else:
             # Ensemble method
-            model_save_dir = os.path.join(model_PATH, 'Results', args.params_name, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}')
+            model_save_dir = os.path.join(model_PATH, f'second_stage_{args.RESIDUAL_SAMPLES}')
             chosen_method = 'ensemble'
         
         # Create model directory if it doesn't exist
