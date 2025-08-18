@@ -2,6 +2,7 @@ import config
 import numpy as np
 import os
 import re
+import torch
 import matplotlib.pyplot as plt
 from config import DIR_EXAMPLE, create_main_parser
 from utils.plot import plot_NOISE_LEVEL_EFFECT, plot_energy_conservation
@@ -16,12 +17,16 @@ args = parser.parse_args()
 # Set device to cpu to avoid torch issues
 print(f"Using device: {args.DEVICE}")
 
-# Set up base path
-if str(args.DEVICE) == 'cpu':
-    base_path = os.path.join(DIR_EXAMPLE, args.Model, 'Results')
-    print(f"Base path: {base_path}")
-elif str(args.DEVICE) == "cuda:0":
-    base_path = os.path.join(DIR_TRIAD, "Results","Results1","Results")
+if torch.cuda.is_available() and args.DEVICE.startswith('cuda'):
+    DEVICE = torch.device(args.DEVICE)
+    print(f"Using {args.DEVICE}")
+    base_path = os.path.join(DIR_EXAMPLE,args.Model,'Results','Results1','Results')
+else:
+    DEVICE = torch.device('cpu')
+    print("CUDA is not available, using CPU instead")
+    base_path = os.path.join(DIR_EXAMPLE,args.Model,'Results')
+
+
     
 if args.LOG_SAVE_PATH is None:
     args.LOG_SAVE_PATH = f'{base_path}/{args.params_name}'
@@ -31,7 +36,7 @@ print("args.DEVICE:", args.DEVICE)
 print("args.Model:", args.Model)
 
 # Get coefficients
-coefficients = get_coefficients(load_dir="Example/MC_triad",model_name=args.params_name,DEVICE=args.DEVICE)
+coefficients = get_coefficients(load_dir="Example/MC_triad",model_name=args.params_name,DEVICE=DEVICE)
 
 # Print out all coefficients for each dimension and term
 print("\n=== Coefficient Values by Noise Level ===")
