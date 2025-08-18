@@ -148,7 +148,7 @@ def find_nearest_neighbors(distances, short_size):
 
 def get_coefficients(load_dir: str = "",
                      model_name:str = "equipart",
-                     noise_levels: list = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8],
+                     noise_levels: list = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8,2.0],
                      DEVICE: str = "cpu")->dict:
     """
     Extract coefficients from FINAL_EXPR.txt file.
