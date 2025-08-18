@@ -146,8 +146,9 @@ def find_nearest_neighbors(distances, short_size):
     return indices
 
 
-def get_coefficients(load_dir: str = "", 
-                     noise_levels: list = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0],
+def get_coefficients(load_dir: str = "",
+                     model_name:str = "equipart",
+                     noise_levels: list = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8],
                      DEVICE: str = "cpu")->dict:
     """
     Extract coefficients from FINAL_EXPR.txt file.
@@ -163,9 +164,9 @@ def get_coefficients(load_dir: str = "",
     
     # Define path to FINAL_EXPR.txt
     if DEVICE == "cuda:0":
-        file_path = os.path.join(load_dir, "Results", "Results1", "Results", "equipart", "FINAL_EXPR.txt")
+        file_path = os.path.join(load_dir, "Results", "Results1", "Results", model_name, "FINAL_EXPR.txt")
     else:
-        file_path = os.path.join(load_dir, "Results", "equipart", "FINAL_EXPR.txt")
+        file_path = os.path.join(load_dir, "Results", model_name, "FINAL_EXPR.txt")
     
     print(f"DEBUG: Looking for file at: {file_path}")
     print(f"DEBUG: File exists: {os.path.exists(file_path)}")
@@ -184,14 +185,16 @@ def get_coefficients(load_dir: str = "",
     # Read the FINAL_EXPR.txt file
     with open(file_path, 'r') as f:
         content = f.read()
-    
+    print(noise_levels)
     # Process each noise level
     for noise_level in noise_levels:
         # Find the section for this noise level
         if noise_level == 0.0:
-            noise_pattern = r'NOISE 0\.0 ODE\s*#=+\s*(.*?)(?=\n\nNOISE|\n\nNoise|\Z)'
+            noise_pattern = rf'(?:NOISE|Noise)\s*{noise_level}(?:\s*ODE|\s*total noise)?\s*(?:#=+|=+)\s*(.*?)(?=\n(?:NOISE|Noise)|\Z)'
+            #noise_pattern = r'NOISE 0\.0 ODE\s*#=+\s*(.*?)(?=\n\nNOISE|\n\nNoise|\Z)'
         elif noise_level == 1.0:
-            noise_pattern = r'Noise 1\.0 total noise\s*#.*?\n(.*?)(?=\n\nNOISE|\Z)'
+            noise_pattern = rf'(?:NOISE|Noise)\s*{noise_level}(?:\s*ODE|\s*total noise)?\s*(?:#=+|=+)\s*(.*?)(?=\n(?:NOISE|Noise)|\Z)'
+            #noise_pattern = r'Noise 1\.0 total noise\s*#.*?\n(.*?)(?=\n\nNOISE|\Z)'
         elif noise_level == 1.8:
             # Special case for the last section (1.8)
             noise_pattern = rf'NOISE {noise_level}\s*=+\s*(.*?)(?=\Z)'

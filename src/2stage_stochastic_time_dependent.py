@@ -840,7 +840,7 @@ elif choice == '2':
     ensemble_models = {}
     ensemble_norms = {}
 
-    if device == 'cuda:0':
+    if str(device) == 'cuda:0':
         save_dir_single = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_1.0/second_stage_10000_single'
         save_dir_ensemble = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_1.0/second_stage_10000'
     else:
@@ -893,14 +893,14 @@ elif choice == '2':
         # RK4 for the deterministic part (FEX model)
         # Step 1
         # Step 1
-        k1_det = FEX_model_check(current_tensor,params_name=args.params_name) * dt
+        k1_det = FEX_model_check(current_tensor,params_name=args.params_name,device =device) * dt
         k1_det_np = k1_det.cpu().detach().numpy()
         u1 = current_tensor +  k1_det
 
       
 
          # Step 2
-        k2_det = FEX_model_check(u1,params_name=args.params_name) * dt
+        k2_det = FEX_model_check(u1,params_name=args.params_name,device =device) * dt
         k2_det_np = k2_det.cpu().detach().numpy()
         u2 = current_tensor +  k2_det
     
@@ -1038,7 +1038,10 @@ elif choice == '2':
 
     # Create save directory for plots
     import os
-    save_dir = f"../src/Example/MC_triad/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/plots"
+    if str(device)=="cuda:0":
+        save_dir = f"../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/plots"
+    else:
+        save_dir = f"../src/Example/MC_triad/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/plots"
     os.makedirs(save_dir, exist_ok=True)
     print(f"Saving plots to: {save_dir}")
 
