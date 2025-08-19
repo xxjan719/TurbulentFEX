@@ -216,8 +216,8 @@ class Config:
                             help = 'Model to use')
         # Case selection
         parser.add_argument('--params_name', type=str, 
-                            choices = ['cascade', 'equipart'],
-                            default='cascade',
+                            choices = ['cascade', 'equipart','dual_cascade','periodic_cascade','random_cascade'],
+                            default='dual_cascade',
                             help='Case to use')
         # Seed
         parser.add_argument('--SEED', type=int, 
@@ -321,7 +321,7 @@ class Config:
                             default = None,
                             help='Path to save figure.')
         parser.add_argument('--TRAIN_THREE_DIMENSION_INTEGRATED',type=bool,
-                            default = True,
+                            default = False,
                             help='Whether to train the FEX with ground truth data.')
         return parser
     
