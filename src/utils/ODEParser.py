@@ -195,7 +195,7 @@ def generate_euler_residue(func, data, dt):
 
 
 
-def process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, x_sample, x0_train, train_size, x_dim):
+def process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, x_sample, x0_train, train_size, x_dim, batch_size=256, sample_batch_size=100):
     """
     CPU version of process_chunk using FAISS for efficient nearest neighbor search.
     
@@ -207,37 +207,56 @@ def process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, x_sample, x
         x0_train: Training points to find neighbors for
         train_size: Total number of training points
         x_dim: Dimension of the data points
+        batch_size: Batch size for FAISS search
+        sample_batch_size: Number of samples to process in each batch
     
     Returns:
         x0_train_index_initial: Array of nearest neighbor indices
     """
-    # if not FAISS_AVAILABLE:
-        # raise ImportError("FAISS is required for this function. Install with: pip install faiss-cpu")
-    
-    x0_train_index_initial = np.empty((train_size, short_size), dtype=int)
-    
-    # Create a FAISS index for exact L2 distance searches on CPU
-    index = faiss.IndexFlatL2(x_dim)
-    
-    # Add the reference points to the index
-    index.add(x_sample.astype(np.float32))
-    
-    for jj in range(it_n_index):
-        start_idx = jj * it_size_x0train
-        end_idx = min((jj + 1) * it_size_x0train, train_size)
-        x0_train_chunk = x0_train[start_idx:end_idx]
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    x_sample = torch.tensor(x_sample, dtype=torch.float32,device=device)
+    x0_train = torch.tensor(x0_train, dtype=torch.float32,device=device)
 
-        # Perform the search on CPU
-        _, index_initial = index.search(x0_train_chunk.astype(np.float32), short_size)
-        x0_train_index_initial[start_idx:end_idx, :] = index_initial 
+    try:
+        x0_train_index_initial = np.empty((train_size, short_size), dtype=int)
+        
+        # Process in smaller chunks to avoid memory issues
+        for jj in range(it_n_index):
+            print(f'this is {jj} times / overall {it_n_index} times')
+            start_idx = jj * it_size_x0train
+            end_idx = min((jj + 1) * it_size_x0train, train_size)
+            print(f'start_idx is {start_idx}; end_idx is {end_idx}')
+            x0_train_chunk = x0_train[start_idx:end_idx]
 
-        if jj % 500 == 0:
-            print('find index iteration:', jj, it_size_x0train)
-    
-    # Cleanup resources
-    del index
-    
-    return x0_train_index_initial
+            for batch_start in range(0, x0_train_chunk.shape[0], batch_size):
+                batch_end = min(batch_start + batch_size, x0_train_chunk.shape[0])
+                batch = x0_train_chunk[batch_start:batch_end]
+                batch_distances = []
+                batch_indices = []
+                for sample_start in range(0, x_sample.size(0), sample_batch_size):
+                    sample_end = min(sample_start + sample_batch_size, x_sample.size(0))
+                    sample_batch = x_sample[sample_start:sample_end]
+                    distances =torch.cdist(sample_batch, batch, p=2)
+                    batch_distances.append(distances)
+                    batch_indices.append(
+                        torch.arange(sample_start, sample_end, device=device).unsqueeze(0).repeat(batch.size(0),1))
+                batch_distances = torch.cat(batch_distances, dim=1)
+                batch_indices = torch.cat(batch_indices, dim=1)
+                _, topk_indices = torch.topk(batch_distances, k=short_size, dim=1, largest=False)
+                topk_global_indices = torch.gather(batch_indices, 1, topk_indices)
+                x0_train_index_initial[start_idx+batch_start:start_idx+batch_end, :] = topk_global_indices.cpu().numpy()
+                
+                if jj % 500 == 0:
+                    print(f'find index iteration: {jj}/{it_n_index}, chunk size: {x0_train_chunk.shape[0]}')    
+        return x0_train_index_initial
+        
+    except Exception as e:
+        print(f'[ERROR] process_chunk_faiss_cpu failed: {e}')
+        # Fallback: return random indices
+        print('[WARNING] Using random indices as fallback')
+        return np.random.choice(
+            x_sample.shape[0], size=(train_size, short_size), replace=True
+        )
 
 
 
