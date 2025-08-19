@@ -93,11 +93,12 @@ if choice == '1':
     
     # Flatten while preserving trajectory structure
     residuals_train_flat = residuals_current_train.reshape(-1, residuals_current_train.shape[1])  # Shape: (100000, 3)
+    residuals_train_flat = residuals_train_flat*args.DIFF_SCALE
     u_current_train_flat = u_current_train.reshape(-1, u_current_train.shape[1])  # Shape: (100000, 3)
     
     print(f'[INFO] the residual shape is {residuals_train_flat.shape},the state of dyamics is {u_current_train_flat.shape}')
     scaler = np.ones(3) * args.DIFF_SCALE
-    train_size = 20000
+    train_size = 60000
     short_size = 2048
     it_size_utrain = 2000
     
@@ -156,58 +157,333 @@ if choice == '1':
     ZT_shuffled = ZT_filtered[indices_filtered]
     ODE_shuffled = ODE_filtered[indices_filtered]
     print(f'[INFO] the shape of shuffled ZT solution is {ZT_shuffled.shape}, the shape of shuffled ODE solution is {ODE_shuffled.shape}')
-    ZT_mean = np.mean(ZT_shuffled,axis=0,keepdims=True)
-    ZT_std = np.std(ZT_shuffled,axis=0,keepdims=True)
-    ODE_mean = np.mean(ODE_shuffled,axis=0,keepdims=True)
-    ODE_std = np.std(ODE_shuffled,axis=0,keepdims=True)
+    NTrain = int(ZT_filtered.shape[0]*0.8)
+    NTest = int(ZT_filtered.shape[0]*0.2)
+    if not os.path.exists(os.path.join(independent_save_dir,'data_inference.pt')):
+        
+        ZT_mean = np.mean(ZT_shuffled,axis=0,keepdims=True)
+        ZT_std = np.std(ZT_shuffled,axis=0,keepdims=True)
+        ODE_mean = np.mean(ODE_shuffled,axis=0,keepdims=True)
+        ODE_std = np.std(ODE_shuffled,axis=0,keepdims=True)
 
-    ZT_normalized = (ZT_shuffled - ZT_mean) / ZT_std
-    ODE_normalized = (ODE_shuffled - ODE_mean) / ODE_std
-    # convert data to a tensor
-    ZT_normalized = torch.tensor(ZT_normalized,dtype=torch.float32,device=device)
-    ODE_normalized = torch.tensor(ODE_normalized,dtype=torch.float32,device=device)
-    ZT_mean = torch.tensor(ZT_mean,dtype=torch.float32,device=device)
-    ZT_std = torch.tensor(ZT_std,dtype=torch.float32,device=device)
-    ODE_mean = torch.tensor(ODE_mean,dtype=torch.float32,device=device)
-    ODE_std = torch.tensor(ODE_std,dtype=torch.float32,device=device)
-    dataname = os.path.join(independent_save_dir,'data_inference.pt')
-    torch.save({'ZT_mean':ZT_mean,
+        ZT_normalized = (ZT_shuffled - ZT_mean) / ZT_std
+        ODE_normalized = (ODE_shuffled - ODE_mean) / ODE_std
+        # convert data to a tensor
+        ZT_normalized = torch.tensor(ZT_normalized,dtype=torch.float32,device=device)
+        ODE_normalized = torch.tensor(ODE_normalized,dtype=torch.float32,device=device)
+        ZT_mean = torch.tensor(ZT_mean,dtype=torch.float32,device=device)
+        ZT_std = torch.tensor(ZT_std,dtype=torch.float32,device=device)
+        ODE_mean = torch.tensor(ODE_mean,dtype=torch.float32,device=device)
+        ODE_std = torch.tensor(ODE_std,dtype=torch.float32,device=device)
+        dataname = os.path.join(independent_save_dir,'data_inference.pt')
+        torch.save({'ZT_mean':ZT_mean,
                  'ZT_std':ZT_std,
                  'ODE_mean':ODE_mean,
                  'ODE_std':ODE_std,
                  'diff_scale':args.DIFF_SCALE,
-    },dataname)
-    NTrain = int(ZT_filtered.shape[0]*0.8)
-    NTest = int(ZT_filtered.shape[0]*0.2)
+        },dataname)
+    else:
+        print('[INFO] the data_inference has already been generated, skip the generation process.')
+        dataname = os.path.join(independent_save_dir,'data_inference.pt')
+        data_inference = torch.load(dataname)
+        ZT_mean = data_inference['ZT_mean']
+        ZT_std = data_inference['ZT_std']
+        ODE_mean = data_inference['ODE_mean']
+        ODE_std = data_inference['ODE_std']
+        diff_scale = data_inference['diff_scale']
+        ZT_shuffled = torch.tensor(ZT_shuffled,dtype=torch.float32,device=device)
+        ODE_shuffled = torch.tensor(ODE_shuffled,dtype=torch.float32,device=device)
+        ZT_normalized = (ZT_shuffled - ZT_mean) / ZT_std
+        ODE_normalized = (ODE_shuffled - ODE_mean) / ODE_std
+        
+       
     ZT_train_normal = ZT_normalized[:NTrain,:]
     ODE_train_normal = ODE_normalized[:NTrain,:]
     ZT_test_normal = ZT_normalized[NTrain:,:]
     ODE_test_normal = ODE_normalized[NTrain:,:]
-    learning_rate = 0.01
-    Neural_Network = FN_Net(3,3,50).to(device)
-    Neural_Network.zero_grad()
-    optimizer = torch.optim.Adam(Neural_Network.parameters(),lr=learning_rate, weight_decay = 1e-5)
-    criterion = torch.nn.MSELoss()
-    best_valid_err = 5.0
-    n_iter = 2000
-    for j in range(n_iter):
-        optimizer.zero_grad()
-        pred = Neural_Network(ZT_train_normal)
-        loss = criterion(pred,ODE_train_normal)
-        loss.backward()
-        optimizer.step()
-        pred1 = Neural_Network(ZT_test_normal)
-        valid_loss = criterion(pred1,ODE_test_normal)
-        if valid_loss < best_valid_err:
-            Neural_Network.update_best()
-            best_valid_err = valid_loss
-        if j%100 == 0:
-            print(f'epoch is {j+1}; loss is {loss}; valid loss is {valid_loss}')
 
-    Neural_Network.final_update()
-
-    Neural_Network_path = os.path.join(save_dir,'Neural_Network.pth')
-    torch.save(Neural_Network.state_dict(),Neural_Network_path)
+    if not os.path.exists(os.path.join(save_dir,'Neural_Network.pth')):
+        learning_rate = 0.01
+        Neural_Network = FN_Net(3,3,50).to(device)
+        Neural_Network.zero_grad()
+        optimizer = torch.optim.Adam(Neural_Network.parameters(),lr=learning_rate, weight_decay = 1e-5)
+        criterion = torch.nn.MSELoss()
+        best_valid_err = 5.0
+        n_iter = 2000
+        for j in range(n_iter):
+            optimizer.zero_grad()
+            pred = Neural_Network(ZT_train_normal)
+            loss = criterion(pred,ODE_train_normal)
+            loss.backward()
+            optimizer.step()
+            pred1 = Neural_Network(ZT_test_normal)
+            valid_loss = criterion(pred1,ODE_test_normal)
+            if valid_loss < best_valid_err:
+                Neural_Network.update_best()
+                best_valid_err = valid_loss
+            if j%100 == 0:
+                print(f'epoch is {j+1}; loss is {loss}; valid loss is {valid_loss}')
+        
+        Neural_Network.final_update()
+        Neural_Network_path = os.path.join(save_dir,'Neural_Network.pth')
+        torch.save(Neural_Network.state_dict(),Neural_Network_path)
+    else:
+        print('[INFO] the Neural_Network has already been trained, skip the training process.')
+        Neural_Network_path = os.path.join(save_dir,'Neural_Network.pth')
+        Neural_Network = FN_Net(3,3,50).to(device)
+        Neural_Network.load_state_dict(torch.load(Neural_Network_path))
+        print("[SUCCESS] the Neural_Network has been loaded successfully")
+        
     print("[SUCCESS] the Neural_Network has been trained successfully")
     print("[SUCESS] you may run the choice 2 to generate the prediction results.")
+else:
+    print("\n[INFO] Skipping training and generating prediction results...")
+     # Add comprehensive testing section
+    print("\n" + "="*60)
+    print("COMPREHENSIVE TRAJECTORY TESTING FOR BOTH MODELS")
+    print("="*60)
+    
+    print("\n[INFO] Running comprehensive trajectory testing...")
+    m0,var0 = MC_triad_initial_value()
+    params = params_init(args.params_name)
+    FEX_model_check = FEX_model_learned
+
+    L = params['L']
+    G = params['G']
+    B = params['B']
+    
+    TIME_AMOUNT = 10
+    dt = 0.01
+    NPATH = 5000
+    initial_state = np.random.normal(loc=m0, scale=np.sqrt(var0), size=(NPATH, 3))    
+    x_pred_initial = torch.ones(NPATH, 3).to(device,dtype=torch.float32) * torch.tensor(m0).to(device,dtype=torch.float32)
+    scaler = args.DIFF_SCALE
+    
+    tmM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
+    tmS = np.zeros(int(TIME_AMOUNT/dt), dtype=np.float32)
+    mean_state_pred = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    mean_state_record = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    mean_state_record[:, 0] = np.mean(initial_state, axis=0)
+    mean_state_pred[:, 0] = np.mean(initial_state, axis=0)
+
+    # Add separate mean arrays for single and ensemble
+    mean_state_single = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    mean_state_single[:, 0] = np.mean(initial_state, axis=0)
+    mean_state_ensemble = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    mean_state_ensemble[:, 0] = np.mean(initial_state, axis=0)
+
+    cov_state_pred = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    cov_state_record = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    cov_state_record[:, :, 0] = np.cov(initial_state, rowvar=False)
+    cov_state_pred[:, :, 0] = np.cov(initial_state, rowvar=False)
+
+    # Add separate covariance arrays for single and ensemble
+    cov_state_single = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    cov_state_single[:, :, 0] = np.cov(initial_state, rowvar=False)
+    cov_state_ensemble = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    cov_state_ensemble[:, :, 0] = np.cov(initial_state, rowvar=False)
+
+    u_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_all[:,:,0] = initial_state
+    u_pred_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_pred_all[:,:,0] = initial_state
+
+    # Add separate arrays for single and ensemble predictions
+    u_pred_single = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_pred_single[:,:,0] = initial_state
+    u_pred_ensemble = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_pred_ensemble[:,:,0] = initial_state
+
+    moment3_state_record = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    moment3_state_pred = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    moment3_first,_ = compute_third_order_moments(initial_state)
+    moment3_state_record[:,:,:,0] = moment3_first
+    moment3_state_pred[:,:,:,0] = moment3_first
+
+    Energy_MC_all = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_MC_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+
+    current_state = initial_state
+    current_pred_state = initial_state
+
+    Energy_update_record = np.zeros(4, dtype=np.float32)
+    Energy_update_pred = np.zeros(4, dtype=np.float32)
+    Energy_dyn_record = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_dyn_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+
+    # At t=0
+    Energy_update_pred[:] = [
+        0.5 * np.sum(mean_state_pred[:, 0] ** 2) + 0.5 * np.trace(cov_state_pred[:, :, 0]),
+        0.5 * (mean_state_pred[0, 0] ** 2 + cov_state_pred[0, 0, 0]),
+        0.5 * (mean_state_pred[1, 0] ** 2 + cov_state_pred[1, 1, 0]),
+        0.5 * (mean_state_pred[2, 0] ** 2 + cov_state_pred[2, 2, 0]),
+    ]
+    Energy_dyn_pred[:, 0] = Energy_update_pred
+
+    Energy_update_record[:] = [
+        0.5 * np.sum(mean_state_record[:, 0] ** 2) + 0.5 * np.trace(cov_state_record[:, :, 0]),
+        0.5 * (mean_state_record[0, 0] ** 2 + cov_state_record[0, 0, 0]),
+        0.5 * (mean_state_record[1, 0] ** 2 + cov_state_record[1, 1, 0]),
+        0.5 * (mean_state_record[2, 0] ** 2 + cov_state_record[2, 2, 0]),
+    ]
+    Energy_dyn_record[:, 0] = Energy_update_record
+
+    # Load neural network models once at the beginning
+    print("Loading neural network models...")
+    single_models = {}
+    single_norms = {}
+    ensemble_models = {}
+    ensemble_norms = {}
+
+    if str(device) == 'cuda:0':
+        save_dir = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_1.0/second_stage_10000_constant'
+        independent_save_dir = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_1.0/second_stage_10000_independent'
+    else:
+        save_dir = f'../src/Example/MC_triad/Results/{args.params_name}/noise_1.0/second_stage_10000_constant'
+        independent_save_dir = f'../src/Example/MC_triad/Results/{args.params_name}/noise_1.0/second_stage_10000_independent'
+
+    dataname = os.path.join(independent_save_dir,'data_inference.pt')
+    data_inference = torch.load(dataname)
+    ZT_mean = data_inference['ZT_mean']
+    ZT_std = data_inference['ZT_std']
+    ODE_mean = data_inference['ODE_mean']
+    ODE_std = data_inference['ODE_std']
+    diff_scale = data_inference['diff_scale']
+    tM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
+    for idx in range(1,int(TIME_AMOUNT/dt)+1):
+        # RK4 integration
+        k1 = (L @ current_state.T).T - current_state @ G + Buu(B, current_state, current_state) + np.ones((NPATH, 1)) * tmM[idx - 1, :]
+        u1 = current_state + dt * k1
+        k2 = (L @ u1.T).T - u1 @ G + Buu(B, u1, u1) + np.ones((NPATH, 1)) * tmM[idx - 1, :]
+        next_state = current_state + dt * (k1 + k2) / 2
+        SS = params['SS'] + tmS[idx - 1] ** 2 * (params['SSt'] - params['SS'])
+        Winc = np.random.randn(NPATH, 3)  # shape (MC, 3)
+        next_state = next_state + np.sqrt(dt) * (Winc @ SS)  # (MC,3) @ (3,3) → (MC,3)
+        u_all[:, :, idx] = next_state
+
+    
+        mean_state_record[:,idx] = np.mean(next_state, axis=0)
+        cov_state_record[:,:,idx] = np.cov(next_state, rowvar=False)
+        moment3_state_record[:,:,:,idx],_ = compute_third_order_moments(next_state)
+        Energy_MC_all[0, idx] = 0.5 * np.sum(mean_state_record[:,idx] ** 2) + 0.5 * np.trace(cov_state_record[:,:,idx])
+        Energy_MC_all[1, idx] = 0.5 * (mean_state_record[0,idx] ** 2 + cov_state_record[0,0,idx])
+        Energy_MC_all[2, idx] = 0.5 * (mean_state_record[1,idx] ** 2 + cov_state_record[1,1,idx])
+        Energy_MC_all[3, idx] = 0.5 * (mean_state_record[2,idx] ** 2 + cov_state_record[2,2,idx])
+        
+      
+        diag_G = np.diag(G)
+        damp1 = np.max(diag_G)
+        damp2 = max(np.min(diag_G), 0)
+        damp3 = np.mean(diag_G)
+        SS_sq_diag = np.diag(SS @ SS.T)
+        
+      
+        Energy_update_record[0] += dt * (
+            -np.sum(diag_G * (mean_state_record[:, idx] ** 2 + np.diag(cov_state_record[:, :, idx]))) +
+             np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) +
+             0.5 * np.sum(SS_sq_diag)
+        )
+        Energy_update_record[1] += dt * (-2 * damp1 * Energy_update_record[1] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+        Energy_update_record[2] += dt * (-2 * damp2 * Energy_update_record[2] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+        Energy_update_record[3] += dt * (-2 * damp3 * Energy_update_record[3] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+    
+        # u_pred_all[:,:,idx] = current_pred_state
+        current_state = next_state
+
+        current_tensor = torch.tensor(current_pred_state, dtype=torch.float32)
+    
+        # RK4 for the deterministic part (FEX model)
+        # Step 1
+        # Step 1
+        k1_det = FEX_model_check(current_tensor,params_name=args.params_name,device =device) * dt
+        k1_det_np = k1_det.cpu().detach().numpy()
+        u1 = current_tensor +  k1_det
+
+      
+
+         # Step 2
+        k2_det = FEX_model_check(u1,params_name=args.params_name,device =device) * dt
+        k2_det_np = k2_det.cpu().detach().numpy()
+        u2 = current_tensor +  k2_det
+    
+        # Final RK4 update
+    
+    
+        # RK4 update for deterministic part
+        det_update = (k1_det_np+k2_det_np)/2
+    
+        # Generate stochastic component (just once per step)
+        Npath = current_pred_state.shape[0]
+        dim = current_pred_state.shape[1]
+        Winc_tensor = torch.Tensor(Winc).to(device, dtype=torch.float32)
+        Winc_tensor = (Winc_tensor - ZT_mean) / ZT_std
+       
+        Neural_Network = FN_Net(3,3,50).to(device)
+        Neural_Network_path = os.path.join(save_dir,'Neural_Network.pth')
+        Neural_Network.load_state_dict(torch.load(Neural_Network_path))
+        # Try both single and ensemble neural networks
+        stoch_update = (Neural_Network(Winc_tensor)*ODE_std + ODE_mean)/diff_scale
+        stoch_update = stoch_update.cpu().detach().numpy()
+    
+        
+    
+        # Simple noise for comparison
+        simple_noise = np.sqrt(dt) * (Winc @ SS)
+    
+        # Print comparison every 50 steps
+        if idx % 50 == 0:
+            print(f"\nStep {idx}: Model Comparison")
+            print("=" * 50)
+        
+            if stoch_update is not None:
+                print(f"Single NN - Mean: {np.mean(stoch_update, axis=0)}")
+                print(f"Single NN - Std:  {np.std(stoch_update, axis=0)}")
+            else:
+                print("Single NN - Not available")
+                 
+            
+            print(f"Simple Noise - Mean: {np.mean(simple_noise, axis=0)}")
+            print(f"Simple Noise - Std:  {np.std(simple_noise, axis=0)}")
+            print("=" * 50)
+    
+            
+        # Fallback to simple noise
+        stoch_update = simple_noise
+        model_used = "Simple"
+    
+        # Compute both single and ensemble predictions
+        if stoch_update is not None:
+            next_pred_single = current_pred_state + det_update + stoch_update
+        else:
+            next_pred_single = current_pred_state + det_update + simple_noise
+        
+        
+    
+        # Use the selected model for the main prediction (for backward compatibility)
+        next_pred_state = current_pred_state + det_update + stoch_update
+    
+        # Store results for all three predictions
+        u_pred_all[:,:,idx] = next_pred_state
+        u_pred_single[:,:,idx] = next_pred_single
+    
+        # Update statistics for all three predictions
+        mean_state_pred[:,idx] = np.mean(next_pred_state, axis=0)
+        mean_state_single[:,idx] = np.mean(next_pred_single, axis=0)
+       
+    
+        cov_state_pred[:,:,idx] = np.cov(next_pred_state, rowvar=False)
+        cov_state_single[:,:,idx] = np.cov(next_pred_single, rowvar=False)
+
+        # Calculate energy directly from mean and covariance (same as ground truth)
+        Energy_MC_pred[0, idx] = 0.5 * np.sum(mean_state_pred[:, idx] ** 2) + 0.5 * np.trace(cov_state_pred[:, :, idx])
+        Energy_MC_pred[1, idx] = 0.5 * (mean_state_pred[0, idx] ** 2 + cov_state_pred[0, 0, idx])
+        Energy_MC_pred[2, idx] = 0.5 * (mean_state_pred[1, idx] ** 2 + cov_state_pred[1, 1, idx])
+        Energy_MC_pred[3, idx] = 0.5 * (mean_state_pred[2, idx] ** 2 + cov_state_pred[2, 2, idx])
+    
+        # Calculate third-order moments for prediction
+        moment3_pred, _ = compute_third_order_moments(next_pred_state)
+        moment3_state_pred[:, :, :, idx] = moment3_pred
+    
+        # Update current state
+        current_pred_state = next_pred_state
     
