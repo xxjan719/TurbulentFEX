@@ -989,7 +989,7 @@ elif choice == '2':
             next_pred_ensemble = current_pred_state + det_update + simple_noise
     
         # Use the selected model for the main prediction (for backward compatibility)
-        next_pred_state = current_pred_state + det_update + stoch_update
+        next_pred_state = current_pred_state + det_update + stoch_update_single
     
         # Store results for all three predictions
         u_pred_all[:,:,idx] = next_pred_state
@@ -1049,9 +1049,9 @@ elif choice == '2':
     from utils.plot import plot_mean_comparison, plot_covariance_comparison, plot_energy_comparison, plot_third_order_moments, plot_probability_distributions
 
     # Plot mean and covariance comparisons
-    plot_mean_comparison(mean_state_record, mean_state_single, Time_record, 
+    plot_mean_comparison(mean_state_record, mean_state_pred, Time_record, 
                     save_path=save_dir, title_suffix=" - FEX-framework")
-    plot_covariance_comparison(cov_state_record, cov_state_single, Time_record, 
+    plot_covariance_comparison(cov_state_record, cov_state_pred, Time_record, 
                           save_path=save_dir, title_suffix=" - FEX-framework")
 
     # Plot energy comparison
