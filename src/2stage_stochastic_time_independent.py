@@ -98,7 +98,7 @@ if choice == '1':
     
     print(f'[INFO] the residual shape is {residuals_train_flat.shape},the state of dyamics is {u_current_train_flat.shape}')
     scaler = np.ones(3) * args.DIFF_SCALE
-    train_size = 60000
+    train_size = 40000
     short_size = 2048
     it_size_utrain = 2000
     
@@ -446,10 +446,7 @@ else:
             print(f"Simple Noise - Std:  {np.std(simple_noise, axis=0)}")
             print("=" * 50)
     
-            
-        # Fallback to simple noise
-        stoch_update = simple_noise
-        model_used = "Simple"
+        
     
         # Compute both single and ensemble predictions
         if stoch_update is not None:
@@ -486,4 +483,24 @@ else:
     
         # Update current state
         current_pred_state = next_pred_state
+    
+    np.random.seed(0)
+    Time_record = np.arange(int(TIME_AMOUNT/dt)+1)
+    plot_mean_comparison(mean_state_record, mean_state_single, Time_record, 
+                    save_path=save_dir, title_suffix=" - FEX-framework")
+    plot_covariance_comparison(cov_state_record, cov_state_single, Time_record, 
+                          save_path=save_dir, title_suffix=" - FEX-framework")
+
+    # Plot energy comparison
+    plot_energy_comparison(Energy_MC_all, Energy_MC_pred, Time_record, 
+                      save_path=save_dir, title_suffix=" - FEX-framework")
+
+    # Plot third-order moments
+    plot_third_order_moments(moment3_state_record, moment3_state_pred, Time_record, 
+                        save_path=save_dir, title_suffix=" - FEX-framework")
+
+    # Plot probability distributions
+    plot_probability_distributions(u_all, u_pred_all, Time_record, 
+                              save_path=save_dir, title_suffix=" - FEX-framework")
+    
     
