@@ -750,7 +750,7 @@ def plot_covariance_comparison(cov_state_record, cov_state_pred, Time_record, sa
                           linestyle=linestyles['Ground-Truth'], color=colors['Ground-Truth'], 
                           linewidth=2, label='Ground Truth')
             
-            # Prediction
+            # # Prediction
             mask_pred = cov_state_pred[i, j] != 0
             axs[i, j].plot(Time_record[mask_pred], cov_state_pred[i, j][mask_pred], 
                          linestyle=linestyles['Prediction'], color=colors['Prediction'], 

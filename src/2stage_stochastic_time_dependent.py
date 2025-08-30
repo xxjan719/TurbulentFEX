@@ -54,7 +54,7 @@ print("2. Skip Training and generate the prediction results")
 print("="*60)
 
 while True:
-#choice = '1' #
+# choice = '1' #
     choice = input("\nChoose option (1 or 2 ):").strip()
     if choice in ['1','2','3']:
         break
@@ -186,6 +186,7 @@ if choice == '1':
             print("2. Ensemble Method (train_FN_ensemble)")
             print("="*60)
             
+            # method_choice =1
             while True:
                 method_choice = input("\nChoose training method (1 or 2): ").strip()
                 if method_choice in ['1', '2']:
@@ -472,11 +473,11 @@ if choice == '1':
         # Update save directory based on method choice
         if method_choice == '1':
             # Single neural network method
-            model_save_dir = os.path.join(model_PATH, f'second_stage_{args.RESIDUAL_SAMPLES}_single')
+            model_save_dir = os.path.join(model_PATH,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}_single')
             chosen_method = 'single'
         else:
             # Ensemble method
-            model_save_dir = os.path.join(model_PATH, f'second_stage_{args.RESIDUAL_SAMPLES}')
+            model_save_dir = os.path.join(model_PATH,f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}')
             chosen_method = 'ensemble'
         
         # Create model directory if it doesn't exist
@@ -841,11 +842,11 @@ elif choice == '2':
     ensemble_norms = {}
 
     if str(device) == 'cuda:0':
-        save_dir_single = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_1.0/second_stage_10000_single'
-        save_dir_ensemble = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_1.0/second_stage_10000'
+        save_dir_single = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/second_stage_10000_single'
+        save_dir_ensemble = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/second_stage_10000'
     else:
-        save_dir_single = f'../src/Example/MC_triad/Results/{args.params_name}/noise_1.0/second_stage_10000_single'
-        save_dir_ensemble = f'../src/Example/MC_triad/Results/{args.params_name}/noise_1.0/second_stage_10000'
+        save_dir_single = f'../src/Example/MC_triad/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/second_stage_10000_single'
+        save_dir_ensemble = f'../src/Example/MC_triad/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/second_stage_10000'
 
     tM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
     for idx in range(1,int(TIME_AMOUNT/dt)+1):
@@ -856,7 +857,7 @@ elif choice == '2':
         next_state = current_state + dt * (k1 + k2) / 2
         SS = params['SS'] + tmS[idx - 1] ** 2 * (params['SSt'] - params['SS'])
         Winc = np.random.randn(NPATH, 3)  # shape (MC, 3)
-        next_state = next_state + np.sqrt(dt) * (Winc @ SS)  # (MC,3) @ (3,3) → (MC,3)
+        next_state = next_state + np.sqrt(dt) * (Winc @ SS)*args.NOISE_LEVEL  # (MC,3) @ (3,3) → (MC,3)
         u_all[:, :, idx] = next_state
 
     
@@ -893,14 +894,14 @@ elif choice == '2':
         # RK4 for the deterministic part (FEX model)
         # Step 1
         # Step 1
-        k1_det = FEX_model_check(current_tensor,params_name=args.params_name,device =device) * dt
+        k1_det = FEX_model_check(current_tensor,params_name=args.params_name,noise_level = args.NOISE_LEVEL,device =device) * dt
         k1_det_np = k1_det.cpu().detach().numpy()
         u1 = current_tensor +  k1_det
 
       
 
          # Step 2
-        k2_det = FEX_model_check(u1,params_name=args.params_name,device =device) * dt
+        k2_det = FEX_model_check(u1,params_name=args.params_name,noise_level = args.NOISE_LEVEL,device =device) * dt
         k2_det_np = k2_det.cpu().detach().numpy()
         u2 = current_tensor +  k2_det
     
@@ -940,7 +941,7 @@ elif choice == '2':
         )
     
         # Simple noise for comparison
-        simple_noise = np.sqrt(dt) * (Winc @ SS)
+        simple_noise = np.sqrt(dt) * (Winc @ SS)*args.NOISE_LEVEL
     
         # Print comparison every 50 steps
         if idx % 50 == 0:
