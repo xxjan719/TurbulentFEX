@@ -300,9 +300,9 @@ def FEX_model_learned(x,
     # Construct path to final_expressions.txt
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if str(device) == 'cuda:0':
-        expr_file = os.path.join(base_dir, "Example", model_name, "Results", "Results1", "Results", params_name, f"noise_{noise_level}", "final_expressions.txt")
+        expr_file = os.path.join(base_dir, "Example", model_name, "Results", "Results1", "Results", params_name, f"noise_{noise_level}", "deter1000","final_expressions.txt")
     else:
-        expr_file = os.path.join(base_dir, "Example", model_name, "Results", params_name, f"noise_{noise_level}", "final_expressions.txt")
+        expr_file = os.path.join(base_dir, "Example", model_name, "Results", params_name, f"noise_{noise_level}", "deter1000","final_expressions.txt")
     
     # print(device)
     # print(expr_file)

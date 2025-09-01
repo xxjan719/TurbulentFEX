@@ -31,12 +31,12 @@ print("\n[INFO] Setting up the path...")
 if str(device) == 'cpu':
     model_PATH =Path(os.path.join(config.DIR_TRIAD, 'Results', args.params_name))
     # Default save directory (will be updated based on method choice)
-    save_dir = os.path.join( model_PATH, f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}_single')
+    save_dir = os.path.join( model_PATH, f'noise_{args.NOISE_LEVEL}','deter1000',f'second_stage_{args.TRAIN_SIZE}_single')
     os.makedirs(save_dir,exist_ok=True)
     print('[INFO] Right now we use our own workspace path.') 
 else:
     model_PATH = Path(os.path.join(config.DIR_TRIAD, 'Results', 'Results1', 'Results', args.params_name))
-    save_dir = os.path.join(config.DIR_TRIAD,'Results', 'Results1', 'Results',args.params_name,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}_single')
+    save_dir = os.path.join(config.DIR_TRIAD,'Results', 'Results1', 'Results',args.params_name,f'noise_{args.NOISE_LEVEL}','deter1000',f'second_stage_{args.TRAIN_SIZE}_single')
     print('[INFO] Right now we use hipergator workspace path.')
     os.makedirs(save_dir,exist_ok=True)
     print(f'[INFO] The save directory is set up successfully')
@@ -53,13 +53,14 @@ print("2. Skip Training and generate the prediction results")
 
 print("="*60)
 
-while True:
-# choice = '1' #
-    choice = input("\nChoose option (1 or 2 ):").strip()
-    if choice in ['1','2','3']:
-        break
-    else:
-        print("Please enter '1' or '2'.")
+choice = '1'
+# while True:
+# # choice = '1' #
+#     choice = input("\nChoose option (1 or 2 ):").strip()
+#     if choice in ['1','2','3']:
+#         break
+#     else:
+#         print("Please enter '1' or '2'.")
 
 if choice == '1':
     # Option 1: Train everything in second stage
@@ -71,7 +72,7 @@ if choice == '1':
     print("="*60)
    
     # Set up common directory for shared files
-    common_save_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}_common')
+    common_save_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', 'deter1000',f'second_stage_{args.TRAIN_SIZE}_common')
     os.makedirs(common_save_dir, exist_ok=True)
     print(f'[INFO] Using common save directory for shared files: {common_save_dir}')
    
@@ -119,8 +120,8 @@ if choice == '1':
     training_method = 'unknown'  # Will be detected from file patterns
     
     # Scan both directories to detect existing models and method
-    ensemble_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}')
-    single_dir = os.path.join(model_PATH,  f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}_single')
+    ensemble_dir = os.path.join(model_PATH, 'deter1000',f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.TRAIN_SIZE}')
+    single_dir = os.path.join(model_PATH,  'deter1000',f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.TRAIN_SIZE}_single')
     os.makedirs(ensemble_dir, exist_ok=True)
     print(f'[DEBUG] Scanning ensemble directory: {ensemble_dir}')
     print(f'[DEBUG] Scanning single directory: {single_dir}')
@@ -186,22 +187,22 @@ if choice == '1':
             print("2. Ensemble Method (train_FN_ensemble)")
             print("="*60)
             
-            # method_choice =1
-            while True:
-                method_choice = input("\nChoose training method (1 or 2): ").strip()
-                if method_choice in ['1', '2']:
-                    break
-                else:
-                    print("Please enter '1' or '2'.")
+            method_choice ='1'
+            # while True:
+            #     method_choice = input("\nChoose training method (1 or 2): ").strip()
+            #     if method_choice in ['1', '2']:
+            #         break
+            #     else:
+            #         print("Please enter '1' or '2'.")
             
             # Update save directory based on method choice
             if method_choice == '1':
                 # Single neural network method
-                model_save_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}_single')
+                model_save_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', 'deter1000',f'second_stage_{args.TRAIN_SIZE}_single')
                 chosen_method = 'single'
             else:
                 # Ensemble method
-                model_save_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}')
+                model_save_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', 'deter1000',f'second_stage_{args.TRAIN_SIZE}')
                 chosen_method = 'ensemble'
             
             # Create model directory if it doesn't exist
@@ -463,21 +464,22 @@ if choice == '1':
         print("2. Ensemble Method (train_FN_ensemble)")
         print("="*60)
         
-        while True:
-            method_choice = input("\nChoose training method (1 or 2): ").strip()
-            if method_choice in ['1', '2']:
-                break
-            else:
-                print("Please enter '1' or '2'.")
+        method_choice = '1'
+        # while True:
+        #     method_choice = input("\nChoose training method (1 or 2): ").strip()
+        #     if method_choice in ['1', '2']:
+        #         break
+        #     else:
+        #         print("Please enter '1' or '2'.")
         
         # Update save directory based on method choice
         if method_choice == '1':
             # Single neural network method
-            model_save_dir = os.path.join(model_PATH,f'noise_{args.NOISE_LEVEL}',f'second_stage_{args.RESIDUAL_SAMPLES}_single')
+            model_save_dir = os.path.join(model_PATH,f'noise_{args.NOISE_LEVEL}','deter1000',f'second_stage_{args.TRAIN_SIZE}_single')
             chosen_method = 'single'
         else:
             # Ensemble method
-            model_save_dir = os.path.join(model_PATH,f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}')
+            model_save_dir = os.path.join(model_PATH,f'noise_{args.NOISE_LEVEL}','deter1000', f'second_stage_{args.TRAIN_SIZE}')
             chosen_method = 'ensemble'
         
         # Create model directory if it doesn't exist
@@ -842,11 +844,11 @@ elif choice == '2':
     ensemble_norms = {}
 
     if str(device) == 'cuda:0':
-        save_dir_single = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/second_stage_10000_single'
-        save_dir_ensemble = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/second_stage_10000'
+        save_dir_single = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/deter1000/second_stage_{args.TRAIN_SIZE}_single'
+        save_dir_ensemble = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/deter1000/ssecond_stage_{args.TRAIN_SIZE}'
     else:
-        save_dir_single = f'../src/Example/MC_triad/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/second_stage_10000_single'
-        save_dir_ensemble = f'../src/Example/MC_triad/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/second_stage_10000'
+        save_dir_single = f'../src/Example/MC_triad/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/deter1000/second_stage_{args.TRAIN_SIZE}'
+        save_dir_ensemble = f'../src/Example/MC_triad/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/deter1000/second_stage_{args.TRAIN_SIZE}'
 
     tM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
     for idx in range(1,int(TIME_AMOUNT/dt)+1):
@@ -990,7 +992,7 @@ elif choice == '2':
             next_pred_ensemble = current_pred_state + det_update + simple_noise
     
         # Use the selected model for the main prediction (for backward compatibility)
-        next_pred_state = current_pred_state + det_update + stoch_update_single
+        next_pred_state = current_pred_state + det_update + stoch_update
     
         # Store results for all three predictions
         u_pred_all[:,:,idx] = next_pred_state
@@ -1040,9 +1042,9 @@ elif choice == '2':
     # Create save directory for plots
     import os
     if str(device)=="cuda:0":
-        save_dir = f"../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/plots"
+        save_dir = f"../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/plots_{args.TRAIN_SIZE}"
     else:
-        save_dir = f"../src/Example/MC_triad/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/plots"
+        save_dir = f"../src/Example/MC_triad/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/plots_{args.TRAIN_SIZE}"
     os.makedirs(save_dir, exist_ok=True)
     print(f"Saving plots to: {save_dir}")
 

@@ -81,9 +81,9 @@ if os.path.exists(data_file):
     
     # Select 1000 trajectories for training
     print(f'[INFO] Full dataset shape: {dataset_full.shape}')
-    print(f'[INFO] Selecting 1000 trajectories for training...')
+    print(f'[INFO] Selecting {args.TRAINING_DETER_SAMPLES} trajectories for training...')
     np.random.seed(SEED)  # Use same seed for reproducibility
-    selected_indices = np.random.choice(dataset_full.shape[0], size=1000, replace=False)
+    selected_indices = np.random.choice(dataset_full.shape[0], size=args.TRAINING_DETER_SAMPLES, replace=False)
     dataset = dataset_full[selected_indices]  # (1000, 3, 1001)
     print(f'[INFO] Selected dataset shape: {dataset.shape}')
     
@@ -109,7 +109,7 @@ else:
     print(f'[INFO] Full dataset shape: {dataset_full.shape}')
     print(f'[INFO] Selecting 1000 trajectories for training...')
     np.random.seed(SEED)  # Use same seed for reproducibility
-    selected_indices = np.random.choice(dataset_full.shape[0], size=1000, replace=False)
+    selected_indices = np.random.choice(dataset_full.shape[0], size=args.TRAINING_DETER_SAMPLES, replace=False)
     dataset = dataset_full[selected_indices]  # (1000, 3, 1001)
     print(f'[INFO] Selected dataset shape: {dataset.shape}')
     print(f'[INFO] Right now it is ok for data. We use it for the first stage training: FEX'.center(60,'='))

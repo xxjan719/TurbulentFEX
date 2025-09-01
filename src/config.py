@@ -217,7 +217,7 @@ class Config:
         # Case selection
         parser.add_argument('--params_name', type=str, 
                             choices = ['cascade', 'equipart','dual_cascade','periodic_cascade','random_cascade'],
-                            default='dual_cascade',
+                            default='equipart',
                             help='Case to use')
         # Seed
         parser.add_argument('--SEED', type=int, 
@@ -255,6 +255,7 @@ class Config:
         parser.add_argument('--NUM_TREES', type=int, 
                             default=200,
                             help='Number of trees in inner iteration')
+        parser.add_argument('--TRAINING_DETER_SAMPLES',type=int, default=1000, help ='Number of experiment for testing fewer sample')
         
         # FEX training integration
         parser.add_argument('--INTEGRATOR_METHOD', type=str, 
@@ -304,7 +305,7 @@ class Config:
                             help='Working dimension for DM training.')
 
         parser.add_argument('--NOISE_LEVEL',type=float,
-                            default =0.4,
+                            default =1.0,
                             help='Noise level for MC simulation.')
         parser.add_argument('--TRAIN_SIZE',type=int,
                             default = 10000,
@@ -321,7 +322,7 @@ class Config:
                             default = None,
                             help='Path to save figure.')
         parser.add_argument('--TRAIN_THREE_DIMENSION_INTEGRATED',type=bool,
-                            default = True,
+                            default = False,
                             help='Whether to train the FEX with ground truth data.')
         return parser
     
