@@ -64,7 +64,7 @@ np.random.seed(SEED)
 random.seed(SEED)
 
 m0, var0 = MC_triad_initial_value()
-params = params_init(args.params_name,sample=10000)  # Generate 50,000 samples
+params = params_init(args.params_name,sample=50000)  # Generate 50,000 samples
 data_file = args.DATA_SAVE_PATH
 
 if os.path.exists(data_file):

@@ -45,13 +45,13 @@ print("="*60)
 
 
 # Ask user whether to train everything in second stage or skip to calculate the measurements
-print("\n"+ "="*60)
-print("SECOND STAGE: STOCHASTIC OPTIONS")
-print("="*60)
-print("1. Train to learn stochastic part in noise level and num samples")
-print("2. Skip Training and generate the prediction results")
+# print("\n"+ "="*60)
+# print("SECOND STAGE: STOCHASTIC OPTIONS")
+# print("="*60)
+# print("1. Train to learn stochastic part in noise level and num samples")
+# print("2. Skip Training and generate the prediction results")
 
-print("="*60)
+# print("="*60)
 
 choice = '1'
 # while True:
@@ -992,7 +992,7 @@ elif choice == '2':
             next_pred_ensemble = current_pred_state + det_update + simple_noise
     
         # Use the selected model for the main prediction (for backward compatibility)
-        next_pred_state = current_pred_state + det_update + stoch_update
+        next_pred_state = current_pred_state + det_update + stoch_update_single
     
         # Store results for all three predictions
         u_pred_all[:,:,idx] = next_pred_state

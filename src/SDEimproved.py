@@ -3,9 +3,6 @@ import torch
 import numpy as np
 import os
 import sys
-
-
-
 # Add the project root directory to Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -74,7 +71,7 @@ if os.path.exists(data_file):
     print(f'[INFO] Full dataset shape: {dataset_full.shape}')
     print(f'[INFO] Selecting 1000 trajectories for training...')
     np.random.seed(SEED)
-    selected_indices = np.random.choice(dataset_full.shape[0], size=1000, replace=False)
+    selected_indices = np.random.choice(dataset_full.shape[0], size=args.TRAINING_DETER_SAMPLES, replace=False)
     dataset = dataset_full[selected_indices]
     print(f'[INFO] Selected dataset shape: {dataset.shape}')
 
@@ -118,7 +115,7 @@ print("="*60)
     
 for dim in range(1, 4):
     print(f'\nSelecting for dimension {dim}...')
-    file_path = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'best_candidates_pool_summary_{dim}.txt')
+    file_path = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", "deter1000",f'best_candidates_pool_summary_{dim}.txt')
     selected_sequence = select_operator_sequence(file_path, dim)
     if selected_sequence is None:
         print(f"[ERROR] Failed to get sequence for dimension {dim}")
@@ -140,7 +137,7 @@ for dim in range(1, 4):
         
 
     print("="*60)
-  
+
 loss_history = []
 mse = torch.nn.MSELoss()
 # # Create optimizer for all parameters
@@ -169,6 +166,8 @@ print(f"the current_state is {current_state.shape}")
 # second_moment_loss = torch.mean((torch.var(state_next_step_collection,dim=0) - torch.var(next_state,dim=0))**2)
 # print(second_moment_loss)
 
+lambda_rollout = 1.0
+lambda_moment  = 0.1
 
 # # Training loop
 for train_idx in range(TRAIN_EPOCHS_SECOND):  # Changed from 1 to 10 epochs for testing
@@ -181,33 +180,33 @@ for train_idx in range(TRAIN_EPOCHS_SECOND):  # Changed from 1 to 10 epochs for 
     # Don't use requires_grad=True on the collection tensor - gradients will flow through the model outputs
     state_next_step_collection = torch.zeros_like(current_state)
     
-#     for t_idx in range(current_state.shape[2]):
-#         current_tidx = current_state[:,:,t_idx]
-#         current_tidx_next_step = torch.zeros_like(current_tidx)
+    for t_idx in range(current_state.shape[2]):
+        current_tidx = current_state[:,:,t_idx]
+        current_tidx_next_step = torch.zeros_like(current_tidx)
         
-#         # FIXED: Properly collect outputs from each model
-#         for dim in range(1, 4):
-#             model = models[str(dim)]
-#             # Each model should take input of shape (batch_size, 3) and output (batch_size, 1)
-#             test_output = model(current_tidx)
-#             #print(f"Model {dim} input shape: {current_tidx.shape}, output shape: {test_output.shape}")
-#             # FIXED: Store output in the correct dimension
-#             current_tidx_next_step[:,dim-1] = test_output.squeeze(-1)
+        # FIXED: Properly collect outputs from each model
+        for dim in range(1, 4):
+            model = models[str(dim)]
+            # Each model should take input of shape (batch_size, 3) and output (batch_size, 1)
+            test_output = model(current_tidx)
+            #print(f"Model {dim} input shape: {current_tidx.shape}, output shape: {test_output.shape}")
+            # FIXED: Store output in the correct dimension
+            current_tidx_next_step[:,dim-1] = test_output.squeeze(-1)
         
-#         # FIXED: Store the complete next step prediction
-#         state_next_step_collection[:,:,t_idx] = current_tidx_next_step
+        # FIXED: Store the complete next step prediction
+        state_next_step_collection[:,:,t_idx] = current_tidx_next_step
 
-#     #print(f"the state_next_step_collection is {state_next_step_collection.shape}")
-#     next_state = dataset_tensor[:,:,1:]
-#     #print(f"the next_state is {next_state.shape}")
-    
+    #print(f"the state_next_step_collection is {state_next_step_collection.shape}")
+    next_state = dataset_tensor[:,:,1:]
+    #print(f"the next_state is {next_state.shape}")
+    mu_y = next_state.mean(dim=(0,2), keepdim=True)
+    sigma_y = next_state.std(dim=(0,2), keepdim=True) + 1e-8
+    # z-score for moment term only
+    z_pred = (state_next_step_collection - mu_y) / sigma_y
+    z_tgt  = (next_state - mu_y) / sigma_y
+    first_moment_loss = (z_pred.mean(dim=0) - z_tgt.mean(dim=0)).pow(2).mean()
 #     # FIXED: Compute moment losses with proper gradient tracking
-#     mean_next_state_pred = torch.mean(state_next_step_collection,dim=0)
-#     #print(f"the mean_next_state_pred is {mean_next_state_pred.shape}")
-#     mean_next_state_target = torch.mean(next_state,dim=0)
-#     #print(f"the mean_next_state_target is {mean_state_target.shape}")
-#     first_moment_loss = torch.mean((mean_next_state_pred - mean_next_state_target)**2)
-#     #print(first_moment_loss)
+    
 
 #     var_next_state_pred = torch.var(state_next_step_collection,dim=0)
 #     #print(f"the var_next_state_pred is {var_next_state_pred.shape}")
@@ -232,7 +231,7 @@ for train_idx in range(TRAIN_EPOCHS_SECOND):  # Changed from 1 to 10 epochs for 
         individual_pred_losses += dim_loss
 
     # Combine moment losses with individual prediction losses
-    total_pred_loss = individual_pred_losses#+first_moment_loss #+ second_moment_loss + third_moment_loss
+    total_pred_loss = lambda_rollout*individual_pred_losses+lambda_moment*first_moment_loss #+ second_moment_loss + third_moment_loss
     
     # FIXED: Debug gradient flow
     # print(f"\n[DEBUG] Epoch {train_idx} - Gradient check before backward:")
@@ -281,7 +280,7 @@ for train_idx in range(TRAIN_EPOCHS_SECOND):  # Changed from 1 to 10 epochs for 
             print(f"Training index: {train_idx}")
             print(f"Total Loss: {total_pred_loss.item():.6f}")
             print(f"Individual Pred Loss: {individual_pred_losses.item():.6f}")
-            # print(f"First Moment Loss: {first_moment_loss.item():.6f}")
+            print(f"First Moment Loss: {first_moment_loss.item():.6f}")
             # print(f"Second Moment Loss: {second_moment_loss.item():.6f}")
             # print(f"Third Moment Loss: {third_moment_loss.item():.6f}")
             
