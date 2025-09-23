@@ -263,11 +263,20 @@ if choice == '1':
                     print(f"[INFO] Using single neural network method...")
                     # For single method, we need to calculate num_time_points from the range
                     num_time_points = end_idx - start_idx
-                    train_FN_each_dimension(
-                        ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=model_save_dir,
-                        time_range=(start_idx, end_idx),  # Use specific time range
-                        dt=dt
-                    )
+                    if args.params_name in ['equipart', 'cascade']:
+                        # For equipart and cascade: use separate dimension training (preserves diagonal noise structure)
+                        print(f"[INFO] Using separate dimension training for {args.params_name} case...")
+                        train_FN_each_dimension(
+                            ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=model_save_dir,
+                            time_range=(start_idx, end_idx), dt=dt
+                        )
+                    else:
+                        # For all other cases (including FN): use multi-output training (preserves correlation structure)
+                        print(f"[INFO] Using multi-output training for {args.params_name} case...")
+                        train_FN_multi(
+                            ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=model_save_dir,
+                            time_range=(start_idx, end_idx), dt=dt
+                        )
                 else:
                     # Ensemble method
                     print(f"[INFO] Using ensemble method...")
@@ -631,11 +640,22 @@ if choice == '1':
                 if method_choice == '1':
                     # Single neural network method
                     print(f"[INFO] Using single neural network method...")
-                    train_FN_each_dimension(
-                        ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=model_save_dir,
-                        time_range=(start_idx, end_idx),  # Use specific time range
-                        dt=dt
-                    )
+                    
+                    # Special condition: use different training methods based on params_name
+                    if args.params_name in ['equipart', 'cascade']:
+                        # For equipart and cascade: use separate dimension training (preserves diagonal noise structure)
+                        print(f"[INFO] Using separate dimension training for {args.params_name} case...")
+                        train_FN_each_dimension(
+                            ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=model_save_dir,
+                            time_range=(start_idx, end_idx), dt=dt
+                        )
+                    else:
+                        # For all other cases (including FN): use multi-output training (preserves correlation structure)
+                        print(f"[INFO] Using multi-output training for {args.params_name} case...")
+                        train_FN_multi(
+                            ODE_Solution, ZT_Solution, dim=3, device=device, save_dir=model_save_dir,
+                            time_range=(start_idx, end_idx), dt=dt
+                        )
                 else:
                     # Ensemble method
                     print(f"[INFO] Using ensemble method...")

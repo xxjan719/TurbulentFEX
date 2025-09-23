@@ -511,6 +511,135 @@ def train_FN_each_dimension(ODE_Solution:np.ndarray,
             else:
                 print(f'[WARNING] save_dir is None, not saving model for dim{x_dim}_t{t}')
 
+
+def train_FN_multi(ODE_Solution:np.ndarray,
+                   ZT_Solution:np.ndarray,
+                   dim:int=3,
+                   device:str='cpu',
+                   learning_rate:float=0.001,
+                   n_iter:int=5000,
+                   best_valid_err:float=5.0,
+                   save_dir:str=None,
+                   num_time_points:int=None,
+                   time_range:tuple=None,
+                   dt:float=0.01):
+    """
+    Train a multi-output neural network (3→3) for joint prediction
+    This preserves correlation structure between dimensions
+    """
+    total_time_steps = ODE_Solution.shape[2]
+    size = ODE_Solution.shape[0]
+    
+    # Select time points to train on
+    if time_range is not None:
+        # Use specific time range
+        start_idx, end_idx = time_range
+        time_indices = range(start_idx, min(end_idx, total_time_steps))
+        selected_times = np.array([t * dt for t in time_indices])
+        print(f"Training 3→3 network on time range {start_idx}-{min(end_idx, total_time_steps)} ({len(time_indices)} time points)")
+        print(f"Time range: {selected_times[0]:.2f}s to {selected_times[-1]:.2f}s")
+    elif num_time_points is not None:
+        selected_indices, selected_times = select_time_points(
+            total_time_steps, dt, num_time_points
+        )
+        print(f"Training 3→3 network on {len(selected_indices)} time points out of {total_time_steps} total")
+        print(f"Time range: {selected_times[0]:.2f}s to {selected_times[-1]:.2f}s")
+        time_indices = selected_indices
+    else:
+        time_indices = range(total_time_steps)
+        selected_times = np.arange(total_time_steps) * dt
+    
+    for t_idx, t in enumerate(time_indices):
+        print(f'Training 3→3 network for {t_idx+1}/{len(time_indices)} times (time step {t}, t={selected_times[t_idx]:.2f}s)')
+        NTrain = int(size * 0.8)
+        
+        # Create 3→3 neural network (3 inputs, 3 outputs)
+        FN_multi = FN_Net(3, 3, 100).to(device)  # 3 inputs, 3 outputs
+        FN_multi.zero_grad()
+        optimizer = optim.Adam(FN_multi.parameters(), lr=learning_rate, weight_decay=1e-5)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=200)
+        criterion = nn.MSELoss()
+        
+        # Prepare data for ALL dimensions at once
+        # Input: All 3 Wiener increments [W1, W2, W3]
+        xTrain_normal = torch.tensor(ZT_Solution[0:NTrain, :, t_idx], dtype=torch.float32).to(device)  # (N, 3)
+        # Output: All 3 ODE solutions [dim1, dim2, dim3]
+        yTrain_normal = torch.tensor(ODE_Solution[0:NTrain, :, t_idx], dtype=torch.float32).to(device)  # (N, 3)
+        
+        # Validation data
+        xValid_normal = torch.tensor(ZT_Solution[NTrain:size, :, t_idx], dtype=torch.float32).to(device)  # (N, 3)
+        yValid_normal = torch.tensor(ODE_Solution[NTrain:size, :, t_idx], dtype=torch.float32).to(device)  # (N, 3)
+        
+        # Calculate normalization parameters for all dimensions
+        y_mean = np.mean(ODE_Solution[0:NTrain, :, t_idx], axis=0)  # (3,)
+        y_std = np.std(ODE_Solution[0:NTrain, :, t_idx], axis=0)     # (3,)
+        
+        # Normalize the data
+        yTrain_normal = (yTrain_normal - torch.tensor(y_mean, dtype=torch.float32).to(device)) / torch.tensor(y_std, dtype=torch.float32).to(device)
+        yValid_normal = (yValid_normal - torch.tensor(y_mean, dtype=torch.float32).to(device)) / torch.tensor(y_std, dtype=torch.float32).to(device)
+        
+        best_valid_loss = float('inf')
+        patience_counter = 0
+        patience_limit = 500  # Early stopping patience
+        
+        print(f'[INFO] Training 3→3 network for time step {t}...')
+        print(f'[INFO] Input shape: {xTrain_normal.shape}, Output shape: {yTrain_normal.shape}')
+        
+        for it in range(n_iter):
+            optimizer.zero_grad()
+            
+            # Forward pass: predict all 3 dimensions together
+            pred = FN_multi(xTrain_normal)  # (N, 3)
+            loss = criterion(pred, yTrain_normal)
+            loss.backward()
+            optimizer.step()
+            
+            # Validation
+            with torch.no_grad():
+                pred_valid = FN_multi(xValid_normal)
+                valid_loss = criterion(pred_valid, yValid_normal)
+            
+            # Learning rate scheduling
+            scheduler.step(valid_loss.item())
+            
+            # Early stopping
+            if valid_loss.item() < best_valid_loss:
+                best_valid_loss = valid_loss.item()
+                FN_multi.update_best()
+                patience_counter = 0
+            else:
+                patience_counter += 1
+            
+            if patience_counter >= patience_limit:
+                print(f"Early stopping at iteration {it}")
+                break
+        
+            if it % 500 == 0:
+                print(f'[INFO] Epoch {it+1}/{n_iter}; Train Loss: {loss.item():.6f}; Valid Loss: {valid_loss.item():.6f}')
+
+        # Load best model
+        FN_multi.final_update()
+        
+        # Save the 3→3 network
+        if save_dir is not None:
+            FN_path = os.path.join(save_dir, f'FN_3to3_t{t}.pth')
+            # Save model parameters in CPU format regardless of training device
+            state_dict_cpu = {k: v.cpu() for k, v in FN_multi.state_dict().items()}
+            torch.save(state_dict_cpu, FN_path)
+            print(f'[SAVE] Saved 3→3 model to: {FN_path}')
+            
+            # Save normalization parameters for all dimensions
+            norm_params = {'mean': y_mean, 'std': y_std}
+            norm_path = os.path.join(save_dir, f'norm_params_3to3_t{t}.npy')
+            np.save(norm_path, norm_params)
+            print(f'[SAVE] Saved normalization params to: {norm_path}')
+        else:
+            print(f'[WARNING] save_dir is None, not saving 3→3 model for t{t}')
+    
+    print(f"[INFO] 3→3 neural network training completed!")
+
+
+
 def train_FN_ensemble(ODE_Solution:np.ndarray,
                       ZT_Solution:np.ndarray,
                       dim:int=3,
