@@ -894,6 +894,56 @@ def FN_ensemble_update(Winc_tensor:torch.Tensor,
     return stoch_update if neural_network_used else None
 
 
+def FN_multi_update(Winc_tensor:torch.Tensor,
+                    device:str,
+                    idx:int,
+                    save_dir_single:str,
+                    dim:int=3,
+                    scaler:float=20.0):
+    """
+    Load and use 3→3 neural network for joint prediction
+    """
+    stoch_update = None
+    neural_network_used = False
+    
+    # Load normalization parameters for 3→3 model
+    norm_params_path = os.path.join(save_dir_single, f'norm_params_3to3_t{idx-1}.npy')
+    if not os.path.exists(norm_params_path):
+        return None
+        
+    norm_params = np.load(norm_params_path, allow_pickle=True).item()
+    y_mean = norm_params['mean']  # (3,)
+    y_std = norm_params['std']    # (3,)
+        
+    # Load 3→3 model
+    model_path = os.path.join(save_dir_single, f'FN_3to3_t{idx-1}.pth')
+    if not os.path.exists(model_path):
+        return None
+            
+    FN_3to3 = FN_Net(3, 3, 100).to(device)
+    
+    # Load the CPU-saved model and move to target device
+    state_dict = torch.load(model_path, map_location=device)
+    FN_3to3.load_state_dict(state_dict)
+    FN_3to3.eval()
+        
+    # Make prediction for all dimensions at once
+    with torch.no_grad():
+        pred = FN_3to3(Winc_tensor)  # (N, 3)
+        
+    # Denormalize: pred * y_std + y_mean
+    pred = pred * torch.tensor(y_std, dtype=torch.float32).to(device) + torch.tensor(y_mean, dtype=torch.float32).to(device)
+        
+    # Scale back by scaler
+    pred = pred / scaler
+    
+    # Convert to numpy
+    stoch_update = pred.cpu().detach().numpy()
+    neural_network_used = True
+    
+    return stoch_update if neural_network_used else None
+
+
 def simple_step_update(Winc_tensor:torch.Tensor,
                       device:str,
                       idx:int,
@@ -924,8 +974,10 @@ def simple_step_update(Winc_tensor:torch.Tensor,
         return FN_single_update(Winc_tensor, device, idx, save_dir_single, dim, scaler)
     elif model_type.lower() == 'ensemble':
         return FN_ensemble_update(Winc_tensor, device, idx, save_dir_ensemble, dim, scaler, n_models)
+    elif model_type.lower() == 'multi':
+        return FN_multi_update(Winc_tensor, device, idx, save_dir_single, dim, scaler)
     else:
-        raise ValueError(f"Invalid model_type: {model_type}. Must be 'single' or 'ensemble'")
+        raise ValueError(f"Invalid model_type: {model_type}. Must be 'single', 'ensemble', or 'multi'")
 
 
 

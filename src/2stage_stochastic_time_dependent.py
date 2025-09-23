@@ -938,29 +938,44 @@ elif choice == '2':
         dim = current_pred_state.shape[1]
         Winc_tensor = torch.Tensor(Winc).to(device, dtype=torch.float32)
     
-        # Use the simple step update function for neural networks
-        from utils.ODEParser import simple_step_update
-    
-        # Try both single and ensemble neural networks
-        stoch_update_single = simple_step_update(
-        Winc_tensor=Winc_tensor,
-        device=device,
-        idx=idx,
-        save_dir_single=save_dir_single,
-        save_dir_ensemble=save_dir_ensemble,
-        model_type='single',
-        scaler=scaler
-        )
-    
-        stoch_update_ensemble = simple_step_update(
-        Winc_tensor=Winc_tensor,
-        device=device,
-        idx=idx,
-        save_dir_single=save_dir_single,
-        save_dir_ensemble=save_dir_ensemble,
-        model_type='ensemble',
-        scaler=scaler
-        )
+        # Special handling based on params_name
+        if args.params_name in ['equipart', 'cascade']:
+            # For equipart and cascade: use original simple_step_update (separate models)
+            from utils.ODEParser import simple_step_update
+            
+            stoch_update_single = simple_step_update(
+                Winc_tensor=Winc_tensor,
+                device=device,
+                idx=idx,
+                save_dir_single=save_dir_single,
+                save_dir_ensemble=save_dir_ensemble,
+                model_type='single',
+                scaler=scaler
+            )
+            
+            stoch_update_ensemble = simple_step_update(
+                Winc_tensor=Winc_tensor,
+                device=device,
+                idx=idx,
+                save_dir_single=save_dir_single,
+                save_dir_ensemble=save_dir_ensemble,
+                model_type='ensemble',
+                scaler=scaler
+            )
+        else:
+            # For FN and other cases: use multi-output models
+            from utils.ODEParser import FN_multi_update
+            
+            stoch_update_single = FN_multi_update(
+                Winc_tensor=Winc_tensor,
+                device=device,
+                idx=idx,
+                save_dir_single=save_dir_single,
+                scaler=scaler
+            )
+            
+            # For now, ensemble is same as single for multi-output case
+            stoch_update_ensemble = stoch_update_single
     
         # Simple noise for comparison
         simple_noise = np.sqrt(dt) * (Winc @ SS)*args.NOISE_LEVEL

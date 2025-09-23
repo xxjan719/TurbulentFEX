@@ -7,7 +7,7 @@ from .controller import Controller
 from .ODEParser import (ODE_solver, FN_Net,process_chunk_faiss_cpu,
                         train_FN_each_dimension,train_FN_ensemble,generate_euler_residue, 
                         generate_second_step, 
-                        generate_mean_and_std, simple_step_update, train_FN_multi)
+                        generate_mean_and_std, simple_step_update, train_FN_multi, FN_multi_update)
 from .Pool import Pool
 from .constant import binary_ops, unary_ops, POOL_LIMIT,coefficents_history
 from .Sampler import Sampler
@@ -37,5 +37,5 @@ __all__ = [
     "plot_mean_comparison","plot_covariance_comparison","train_FN_each_dimension","train_FN_ensemble",
     "generate_euler_residue","generate_second_step","generate_mean_and_std","simple_step_update",
     "plot_energy_comparison","plot_third_order_moments","plot_energy_conservation","plot_probability_distributions",
-    "train_FN_multi"
+    "train_FN_multi", "FN_multi_update"
 ]
