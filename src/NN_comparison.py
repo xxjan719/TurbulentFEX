@@ -52,14 +52,14 @@ print("1. Train to learn stochastic part in noise level and num samples")
 print("2. Skip Training and generate the prediction results")
 
 print("="*60)
-choice = '1'
-# while True:
-# # choice = '1' #
-#     choice = input("\nChoose option (1 or 2 ):").strip()
-#     if choice in ['1','2','3']:
-#         break
-#     else:
-#         print("Please enter '1' or '2'.")
+#choice = '1'
+while True:
+# choice = '1' #
+    choice = input("\nChoose option (1 or 2 ):").strip()
+    if choice in ['1','2','3']:
+        break
+    else:
+        print("Please enter '1' or '2'.")
 
 if choice == '1':
     print("\n[INFO] Training NN comparison...")
@@ -92,11 +92,36 @@ if choice == '1':
 
 
     ZT_Solution = torch.zeros(residuals.shape[0], 3, residuals.shape[2])
+    
+    # Check if all models are already trained
+    all_models_exist = True
+    missing_models = []
+    
+    for t_idx in range(residuals.shape[2]):
+        for dim in range(1, 3+1):
+            model_path = os.path.join(save_dir, f'FN_dim_{dim}_t_{t_idx}.npy')
+            if not os.path.exists(model_path):
+                all_models_exist = False
+                missing_models.append(f'dim_{dim}_t_{t_idx}')
+    
+    if all_models_exist:
+        print(f'[INFO] All neural network models already exist! Skipping training.')
+        print(f'[INFO] Found models for all {residuals.shape[2]} time steps and 3 dimensions.')
+    else:
+        print(f'[INFO] Some models are missing. Missing: {missing_models}')
+        print(f'[INFO] Starting training for missing models...')
+    
     for t_idx in range(residuals.shape[2]):
         print(f'[INFO] this is {t_idx+1} times / overall {residuals.shape[2]} times')
         ZT_Solution[:,:,t_idx] = torch.randn(residuals.shape[0],3).to(device)
         print(f'[INFO] the ZT_Solution shape is {ZT_Solution[:,:,t_idx].shape}')
         for dim in range(1,3+1):
+            # Check if this specific model already exists
+            model_path = os.path.join(save_dir, f'FN_dim_{dim}_t_{t_idx}.npy')
+            if os.path.exists(model_path):
+                print(f'[INFO] Model for dim {dim}, t_idx {t_idx} already exists. Skipping...')
+                continue
+                
             print(f'[INFO] this is {dim} dimension / overall {3} dimensions')
             FN_dim = FN_Net(1,1,100).to(device)  # Increased hidden size from 50 to 100
             optimizer = optim.Adam(FN_dim.parameters(),lr = learning_rate,weight_decay = 1e-5)  # Reduced weight decay
@@ -120,7 +145,8 @@ if choice == '1':
             x_train, x_valid = xTrain_normal[:train_size], xTrain_normal[train_size:]
             y_train, y_valid = yTrain_normal[:train_size], yTrain_normal[train_size:]
             
-            for i in range(839,n_iter):
+            # Train from beginning (no checkpoint system)
+            for i in range(n_iter):
                 FN_dim.zero_grad()
                 y_pred = FN_dim(x_train)  # Use training data
                 loss = nn.functional.mse_loss(y_pred, y_train)
