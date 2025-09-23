@@ -349,21 +349,25 @@ elif choice == '2':
         simple_noise = np.sqrt(dt) * (Winc @ SS)*args.NOISE_LEVEL
         
         stoch_update_single_dim1 = FN_Net(1,1,100).to(device)  
-        stoch_update_single_dim1.load_state_dict(np.load(os.path.join(save_dir_comparison, f'FN_dim_1_t_{idx}.npy'), allow_pickle=True).item())
+        stoch_update_single_dim1.load_state_dict(np.load(os.path.join(save_dir_comparison, f'FN_dim_1_t_{idx-1}.npy'), allow_pickle=True).item())
         stoch_update_single_dim1.eval()
         stoch_update_single_dim2 = FN_Net(1,1,100).to(device)  
-        stoch_update_single_dim2.load_state_dict(np.load(os.path.join(save_dir_comparison, f'FN_dim_2_t_{idx}.npy'), allow_pickle=True).item())
+        stoch_update_single_dim2.load_state_dict(np.load(os.path.join(save_dir_comparison, f'FN_dim_2_t_{idx-1}.npy'), allow_pickle=True).item())
         stoch_update_single_dim2.eval()
         stoch_update_single_dim3 = FN_Net(1,1,100).to(device)  
-        stoch_update_single_dim3.load_state_dict(np.load(os.path.join(save_dir_comparison, f'FN_dim_3_t_{idx}.npy'), allow_pickle=True).item())
+        stoch_update_single_dim3.load_state_dict(np.load(os.path.join(save_dir_comparison, f'FN_dim_3_t_{idx-1}.npy'), allow_pickle=True).item())
         stoch_update_single_dim3.eval()
 
         stoch_update_single_dim1 = stoch_update_single_dim1(Winc_tensor[:,0:1])
         stoch_update_single_dim2 = stoch_update_single_dim2(Winc_tensor[:,1:2])
         stoch_update_single_dim3 = stoch_update_single_dim3(Winc_tensor[:,2:3])
         
-        stoch_update_single = np.concatenate([stoch_update_single_dim1, stoch_update_single_dim2, stoch_update_single_dim3], axis=1)
+        stoch_update_single_dim1_np = stoch_update_single_dim1.cpu().detach().numpy()
+        stoch_update_single_dim2_np = stoch_update_single_dim2.cpu().detach().numpy()
+        stoch_update_single_dim3_np = stoch_update_single_dim3.cpu().detach().numpy()
         
+        stoch_update_single = np.concatenate([stoch_update_single_dim1_np, stoch_update_single_dim2_np, stoch_update_single_dim3_np], axis=1)
+        stoch_update_single = stoch_update_single/args.DIFF_SCALE
         # Print comparison every 50 steps
         if idx % 50 == 0:
             print(f"\nStep {idx}: Model Comparison")
@@ -378,7 +382,7 @@ elif choice == '2':
            
             
             print(f"Simple Noise - Mean: {np.mean(simple_noise, axis=0)}")
-           
+            print(f"Simple Noise - Std: {np.std(simple_noise,axis=0)}")
             print("=" * 50)
     
 
@@ -422,4 +426,40 @@ elif choice == '2':
 
     print("="*80)
     
+    # Generate plots
+    print("\nGenerating comparison plots...")
+
+    # Create save directory for plots
+    import os
+    if str(device)=="cuda:0":
+        save_dir = f"../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/plots_{args.TRAIN_SIZE}_NNcompare"
+    else:
+        save_dir = f"../src/Example/MC_triad/Results/{args.params_name}/noise_{args.NOISE_LEVEL}/plots_{args.TRAIN_SIZE}_NNcompare"
+    os.makedirs(save_dir, exist_ok=True)
+    print(f"Saving plots to: {save_dir}")
+
+    # Import plotting functions
+    from utils.plot import plot_mean_comparison, plot_covariance_comparison, plot_energy_comparison, plot_third_order_moments, plot_probability_distributions
+
+    # Plot mean and covariance comparisons
+    plot_mean_comparison(mean_state_record, mean_state_pred, Time_record, 
+                    save_path=save_dir, title_suffix=" - FEX-framework")
+    plot_covariance_comparison(cov_state_record, cov_state_pred, Time_record, 
+                          save_path=save_dir, title_suffix=" - FEX-framework")
+
+    # Plot energy comparison
+    plot_energy_comparison(Energy_MC_all, Energy_MC_pred, Time_record, 
+                      save_path=save_dir, title_suffix=" - FEX-framework")
+
+    # Plot third-order moments
+    plot_third_order_moments(moment3_state_record, moment3_state_pred, Time_record, 
+                        save_path=save_dir, title_suffix=" - FEX-framework")
+
+    # Plot probability distributions
+    plot_probability_distributions(u_all, u_pred_all, Time_record, 
+                              save_path=save_dir, title_suffix=" - FEX-framework")
+
+    print("[INFO] All plots saved successfully!")
+    print("\n")
+    print("[SUCCESS] have already finished prediction! Now you finish the work!")
 
