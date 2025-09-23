@@ -52,13 +52,14 @@ print("1. Train to learn stochastic part in noise level and num samples")
 print("2. Skip Training and generate the prediction results")
 
 print("="*60)
-while True:
-# choice = '1' #
-    choice = input("\nChoose option (1 or 2 ):").strip()
-    if choice in ['1','2','3']:
-        break
-    else:
-        print("Please enter '1' or '2'.")
+choice = '1'
+# while True:
+# # choice = '1' #
+#     choice = input("\nChoose option (1 or 2 ):").strip()
+#     if choice in ['1','2','3']:
+#         break
+#     else:
+#         print("Please enter '1' or '2'.")
 
 if choice == '1':
     print("\n[INFO] Training NN comparison...")
@@ -90,7 +91,7 @@ if choice == '1':
 
 
 
-    ZT_Solution = np.zeros((residuals.shape[0], 3, residuals.shape[2]))
+    ZT_Solution = torch.zeros(residuals.shape[0], 3, residuals.shape[2])
     for t_idx in range(residuals.shape[2]):
         print(f'[INFO] this is {t_idx+1} times / overall {residuals.shape[2]} times')
         ZT_Solution[:,:,t_idx] = torch.randn(residuals.shape[0],3).to(device)
@@ -119,7 +120,7 @@ if choice == '1':
             x_train, x_valid = xTrain_normal[:train_size], xTrain_normal[train_size:]
             y_train, y_valid = yTrain_normal[:train_size], yTrain_normal[train_size:]
             
-            for i in range(n_iter):
+            for i in range(839,n_iter):
                 FN_dim.zero_grad()
                 y_pred = FN_dim(x_train)  # Use training data
                 loss = nn.functional.mse_loss(y_pred, y_train)

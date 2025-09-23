@@ -45,22 +45,22 @@ print("="*60)
 
 
 # Ask user whether to train everything in second stage or skip to calculate the measurements
-# print("\n"+ "="*60)
-# print("SECOND STAGE: STOCHASTIC OPTIONS")
-# print("="*60)
-# print("1. Train to learn stochastic part in noise level and num samples")
-# print("2. Skip Training and generate the prediction results")
+print("\n"+ "="*60)
+print("SECOND STAGE: STOCHASTIC OPTIONS")
+print("="*60)
+print("1. Train to learn stochastic part in noise level and num samples")
+print("2. Skip Training and generate the prediction results")
 
-# print("="*60)
+print("="*60)
 
-choice = '1'
-# while True:
-# # choice = '1' #
-#     choice = input("\nChoose option (1 or 2 ):").strip()
-#     if choice in ['1','2','3']:
-#         break
-#     else:
-#         print("Please enter '1' or '2'.")
+# choice = '1'
+while True:
+# choice = '1' #
+    choice = input("\nChoose option (1 or 2 ):").strip()
+    if choice in ['1','2','3']:
+        break
+    else:
+        print("Please enter '1' or '2'.")
 
 if choice == '1':
     # Option 1: Train everything in second stage
