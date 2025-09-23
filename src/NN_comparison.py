@@ -349,13 +349,13 @@ elif choice == '2':
         simple_noise = np.sqrt(dt) * (Winc @ SS)*args.NOISE_LEVEL
         
         stoch_update_single_dim1 = FN_Net(1,1,100).to(device)  
-        stoch_update_single_dim1.load_state_dict(torch.load(os.path.join(save_dir_comparison, f'FN_dim_1_t_{idx}.npy')))
+        stoch_update_single_dim1.load_state_dict(np.load(os.path.join(save_dir_comparison, f'FN_dim_1_t_{idx}.npy'), allow_pickle=True).item())
         stoch_update_single_dim1.eval()
         stoch_update_single_dim2 = FN_Net(1,1,100).to(device)  
-        stoch_update_single_dim2.load_state_dict(torch.load(os.path.join(save_dir_comparison, f'FN_dim_2_t_{idx}.npy')))
+        stoch_update_single_dim2.load_state_dict(np.load(os.path.join(save_dir_comparison, f'FN_dim_2_t_{idx}.npy'), allow_pickle=True).item())
         stoch_update_single_dim2.eval()
         stoch_update_single_dim3 = FN_Net(1,1,100).to(device)  
-        stoch_update_single_dim3.load_state_dict(torch.load(os.path.join(save_dir_comparison, f'FN_dim_3_t_{idx}.npy')))
+        stoch_update_single_dim3.load_state_dict(np.load(os.path.join(save_dir_comparison, f'FN_dim_3_t_{idx}.npy'), allow_pickle=True).item())
         stoch_update_single_dim3.eval()
 
         stoch_update_single_dim1 = stoch_update_single_dim1(Winc_tensor[:,0:1])
