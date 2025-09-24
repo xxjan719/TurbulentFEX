@@ -551,6 +551,16 @@ def train_FN_multi(ODE_Solution:np.ndarray,
     
     for t_idx, t in enumerate(time_indices):
         print(f'Training 3→3 network for {t_idx+1}/{len(time_indices)} times (time step {t}, t={selected_times[t_idx]:.2f}s)')
+        
+        # Check if 3→3 model already exists
+        if save_dir is not None:
+            FN_path = os.path.join(save_dir, f'FN_3to3_t{t}.pth')
+            norm_path = os.path.join(save_dir, f'norm_params_3to3_t{t}.npy')
+            
+            if os.path.exists(FN_path) and os.path.exists(norm_path):
+                print(f'[INFO] 3→3 model for time step {t} already exists. Skipping...')
+                continue
+        
         NTrain = int(size * 0.8)
         
         # Create 3→3 neural network (3 inputs, 3 outputs)
