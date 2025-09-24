@@ -1027,7 +1027,7 @@ elif choice == '2':
             next_pred_ensemble = current_pred_state + det_update + simple_noise
     
         # Use the selected model for the main prediction (for backward compatibility)
-        next_pred_state = current_pred_state + det_update + stoch_update_single
+        next_pred_state = current_pred_state + det_update #+ stoch_update_single
     
         # Store results for all three predictions
         u_pred_all[:,:,idx] = next_pred_state
