@@ -461,20 +461,7 @@ else:
 
             du_pred = torch.gradient(u_pred, dim=0)[0]
             loss = mse(u_pred, u_target)
-            # if dim == 1:
-            #     coeffs_3 = round(float(coeff_x3))
-            #     coeffs_2 = round(float(coeff_x2))
-            #     extra_loss = torch.abs(model.linear_a[0] + 0.2)**2
-                        
-            # elif dim == 2:
-            #     coeffs_3 = round(float(coeff_x3))
-            #     coeffs_1 = round(float(coeff_x1))
-            #     extra_loss = torch.abs(model.linear_a[1] + 0.1)**2
-            # elif dim == 3:
-            #     coeffs_2 = round(float(coeff_x2))
-            #     coeffs_1 = round(float(coeff_x1))
-            #     extra_loss = torch.abs(model.linear_a[2] + 0.1)**2
-            total_pred_loss += loss#+ extra_loss
+            total_pred_loss += loss
         
         # Call backward only once after all dimensions are processed
         total_pred_loss.backward(retain_graph=True)

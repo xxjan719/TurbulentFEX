@@ -80,12 +80,22 @@ def params_init(case_name = None,
         params['SS'] = np.diag([np.sqrt(10), np.sqrt(10**(-2)), np.sqrt(10**(-2))])
         params['SSt'] = np.diag([np.sqrt(1),np.sqrt(2),np.sqrt(2)])
 
-        params['fr'] = 2*np.pi/8 # frequency of the forcing
-        j_array = np.arange(params['Nt']) 
+        # Forcing settings - EXACTLY match MATLAB
+        params['fr'] = 2*np.pi/8  # frequency of the forcing 
+        # Initialize forcing arrays - EXACTLY match MATLAB loop
         params['tmS'] = np.zeros(params['Nt'])
-        sin_wave = np.sin(params['fr']*j_array*params['Dt']) 
-        params['tmM'] = np.stack([sin_wave, sin_wave, sin_wave], axis=1) # forcing term
-        params['namefig'] = f"periodic_cascade{period:.4f}"
+        params['tmM'] = np.zeros((params['Nt'], 3))
+        
+        # MATLAB loop: for j=1:params.Nt
+        for j in range(params['Nt']):
+            params['tmS'][j] = 0  
+            time_point = (j) * params['Dt']  
+            sin_value = np.sin(params['fr'] * time_point)
+            params['tmM'][j, 0] = sin_value  
+            params['tmM'][j, 1] = sin_value  
+            params['tmM'][j, 2] = sin_value  
+        period_value = 1/params['fr'] * 2*np.pi
+        params['namefig'] = f"periodic_cascade{period_value:.4f}"
     
     elif case_name == 'random_cascade': # random oscillation between 1-2
         # System matrices
