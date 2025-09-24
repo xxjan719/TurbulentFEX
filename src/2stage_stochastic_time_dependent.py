@@ -780,15 +780,24 @@ elif choice == '2':
     G = params['G']
     B = params['B']
     
+             
+    
     TIME_AMOUNT = 10
     dt = 0.01
     NPATH = 5000
+    
+    Nt = int(TIME_AMOUNT / dt)
+    
+    tmM = np.zeros((Nt, 3), dtype=np.float32)
+    tmS = np.zeros(Nt, dtype=np.float32)
+    if args.params_name == 'dual_cascade':
+         tmM[:] = np.array([0.0, -1.0, 1.0], dtype=np.float32)  
+    
     initial_state = np.random.normal(loc=m0, scale=np.sqrt(var0), size=(NPATH, 3))    
     x_pred_initial = torch.ones(NPATH, 3).to(device,dtype=torch.float32) * torch.tensor(m0).to(device,dtype=torch.float32)
     scaler = args.DIFF_SCALE
     
-    tmM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
-    tmS = np.zeros(int(TIME_AMOUNT/dt), dtype=np.float32)
+    
     mean_state_pred = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     mean_state_record = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     mean_state_record[:, 0] = np.mean(initial_state, axis=0)
@@ -1027,7 +1036,7 @@ elif choice == '2':
             next_pred_ensemble = current_pred_state + det_update + simple_noise
     
         # Use the selected model for the main prediction (for backward compatibility)
-        next_pred_state = current_pred_state + det_update #+ stoch_update_single
+        next_pred_state = current_pred_state + det_update+ stoch_update_single
     
         # Store results for all three predictions
         u_pred_all[:,:,idx] = next_pred_state
