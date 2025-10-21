@@ -250,7 +250,7 @@ class Config:
                             help='Quantile method for controller')
         # FEX training settings
         parser.add_argument('--EXPLORATION_ITERS', type=int, 
-                            default=1,
+                            default=10,
                             help='Number of exploration iterations')
         parser.add_argument('--NUM_TREES', type=int, 
                             default=200,

@@ -53,6 +53,76 @@ def check_allowed_terms(expression, dimension):
     return {'valid': has_allowed_var, 'terms_present': terms_present}
 
 
+def check_allowed_terms_periodic_cascade(expression, dimension):
+    """
+    Check if expression contains only allowed terms for periodic_cascade case.
+    This version allows sin, cos, exp functions for time-dependent forcing.
+                    
+    Args:
+        expression (str): The expression to check
+        dimension (int): Dimension (1, 2, or 3)
+                    
+    Returns:
+        dict: Dictionary with 'valid' (bool) and 'terms_present' (list of terms found)
+    """
+    # Define allowed terms for each dimension (same as regular case)
+    allowed_terms = {
+    1: ['x1', 'x2', 'x3', 'x2*x3', 'x2x3'],  # x1, x2, x3, x2x3, and constants
+    2: ['x1', 'x2', 'x3', 'x1*x3', 'x1x3'],  # x1, x2, x3, x1x3, and constants
+    3: ['x1', 'x2', 'x3', 'x1*x2', 'x1x2']   # x1, x2, x3, x1x2, and constants
+    }
+                    
+    # Convert expression to lowercase for easier checking
+    expr_lower = expression.lower()
+                    
+    # Check for disallowed terms (terms that should NOT be present)
+    # For periodic_cascade, we allow sin, cos, exp but only for time-dependent forcing
+    # We want to exclude: sin(x1), sin(x2), sin(x3), cos(x1), cos(x2), cos(x3), exp(x1), exp(x2), exp(x3)
+    # And high powers: x1**2, x1**3, x1**4, x2**2, x2**3, x2**4, x3**2, x3**3, x3**4
+    disallowed_terms = {
+        1: ['x1*x2', 'x1x2', 'x1*x3', 'x1x3',  # Wrong interaction terms
+            'sin(x1)', 'sin(x2)', 'sin(x3)', 'cos(x1)', 'cos(x2)', 'cos(x3)', 'exp(x1)', 'exp(x2)', 'exp(x3)',  # Trig/exp of variables
+            'x1**2', 'x1**3', 'x1**4', 'x1**5', 'x1**6', 'x1**7', 'x1**8',  # High powers of x1
+            'x2**2', 'x2**3', 'x2**4', 'x2**5', 'x2**6', 'x2**7', 'x2**8',  # High powers of x2  
+            'x3**2', 'x3**3', 'x3**4', 'x3**5', 'x3**6', 'x3**7', 'x3**8'], # High powers of x3
+        2: ['x1*x2', 'x1x2', 'x2*x3', 'x2x3',  # Wrong interaction terms
+            'sin(x1)', 'sin(x2)', 'sin(x3)', 'cos(x1)', 'cos(x2)', 'cos(x3)', 'exp(x1)', 'exp(x2)', 'exp(x3)',  # Trig/exp of variables
+            'x1**2', 'x1**3', 'x1**4', 'x1**5', 'x1**6', 'x1**7', 'x1**8',  # High powers of x1
+            'x2**2', 'x2**3', 'x2**4', 'x2**5', 'x2**6', 'x2**7', 'x2**8',  # High powers of x2
+            'x3**2', 'x3**3', 'x3**4', 'x3**5', 'x3**6', 'x3**7', 'x3**8'], # High powers of x3
+        3: ['x1*x3', 'x1x3', 'x2*x3', 'x2x3',  # Wrong interaction terms
+            'sin(x1)', 'sin(x2)', 'sin(x3)', 'cos(x1)', 'cos(x2)', 'cos(x3)', 'exp(x1)', 'exp(x2)', 'exp(x3)',  # Trig/exp of variables
+            'x1**2', 'x1**3', 'x1**4', 'x1**5', 'x1**6', 'x1**7', 'x1**8',  # High powers of x1
+            'x2**2', 'x2**3', 'x2**4', 'x2**5', 'x2**6', 'x2**7', 'x2**8',  # High powers of x2
+            'x3**2', 'x3**3', 'x3**4', 'x3**5', 'x3**6', 'x3**7', 'x3**8']  # High powers of x3
+    }
+                    
+    # Check if any disallowed terms are present
+    for term in disallowed_terms[dimension]:
+        if term in expr_lower:
+            return {'valid': False, 'terms_present': []}
+                    
+    # Check which allowed terms are present
+    terms_present = [term for term in allowed_terms[dimension] if term in expr_lower]
+    
+    # Check if at least one allowed term is present (excluding constants)
+    allowed_vars = ['x1', 'x2', 'x3']
+    has_allowed_var = any(var in expr_lower for var in allowed_vars)
+    
+    # For periodic_cascade, check for proper time-dependent forcing
+    # Allow: sin(t), cos(t), exp(t) or sin(something*t), cos(something*t), exp(something*t)
+    # But NOT: t**2, t**3, t**4, t**5, etc.
+    has_sin_t = 'sin(' in expr_lower and 't' in expr_lower
+    has_cos_t = 'cos(' in expr_lower and 't' in expr_lower  
+    has_exp_t = 'exp(' in expr_lower and 't' in expr_lower
+    has_high_power_t = any(f't**{i}' in expr_lower for i in range(2, 9))  # t**2, t**3, ..., t**8
+    
+    # Valid time-dependent forcing: sin(t), cos(t), or exp(t) but no high powers of t
+    has_time_var = (has_sin_t or has_cos_t or has_exp_t) and not has_high_power_t
+                    
+    return {'valid': has_allowed_var and has_time_var, 'terms_present': terms_present}
+
+
 def Buu(B,u,v):
     '''Compute the Buu operator terms for the triad model.'''
     if len(u.shape) == 1:

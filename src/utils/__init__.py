@@ -19,7 +19,7 @@ from .helper import (Buu, compute_third_order_moments,
                      adjust_learning_rate, weights_init,
                      get_coefficients, get_score_expression_from_file,
                      check_allowed_terms,get_sequence_from_candidate,extract_coefficients_from_expr,
-                     select_operator_sequence)
+                     select_operator_sequence, check_allowed_terms_periodic_cascade)
 from .plot import (plot_NOISE_LEVEL_EFFECT,plot_training_progress_grid,
                    plot_mean_comparison,plot_covariance_comparison,
                    plot_energy_comparison,plot_third_order_moments,plot_energy_conservation,
@@ -33,11 +33,12 @@ __all__ = [
     "Pool", "Sampler", "Body4TrainIntegrationParams",
     "Body4TrainIntegrationArgs", "Body4TrainIntegrator", "Controller", 
     "binary_ops", "unary_ops", "POOL_LIMIT", "get_coefficients", 
-    "get_score_expression_from_file", "check_allowed_terms", "plot_NOISE_LEVEL_EFFECT",
+    "get_score_expression_from_file", "check_allowed_terms", "check_allowed_terms_periodic_cascade", "plot_NOISE_LEVEL_EFFECT",
     "get_sequence_from_candidate", "coefficents_history", "extract_coefficients_from_expr",
     "plot_training_progress_grid", "select_operator_sequence","FEX_model_ground_truth_equipart","FEX_model_learned",
     "plot_mean_comparison","plot_covariance_comparison","train_FN_each_dimension","train_FN_ensemble",
     "generate_euler_residue","generate_second_step","generate_mean_and_std","simple_step_update",
     "plot_energy_comparison","plot_third_order_moments","plot_energy_conservation","plot_probability_distributions",
-    "train_FN_multi", "FN_multi_update","FEX_with_force","FEX_with_force_model_learned","FEX_with_force_ground_truth_periodic_cascade"
+    "train_FN_multi", "FN_multi_update","FEX_with_force","FEX_with_force_model_learned","FEX_with_force_ground_truth_periodic_cascade",
+    "check_allowed_terms_periodic_cascade"
 ]

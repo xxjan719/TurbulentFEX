@@ -122,8 +122,10 @@ integratorParams = Body4TrainIntegrationParams(dt=params['Dt'],)
 integrator = Body4TrainIntegrator(integratorParams,method=INTEGRATOR_METHOD)
 pool = Pool()
 
-
-PMF_SIZES = tuple([len(unary_ops), len(binary_ops), len(unary_ops), len(binary_ops)] * dimension)
+if args.params_name == 'periodic_cascade':
+    PMF_SIZES = tuple([len(unary_ops), len(binary_ops), len(unary_ops), len(binary_ops)] * dimension)+(len(unary_ops),)
+else:
+    PMF_SIZES = tuple([len(unary_ops), len(binary_ops), len(unary_ops), len(binary_ops)] * dimension)
 NUM_NODES = len(PMF_SIZES)
 
 
@@ -198,6 +200,7 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
                 
             for tree_idx in range(NUM_TREES):
                 op_seqs[tree_idx, :] = sampler(pmfs, output=torch.zeros(NUM_NODES, dtype=torch.int, device=DEVICE))
+                print(f"Generated operator sequence {tree_idx}: {op_seqs[tree_idx, :].tolist()}")
                 if args.params_name == 'periodic_cascade':
                     model = FEX_with_force(op_seqs[tree_idx,:], dim=3).to(DEVICE)
                 else:
@@ -217,180 +220,202 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
                     logprint(f"[INFO] Skipping model with trivial nonlinear expression: {expression}")
                     continue
                 
-                if args.params_name == 'periodic_cascade':
-                    force_expr = parts[-1].strip()
-                    if "t" not in force_expr:
-                        print(f"[INFO] Skipping model with trivial time variable: {expression}")
-                        logprint(f"[INFO] Skipping model with trival time variable: {expression}")
-                        continue
+                # if args.params_name == 'periodic_cascade':
+                #     force_expr = parts[-1].strip()
+                #     if "t" not in force_expr:
+                #         print(f"[INFO] Skipping model with trivial time variable: {expression}")
+                #         logprint(f"[INFO] Skipping model with trival time variable: {expression}")
+                #         continue
                 trained_count += 1
                     
-#                 # Train the model
-#                 model_optim = torch.optim.Adam(model.parameters(), lr=FEX_LR)
-#                 for train_idx in range(TRAIN_EPOCHS_FIRST):
-#                     model_optim.zero_grad()
-#                     integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor.to(DEVICE), integration_func=model, index=args.TRAIN_WORKING_DIM)
+                # Train the model
+                model_optim = torch.optim.Adam(model.parameters(), lr=FEX_LR)
+                for train_idx in range(TRAIN_EPOCHS_FIRST):
+                    model_optim.zero_grad()
+                    integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor.to(DEVICE), integration_func=model, index=args.TRAIN_WORKING_DIM, params_name=args.params_name)
                         
-#                     du_pred, du_target = integrator.integrate(integration_args)
-#                     loss = mse(du_pred, du_target)
-#                     loss.backward()
-#                     model_optim.step()
+                    du_pred, du_target = integrator.integrate(integration_args)
+                    loss = mse(du_pred, du_target)
+                    loss.backward()
+                    model_optim.step()
                     
-#                 # LBFGS fine-tuning
-#                 lbfgs_optim = torch.optim.LBFGS(model.parameters(), lr=0.1, max_iter=20, max_eval=25,
-#                                                    tolerance_grad=1e-7, tolerance_change=1e-9, history_size=50)
+                # LBFGS fine-tuning
+                lbfgs_optim = torch.optim.LBFGS(model.parameters(), lr=0.1, max_iter=20, max_eval=25,
+                                                   tolerance_grad=1e-7, tolerance_change=1e-9, history_size=50)
                     
-#                 def lbfgs_closure():
-#                     lbfgs_optim.zero_grad()
-#                     integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor.to(DEVICE), integration_func=model, index=args.TRAIN_WORKING_DIM)
-#                     du_pred, du_target = integrator.integrate(integration_args)
-#                     loss = mse(du_pred, du_target)
-#                     if torch.isnan(loss):
-#                         return torch.tensor(1e6, requires_grad=True)
-#                     loss.backward()
-#                     return loss
+                def lbfgs_closure():
+                    lbfgs_optim.zero_grad()
+                    integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor.to(DEVICE), integration_func=model, index=args.TRAIN_WORKING_DIM, params_name=args.params_name)
+                    du_pred, du_target = integrator.integrate(integration_args)
+                    loss = mse(du_pred, du_target)
+                    if torch.isnan(loss):
+                        return torch.tensor(1e6, requires_grad=True)
+                    loss.backward()
+                    return loss
                     
-#                 # Run LBFGS
-#                 for _ in range(10):
-#                     try:
-#                         loss = lbfgs_optim.step(lbfgs_closure)
-#                         if torch.isnan(loss):
-#                             break
-#                     except Exception:
-#                         break
+                # Run LBFGS
+                for _ in range(10):
+                    try:
+                        loss = lbfgs_optim.step(lbfgs_closure)
+                        if torch.isnan(loss):
+                            break
+                    except Exception:
+                        break
                     
-#                 # Ensure loss is a tensor for consistent handling
-#                 if not isinstance(loss, torch.Tensor):
-#                     loss = torch.tensor(loss, device=DEVICE)
+                # Ensure loss is a tensor for consistent handling
+                if not isinstance(loss, torch.Tensor):
+                    loss = torch.tensor(loss, device=DEVICE)
                     
-#                 # Apply noise level penalty if needed
-#                 if args.NOISE_LEVEL == 0:
-#                     loss = 1e6 * loss
-#                 elif args.NOISE_LEVEL == 0.2:
-#                     loss = 2e3 * loss
-#                 elif args.NOISE_LEVEL == 0.4:
-#                     loss = 1e3 * loss
-#                 elif args.NOISE_LEVEL == 1:
-#                     loss = 80*loss
-#                 # Calculate score and add to pool
-#                 if not math.isnan(loss.item()):
-#                     scores[tree_idx] = 1 / (1 + torch.sqrt(loss))
-#                 else:
-#                     scores[tree_idx] = 0.
+                # Apply noise level penalty if needed
+                if args.NOISE_LEVEL == 0:
+                    loss = 1e6 * loss
+                elif args.NOISE_LEVEL == 0.2:
+                    loss = 2e3 * loss
+                elif args.NOISE_LEVEL == 0.4:
+                    loss = 1e3 * loss
+                elif args.NOISE_LEVEL == 1:
+                    if args.params_name == 'periodic_cascade':
+                        loss = (loss)
+                    else:
+                        loss = 80*loss
+                # Calculate score and add to pool
+                if not math.isnan(loss.item()):
+                    scores[tree_idx] = 1 / (1 + torch.sqrt(loss))
+                else:
+                    scores[tree_idx] = 0.
                     
-#                 # Assert that the model's op_seq matches the op_seq being saved
-#                 assert (model.op_seq == op_seqs[tree_idx,:]).all(), "Mismatch between model and op_seq!"
-#                 pool.add(scores[tree_idx], model, loss.item(), op_seqs[tree_idx,:].tolist())
+                # Assert that the model's op_seq matches the op_seq being saved
+                assert (model.op_seq == op_seqs[tree_idx,:]).all(), "Mismatch between model and op_seq!"
+                pool.add(scores[tree_idx], model, loss.item(), op_seqs[tree_idx,:].tolist())
                     
-#                 # Print current model info
-#                 print("\n"+"="*60)
-#                 print(f"[INFO] Model {tree_idx + 1}")
-#                 print(f"Expression: {model.expression_visualize()}")
-#                 print(f"Expression simplified: {model.expression_visualize_simplified()}")
-#                 print(f"Loss: {loss.item():.6f}")
-#                 print(f"Score: {scores[tree_idx]:.6f}")
-#                 print(f"Operator sequence: {op_seqs[tree_idx,:].tolist()}")
-#                 print("="*60)
+                # Print current model info
+                print("\n"+"="*60)
+                print(f"[INFO] Model {tree_idx + 1}")
+                print(f"Expression: {model.expression_visualize()}")
+                print(f"Expression simplified: {model.expression_visualize_simplified()}")
+                print(f"Loss: {loss.item():.6f}")
+                print(f"Score: {scores[tree_idx]:.6f}")
+                print(f"Operator sequence: {op_seqs[tree_idx,:].tolist()}")
+                print("="*60)
                     
                    
                     
-#                 logprint("\n"+"="*60)
-#                 logprint(f"[INFO] Model {tree_idx + 1}")
-#                 logprint(f"Expression: {model.expression_visualize()}")
-#                 logprint(f"Expression simplified: {model.expression_visualize_simplified()}")
-#                 logprint(f"Loss: {loss.item():.6f}")
-#                 logprint(f"Score: {scores[tree_idx]:.6f}")
-#                 logprint(f"Operator sequence: {op_seqs[tree_idx,:].tolist()}")
-#                 logprint("="*60)
-#             # Controller update
-#             scores_detached = scores.cpu().detach().numpy()
-#             scores_upper_quantile = np.percentile(scores_detached, q=(1 - CONTROLLER_TOP_SAMPLES_FRACTION), method=CONTROLLER_QUANTILE_METHOD)
-#             indicator_upper_quantile = (scores_detached >= scores_upper_quantile).astype(int)
+                logprint("\n"+"="*60)
+                logprint(f"[INFO] Model {tree_idx + 1}")
+                logprint(f"Expression: {model.expression_visualize()}")
+                logprint(f"Expression simplified: {model.expression_visualize_simplified()}")
+                logprint(f"Loss: {loss.item():.6f}")
+                logprint(f"Score: {scores[tree_idx]:.6f}")
+                logprint(f"Operator sequence: {op_seqs[tree_idx,:].tolist()}")
+                logprint("="*60)
+            # Controller update
+            scores_detached = scores.cpu().detach().numpy()
+            scores_upper_quantile = np.percentile(scores_detached, q=(1 - CONTROLLER_TOP_SAMPLES_FRACTION), method=CONTROLLER_QUANTILE_METHOD)
+            indicator_upper_quantile = (scores_detached >= scores_upper_quantile).astype(int)
                 
-#             sum_log_probs = torch.zeros(NUM_TREES, device=DEVICE)
-#             log_pmfs = [torch.log(pmf) for pmf in pmfs]
-#             for tree_idx, ops in enumerate(op_seqs):
-#                 for pmf_idx, op in enumerate(ops):
-#                     log_prob = log_pmfs[pmf_idx][op]
-#                     sum_log_probs[tree_idx] += log_prob
+            sum_log_probs = torch.zeros(NUM_TREES, device=DEVICE)
+            log_pmfs = [torch.log(pmf) for pmf in pmfs]
+            for tree_idx, ops in enumerate(op_seqs):
+                for pmf_idx, op in enumerate(ops):
+                    log_prob = log_pmfs[pmf_idx][op]
+                    sum_log_probs[tree_idx] += log_prob
                 
-#             scores_detached = torch.from_numpy(scores_detached).to(DEVICE)
-#             indicator_upper_quantile = torch.from_numpy(indicator_upper_quantile).to(DEVICE)
+            scores_detached = torch.from_numpy(scores_detached).to(DEVICE)
+            indicator_upper_quantile = torch.from_numpy(indicator_upper_quantile).to(DEVICE)
                 
-#             controller_loss = -(1 / CONTROLLER_TOP_SAMPLES_FRACTION) * torch.mean((scores_detached - scores_upper_quantile) * indicator_upper_quantile * sum_log_probs)
-#             controller_loss.backward()
-#             controller_optim.step()
+            controller_loss = -(1 / CONTROLLER_TOP_SAMPLES_FRACTION) * torch.mean((scores_detached - scores_upper_quantile) * indicator_upper_quantile * sum_log_probs)
+            controller_loss.backward()
+            controller_optim.step()
                 
-#             # Log exploration results
-#             logprint(f"Trained {trained_count}/{NUM_TREES} sequences")
-#             logprint(f"Best loss in pool: {min([c.error for c in pool]):.6f}")
-#             print(f"Trained {trained_count}/{NUM_TREES} sequences")
-#             print(f"Best loss in pool: {min([c.error for c in pool]):.6f}")
+            # Log exploration results
+            logprint(f"Trained {trained_count}/{NUM_TREES} sequences")
+            logprint(f"Best loss in pool: {min([c.error for c in pool]):.6f}")
+            print(f"Trained {trained_count}/{NUM_TREES} sequences")
+            print(f"Best loss in pool: {min([c.error for c in pool]):.6f}")
                 
-#             # Update best candidates pool
-#             for candidate_ in pool:
-#                 current_loss = candidate_.error
-#                 current_expr = candidate_.get_expression()  # Use the stored expression
-#                 current_score = candidate_.score  # assuming .score exists
+            # Update best candidates pool
+            for candidate_ in pool:
+                current_loss = candidate_.error
+                current_expr = candidate_.get_expression()  # Use the stored expression
+                current_score = candidate_.score  # assuming .score exists
                             
-#                 # Check if expression follows the allowed terms for this dimension
-#                 check_result = check_allowed_terms(current_expr, args.TRAIN_WORKING_DIM)
-#                 if not check_result['valid']:
-#                     continue
-#                 elif args.TRAIN_WORKING_DIM == 1 and not ('x2*x3' in check_result['terms_present'] or 'x2x3' in check_result['terms_present']):
-#                     continue
-#                 elif args.TRAIN_WORKING_DIM == 2 and not ('x1*x3' in check_result['terms_present'] or 'x1x3' in check_result['terms_present']):
-#                     continue
-#                 elif args.TRAIN_WORKING_DIM == 3 and not ('x1*x2' in check_result['terms_present'] or 'x1x2' in check_result['terms_present']):
-#                     continue
-#                 else:
-#                     best_candidates_pool.append(candidate_)
-#             # Print current pool status
-#             print("\n"+"="*60)
-#             print(f"\n[INFO] Current Pool Status ({len(pool)} candidates):")
-#             print("Pool Selection:")
-#             pool_list = sorted(list(pool), key=lambda c: c.score, reverse=True)
-#             # Print top 50
-#             for idx, candidate_ in enumerate(pool_list[:50]):
-#                 print(f"  {idx + 1}. Score: {candidate_.score:.6f}, Loss: {candidate_.error:.6f}, Seq: {candidate_.action}, Expression={candidate_.get_expression()}")
+                # Check if expression follows the allowed terms for this dimension
+                if args.params_name == 'periodic_cascade':
+                    # For periodic_cascade, use a modified check that allows sin, cos, exp
+                    check_result = check_allowed_terms_periodic_cascade(current_expr, args.TRAIN_WORKING_DIM)
+                else:
+                    check_result = check_allowed_terms(current_expr, args.TRAIN_WORKING_DIM)
+                if not check_result['valid']:
+                    continue
+                elif args.params_name == 'periodic_cascade':
+                    # For periodic_cascade, check for time-dependent forcing term
+                    if 't' not in current_expr:
+                        continue
+                    # Also check for the required interaction terms
+                    if args.TRAIN_WORKING_DIM == 1 and not ('x2*x3' in check_result['terms_present'] or 'x2x3' in check_result['terms_present']):
+                        continue
+                    elif args.TRAIN_WORKING_DIM == 2 and not ('x1*x3' in check_result['terms_present'] or 'x1x3' in check_result['terms_present']):
+                        continue
+                    elif args.TRAIN_WORKING_DIM == 3 and not ('x1*x2' in check_result['terms_present'] or 'x1x2' in check_result['terms_present']):
+                        continue
+                    else:
+                        best_candidates_pool.append(candidate_)
+                else:
+                    # Regular logic for other cases
+                    if args.TRAIN_WORKING_DIM == 1 and not ('x2*x3' in check_result['terms_present'] or 'x2x3' in check_result['terms_present']):
+                        continue
+                    elif args.TRAIN_WORKING_DIM == 2 and not ('x1*x3' in check_result['terms_present'] or 'x1x3' in check_result['terms_present']):
+                        continue
+                    elif args.TRAIN_WORKING_DIM == 3 and not ('x1*x2' in check_result['terms_present'] or 'x1x2' in check_result['terms_present']):
+                        continue
+                    else:
+                        best_candidates_pool.append(candidate_)
+            # Print current pool status
+            print("\n"+"="*60)
+            print(f"\n[INFO] Current Pool Status ({len(pool)} candidates):")
+            print("Pool Selection:")
+            pool_list = sorted(list(pool), key=lambda c: c.score, reverse=True)
+            # Print top 50
+            for idx, candidate_ in enumerate(pool_list[:50]):
+                print(f"  {idx + 1}. Score: {candidate_.score:.6f}, Loss: {candidate_.error:.6f}, Seq: {candidate_.action}, Expression={candidate_.get_expression()}")
                 
-#             print("\n")
-#             print("Best Candidate Pool Selection:")
-#             for idx,  candidate_ in enumerate(best_candidates_pool):
-#                 # Assert that each candidate's model op_seq matches its action
-#                 assert (candidate_.model.op_seq == torch.tensor(candidate_.action, device=candidate_.model.op_seq.device)).all(), f"Mismatch between candidate {idx+1} model and action!"
-#                 print(f"  {idx + 1}. Loss: {candidate_.error:.6f}, Seq: {candidate_.action}, Expression={candidate_.get_expression()}")
-#             print("=" * 60)
+            print("\n")
+            print("Best Candidate Pool Selection:")
+            for idx,  candidate_ in enumerate(best_candidates_pool):
+                # Assert that each candidate's model op_seq matches its action
+                assert (candidate_.model.op_seq == torch.tensor(candidate_.action, device=candidate_.model.op_seq.device)).all(), f"Mismatch between candidate {idx+1} model and action!"
+                print(f"  {idx + 1}. Loss: {candidate_.error:.6f}, Seq: {candidate_.action}, Expression={candidate_.get_expression()}")
+            print("=" * 60)
             
-#         # Select best candidate
-#         logprint(f"\nBest candidates found: {len(best_candidates_pool)}")
-#         print(f"\nBest candidates found: {len(best_candidates_pool)}")
-#         for idx, candidate_ in enumerate(best_candidates_pool):
-#             logprint(f"Candidate {idx + 1}: Loss={candidate_.error:.6f}, Seq={candidate_.action}")
-#             print(f"Candidate {idx + 1}: Loss={candidate_.error:.6f}, Seq={candidate_.action}")
+        # Select best candidate
+        logprint(f"\nBest candidates found: {len(best_candidates_pool)}")
+        print(f"\nBest candidates found: {len(best_candidates_pool)}")
+        for idx, candidate_ in enumerate(best_candidates_pool):
+            logprint(f"Candidate {idx + 1}: Loss={candidate_.error:.6f}, Seq={candidate_.action}")
+            print(f"Candidate {idx + 1}: Loss={candidate_.error:.6f}, Seq={candidate_.action}")
             
-#         # Create save directory if it doesn't exist
-#         save_dir = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}")
-#         os.makedirs(save_dir, exist_ok=True)
-#         summary_path = os.path.join(save_dir, f"best_candidates_pool_summary_{args.TRAIN_WORKING_DIM}.txt")
-#         # Write summary
-#         with open(summary_path, "w") as f:
-#             for idx, candidate_ in enumerate(best_candidates_pool):
-#                 f.write(f"Candidate {idx + 1}: Score={candidate_.score:.6f}, Loss={candidate_.error:.6f}, Seq={candidate_.action}, Expr={candidate_.get_expression()}\n")
+        # Create save directory if it doesn't exist
+        save_dir = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}")
+        os.makedirs(save_dir, exist_ok=True)
+        summary_path = os.path.join(save_dir, f"best_candidates_pool_summary_{args.TRAIN_WORKING_DIM}.txt")
+        # Write summary
+        with open(summary_path, "w") as f:
+            for idx, candidate_ in enumerate(best_candidates_pool):
+                f.write(f"Candidate {idx + 1}: Score={candidate_.score:.6f}, Loss={candidate_.error:.6f}, Seq={candidate_.action}, Expr={candidate_.get_expression()}\n")
 
-#         print(f"[INFO] best_candidates_pool_summary saved to {summary_path}")
-#         logprint(f"[INFO] best_candidates_pool_summary saved to {summary_path}")
-#         # Use best candidate by default (or add user selection if needed)
-#         best_candidate = min(best_candidates_pool, key=lambda c: c.error)
-#         optimal_idx = best_candidate.action
-#         # Assert that the best candidate's model op_seq matches its action
-#         assert (best_candidate.model.op_seq == torch.tensor(best_candidate.action, device=best_candidate.model.op_seq.device)).all(), "Mismatch between best_candidate model and action!"
-#         logprint(f"Selected: Loss={best_candidate.error:.6f}, Expression={best_candidate.get_expression()}")
-#         print(f"Selected: Loss={best_candidate.error:.6f}, Expression={best_candidate.get_expression()}")
+        print(f"[INFO] best_candidates_pool_summary saved to {summary_path}")
+        logprint(f"[INFO] best_candidates_pool_summary saved to {summary_path}")
+        # Use best candidate by default (or add user selection if needed)
+        best_candidate = min(best_candidates_pool, key=lambda c: c.error)
+        optimal_idx = best_candidate.action
+        # Assert that the best candidate's model op_seq matches its action
+        assert (best_candidate.model.op_seq == torch.tensor(best_candidate.action, device=best_candidate.model.op_seq.device)).all(), "Mismatch between best_candidate model and action!"
+        logprint(f"Selected: Loss={best_candidate.error:.6f}, Expression={best_candidate.get_expression()}")
+        print(f"Selected: Loss={best_candidate.error:.6f}, Expression={best_candidate.get_expression()}")
 
             
-#         logprint(f"[INFO] Now we need to train the integrated FEX model")
-#         print(f"[INFO] Now we need to train the integrated FEX model")
+        logprint(f"[INFO] Now we need to train the integrated FEX model")
+        print(f"[INFO] Now we need to train the integrated FEX model")
 # else:
 #     print("\n"+"="*60)
 #     print("[INFO] Loading FEX models from previous stage...")
