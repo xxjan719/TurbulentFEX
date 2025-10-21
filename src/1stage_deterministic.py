@@ -275,7 +275,12 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
                     loss = 1e3 * loss
                 elif args.NOISE_LEVEL == 1:
                     if args.params_name == 'periodic_cascade':
-                        loss = (loss)
+                        if args.TRAIN_WORKING_DIM == 1:
+                            loss = (loss)
+                        elif args.TRAIN_WORKING_DIM == 2:
+                            loss = 20*(loss)
+                        elif args.TRAIN_WORKING_DIM == 3:
+                            loss = 20*(loss)
                     else:
                         loss = 80*loss
                 # Calculate score and add to pool

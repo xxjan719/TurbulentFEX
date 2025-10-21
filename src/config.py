@@ -301,7 +301,7 @@ class Config:
                             help='Number of samples for DM training.')
         
         parser.add_argument('--TRAIN_WORKING_DIM',type=int,
-                            default = 1,
+                            default = 2,
                             help='Working dimension for DM training.')
 
         parser.add_argument('--NOISE_LEVEL',type=float,
