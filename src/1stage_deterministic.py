@@ -100,22 +100,18 @@ else:
     
 
     
-if args.params_name == 'cascade' or args.params_name =='equipart' or args.params_name =='dual_cascade':
-    # Select 1000 trajectories for training
-    print(f'[INFO] Full dataset shape: {dataset_full.shape}')
-    print(f'[INFO] Selecting {args.TRAINING_DETER_SAMPLES} trajectories for training...')
-    np.random.seed(SEED)  # Use same seed for reproducibility
-    selected_indices = np.random.choice(dataset_full.shape[0], size=args.TRAINING_DETER_SAMPLES, replace=False)
-    dataset = dataset_full[selected_indices]  # (1000, 3, 1001)
-    print(f'[INFO] Selected dataset shape: {dataset.shape}')
-    print(f'[INFO] Right now it is ok for data. We use it for the first stage training: FEX'.center(60,'='))
-elif args.params_name == 'periodic_cascade':
-    
-    print(f'[INFO] Full dataset shape: {dataset_full.shape}')
-    print(f"[INFO] This time we need to train the first step and then divide another stage for learning time variable")
-    dataset = dataset_full[:,:,:2]
-    print(f'[INFO] Selected dataset shape: {dataset.shape}')
-    print(f'[INFO] Right now it is ok for data. We use it for the first stage training: FEX'.center(60,'='))
+
+# Select 1000 trajectories for training
+print(f"[INFO] The case now is {args.params_name}")
+print("\n")
+print(f'[INFO] Full dataset shape: {dataset_full.shape}')
+print(f'[INFO] Selecting {args.TRAINING_DETER_SAMPLES} trajectories for training...')
+np.random.seed(SEED)  # Use same seed for reproducibility
+selected_indices = np.random.choice(dataset_full.shape[0], size=args.TRAINING_DETER_SAMPLES, replace=False)
+dataset = dataset_full[selected_indices]  # (1000, 3, 1001)
+print(f'[INFO] Selected dataset shape: {dataset.shape}')
+print(f'[INFO] Right now it is ok for data. We use it for the first stage training: FEX'.center(60,'='))
+
 
 dataset_tensor = torch.from_numpy(dataset).float().to(DEVICE)
 dimension = dataset_tensor.shape[1]  # Assuming the second dimension is the number of features
@@ -140,85 +136,94 @@ print(f'the PMF_SIZES is {PMF_SIZES}')
 print(f'the NUM_NODES is {NUM_NODES}')
 print("="*60)
 
-# if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
-#     print("\n"+"="*60)
-#     print('[INFO] Start to train the FEX')
-#     print("[INFO] The idea is first train the FEX for each dimension, and then train the integrated FEX model")
-#     print("And in this example, we always can get  ground truth operator sequence for each dimension")
-#     #for dim in range(1, dimension+1):
-#     print("\n"+"="*60)
-#     print(f"The dimension is {args.TRAIN_WORKING_DIM}")
-#     model_save_path = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}",f"best_candidates_pool_summary_{args.TRAIN_WORKING_DIM}.txt")
-#     log_file = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}",f'log_dimension_{args.TRAIN_WORKING_DIM}_{args.NOISE_LEVEL}.txt')
-#     # Always create the log file directory
-#     os.makedirs(os.path.dirname(log_file), exist_ok=True)
+if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
+    print("\n"+"="*60)
+    print('[INFO] Start to train the FEX')
+    print("[INFO] The idea is first train the FEX for each dimension, and then train the integrated FEX model")
+    print("And in this example, we always can get  ground truth operator sequence for each dimension")
+    #for dim in range(1, dimension+1):
+    print("\n"+"="*60)
+    print(f"The dimension is {args.TRAIN_WORKING_DIM}")
+    model_save_path = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}",f"best_candidates_pool_summary_{args.TRAIN_WORKING_DIM}.txt")
+    log_file = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}",f'log_dimension_{args.TRAIN_WORKING_DIM}_{args.NOISE_LEVEL}.txt')
+    # Always create the log file directory
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)
     
     
-#     if os.path.exists(model_save_path) and os.path.exists(log_file): #os.path.exists(model_save_path) and 
-#         print(f'[INFO] Model for dimension {args.TRAIN_WORKING_DIM} has already generated, just using for the second stage training:FEX'.center(60, '='))
-#         print("\n Loading the initial training model and log file")
-#         print('[INFO] Print the initial training model expression')          
-#         get_score_expression_from_file(model_save_path)
-#     else:
-#         print(f'[INFO]No MODEL FOR DIMENSION {args.TRAIN_WORKING_DIM} SAVED IN THIS PATH, it will be generated automatically')        
-#         print(f'[DEBUG] About to set up logging to: {log_file}')
+    if os.path.exists(model_save_path) and os.path.exists(log_file): #os.path.exists(model_save_path) and 
+        print(f'[INFO] Model for dimension {args.TRAIN_WORKING_DIM} has already generated, just using for the second stage training:FEX'.center(60, '='))
+        print("\n Loading the initial training model and log file")
+        print('[INFO] Print the initial training model expression')          
+        get_score_expression_from_file(model_save_path)
+    else:
+        print(f'[INFO]No MODEL FOR DIMENSION {args.TRAIN_WORKING_DIM} SAVED IN THIS PATH, it will be generated automatically')        
+        print(f'[DEBUG] About to set up logging to: {log_file}')
         
-#         # Remove any existing handlers
-#         for handler in logging.root.handlers[:]:
-#             logging.root.removeHandler(handler)
+        # Remove any existing handlers
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
         
-#         try:
-#             # Set up logging to both file and console
-#             logging.basicConfig(
-#                          level=logging.INFO,
-#                          format='%(asctime)s - %(levelname)s - %(message)s',
-#                          handlers=[
-#                          logging.FileHandler(log_file, encoding='utf-8'),  
-#                          logging.StreamHandler(sys.stdout)])
-#             print(f'[DEBUG] Logging setup completed successfully')
-#         except Exception as e:
-#             print(f'[ERROR] Failed to set up logging: {e}')
-#             raise
+        try:
+            # Set up logging to both file and console
+            logging.basicConfig(
+                         level=logging.INFO,
+                         format='%(asctime)s - %(levelname)s - %(message)s',
+                         handlers=[
+                         logging.FileHandler(log_file, encoding='utf-8'),  
+                         logging.StreamHandler(sys.stdout)])
+            print(f'[DEBUG] Logging setup completed successfully')
+        except Exception as e:
+            print(f'[ERROR] Failed to set up logging: {e}')
+            raise
     
-#         # Initialize best candidates pool
-#         print("\n")
-#         print('[INFO] Initialize the best candidates pool')
-#         best_candidates_pool = []
-#         best_loss = float('inf')
-#         MAX_BEST_CANDIDATES = 20
+        # Initialize best candidates pool
+        print("\n")
+        print('[INFO] Initialize the best candidates pool')
+        best_candidates_pool = []
+        best_loss = float('inf')
+        MAX_BEST_CANDIDATES = 20
 
-#         # dimension 1 need 10 EXPLORATION_ITERS
-#         for explore_idx in range(EXPLORATION_ITERS):
-#             print(f'\n[INFO] Exploration {explore_idx + 1}/{EXPLORATION_ITERS}')
-#             logprint(f'\n[INFO] Exploration {explore_idx + 1}/{EXPLORATION_ITERS}')
+        # dimension 1 need 10 EXPLORATION_ITERS
+        for explore_idx in range(EXPLORATION_ITERS):
+            print(f'\n[INFO] Exploration {explore_idx + 1}/{EXPLORATION_ITERS}')
+            logprint(f'\n[INFO] Exploration {explore_idx + 1}/{EXPLORATION_ITERS}')
                 
-#             controller_optim.zero_grad()
-#             pmfs = controller(torch.zeros(CONTROLLER_INPUT_SIZE, device=DEVICE))
-#             scores = torch.zeros(NUM_TREES, device=DEVICE)
+            controller_optim.zero_grad()
+            pmfs = controller(torch.zeros(CONTROLLER_INPUT_SIZE, device=DEVICE))
+            scores = torch.zeros(NUM_TREES, device=DEVICE)
                 
-#                 # Generate and train operator sequences
-#             op_seqs = torch.zeros(NUM_TREES, NUM_NODES, dtype=torch.int, device=DEVICE)
-#             trained_count = 0
+                # Generate and train operator sequences
+            op_seqs = torch.zeros(NUM_TREES, NUM_NODES, dtype=torch.int, device=DEVICE)
+            trained_count = 0
                 
-#             for tree_idx in range(NUM_TREES):
-#                 op_seqs[tree_idx, :] = sampler(pmfs, output=torch.zeros(NUM_NODES, dtype=torch.int, device=DEVICE))
-#                 model = FEX(op_seqs[tree_idx,:], dim=3).to(DEVICE)
-#                 model.apply(weights_init)
-#                 expression = model.expression_visualize()
-#                 parts = expression.split(') + (')
-#                 nonlinear_expr = parts[1].strip()
+            for tree_idx in range(NUM_TREES):
+                op_seqs[tree_idx, :] = sampler(pmfs, output=torch.zeros(NUM_NODES, dtype=torch.int, device=DEVICE))
+                if args.params_name == 'periodic_cascade':
+                    model = FEX_with_force(op_seqs[tree_idx,:], dim=3).to(DEVICE)
+                else:
+                    model = FEX(op_seqs[tree_idx,:], dim=3).to(DEVICE)
+                model.apply(weights_init)
+                expression = model.expression_visualize()
+                parts = expression.split(') + (')
+                nonlinear_expr = parts[1].strip()
                     
-#                 # Skip trivial expressions
-#                 if ("x1" not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" not in nonlinear_expr) or \
-#                     ("x1" in nonlinear_expr and "x2" not in nonlinear_expr and "x3" not in nonlinear_expr and "**" not in nonlinear_expr and "sin" not in nonlinear_expr and "cos" not in nonlinear_expr and "exp" not in nonlinear_expr) or \
-#                     ("x1" not in nonlinear_expr and "x2" in nonlinear_expr and "x3" not in nonlinear_expr and "**" not in nonlinear_expr and "sin" not in nonlinear_expr and "cos" not in nonlinear_expr and "exp" not in nonlinear_expr) or \
-#                     ("x1" not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" in nonlinear_expr and "**" not in nonlinear_expr and "sin" not in nonlinear_expr and "cos" not in nonlinear_expr and "exp" not in nonlinear_expr) or \
-#                     ("x1" in nonlinear_expr and "x2" in nonlinear_expr and "x3" in nonlinear_expr and "**" not in nonlinear_expr and "sin" not in nonlinear_expr and "cos" not in nonlinear_expr and "exp" not in nonlinear_expr):
-#                     print(f"[INFO] Skipping model with trivial nonlinear expression: {expression}")
-#                     logprint(f"[INFO] Skipping model with trivial nonlinear expression: {expression}")
-#                     continue
-                    
-#                 trained_count += 1
+                # Skip trivial expressions
+                if ("x1" not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" not in nonlinear_expr) or \
+                    ("x1" in nonlinear_expr and "x2" not in nonlinear_expr and "x3" not in nonlinear_expr and "**" not in nonlinear_expr and "sin" not in nonlinear_expr and "cos" not in nonlinear_expr and "exp" not in nonlinear_expr) or \
+                    ("x1" not in nonlinear_expr and "x2" in nonlinear_expr and "x3" not in nonlinear_expr and "**" not in nonlinear_expr and "sin" not in nonlinear_expr and "cos" not in nonlinear_expr and "exp" not in nonlinear_expr) or \
+                    ("x1" not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" in nonlinear_expr and "**" not in nonlinear_expr and "sin" not in nonlinear_expr and "cos" not in nonlinear_expr and "exp" not in nonlinear_expr) or \
+                    ("x1" in nonlinear_expr and "x2" in nonlinear_expr and "x3" in nonlinear_expr and "**" not in nonlinear_expr and "sin" not in nonlinear_expr and "cos" not in nonlinear_expr and "exp" not in nonlinear_expr):
+                    print(f"[INFO] Skipping model with trivial nonlinear expression: {expression}")
+                    logprint(f"[INFO] Skipping model with trivial nonlinear expression: {expression}")
+                    continue
+                
+                if args.params_name == 'periodic_cascade':
+                    force_expr = parts[-1].strip()
+                    if "t" not in force_expr:
+                        print(f"[INFO] Skipping model with trivial time variable: {expression}")
+                        logprint(f"[INFO] Skipping model with trival time variable: {expression}")
+                        continue
+                trained_count += 1
                     
 #                 # Train the model
 #                 model_optim = torch.optim.Adam(model.parameters(), lr=FEX_LR)

@@ -83,7 +83,7 @@ class FEX_with_force(nn.Module):
     def force(self, t: Tensor) -> Tensor:
         force_output_first = self.force_a.to(t.device) * t + self.force_b.to(t.device)
         force_output_final = self.unary(self.op_seq[-1], force_output_first)
-        return force_output_final
+        return force_output_final.unsqueeze(-1)  # Add dimension to match other outputs
 
     def forward(self, x: Tensor) -> Tensor:
         # linear part
