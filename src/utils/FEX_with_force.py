@@ -182,9 +182,9 @@ class FEX_with_force(nn.Module):
         nonlinear_expanded = sp.expand(nonlinear_sympy)
         linear_expanded = sp.expand(linear_sympy)
         
-        # For force term, don't expand if it contains exponential functions
-        if 'exp(' in str(force_sympy):
-            force_expanded = force_sympy  # Keep exponential as is
+        # For force term, don't expand if it contains time variable or exponential functions
+        if 't' in str(force_sympy) or 'exp(' in str(force_sympy):
+            force_expanded = force_sympy  # Keep time-dependent and exponential terms as is
         else:
             force_expanded = sp.expand(force_sympy)
 

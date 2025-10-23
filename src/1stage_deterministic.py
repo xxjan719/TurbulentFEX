@@ -421,131 +421,131 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
             
         logprint(f"[INFO] Now we need to train the integrated FEX model")
         print(f"[INFO] Now we need to train the integrated FEX model")
-# else:
-#     print("\n"+"="*60)
-#     print("[INFO] Loading FEX models from previous stage...")
-#     # Ask user whether to train everything in second stage or skip to calculate the measurements
-#     print("\n"+"="*60)
-#     print("Find the candidate operator sequence from training")
+else:
+    print("\n"+"="*60)
+    print("[INFO] Loading FEX models from previous stage...")
+    # Ask user whether to train everything in second stage or skip to calculate the measurements
+    print("\n"+"="*60)
+    print("Find the candidate operator sequence from training")
     
-#     # print(f"[INFO] get the picture of how the single dimension FEX model works")
-#     # coefficients = get_coefficients(load_dir= DIR_TRIAD, DEVICE=args.DEVICE)
-#     # plot_NOISE_LEVEL_EFFECT(coefficients,save_dir=args.LOG_SAVE_PATH)
-#     # print(f"the coefficients are {coefficients}")
-#     op_seqs_all = {}
-#     models = {}
-#     symbols = [sp.symbols(f'x{i+1}') for i in range(dimension)]
-#     print(f'[INFO] the noise level is {args.NOISE_LEVEL}')
+    # print(f"[INFO] get the picture of how the single dimension FEX model works")
+    # coefficients = get_coefficients(load_dir= DIR_TRIAD, DEVICE=args.DEVICE)
+    # plot_NOISE_LEVEL_EFFECT(coefficients,save_dir=args.LOG_SAVE_PATH)
+    # print(f"the coefficients are {coefficients}")
+    op_seqs_all = {}
+    models = {}
+    symbols = [sp.symbols(f'x{i+1}') for i in range(dimension)]
+    print(f'[INFO] the noise level is {args.NOISE_LEVEL}')
     
-#     # Let user select operator sequences for each dimension
-#     print("\n" + "="*60)
-#     print("Selecting operator sequences for each dimension...")
-#     print("="*60)
+    # Let user select operator sequences for each dimension
+    print("\n" + "="*60)
+    print("Selecting operator sequences for each dimension...")
+    print("="*60)
     
-#     for dim in range(1, dimension+1):
-#         print(f'\nSelecting for dimension {dim}...')
-#         file_path = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'best_candidates_pool_summary_{dim}.txt')
-#         selected_sequence = select_operator_sequence(file_path, dim)
-#         if selected_sequence is None:
-#             print(f"[ERROR] Failed to get sequence for dimension {dim}")
-#             sys.exit(1)
+    for dim in range(1, dimension+1):
+        print(f'\nSelecting for dimension {dim}...')
+        file_path = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}", f'best_candidates_pool_summary_{dim}.txt')
+        selected_sequence = select_operator_sequence(file_path, dim)
+        if selected_sequence is None:
+            print(f"[ERROR] Failed to get sequence for dimension {dim}")
+            sys.exit(1)
             
-#         op_seqs = torch.tensor(selected_sequence, device=DEVICE)
-#         op_seqs_all[dim] = op_seqs
-#         print(f"[INFO] {dim} dimension data found. Now let us train integrated FEX model")
-#         print("\n")
-#         model = FEX(op_seqs, dim=dimension).to(DEVICE)
-#         model.apply(weights_init)
-#         models[str(dim)] = model
+        op_seqs = torch.tensor(selected_sequence, device=DEVICE)
+        op_seqs_all[dim] = op_seqs
+        print(f"[INFO] {dim} dimension data found. Now let us train integrated FEX model")
+        print("\n")
+        if args.params_name == 'periodic_cascade':
+            model = FEX_with_force(op_seqs, dim=dimension).to(DEVICE)
+        else:
+            model = FEX(op_seqs, dim=dimension).to(DEVICE)
+        model.apply(weights_init)
+        models[str(dim)] = model
         
-#         # Show initial expression before training
-#         print(f"Initial expression for Dimension {dim}:")
-#         print(f"  Full expression: {model.expression_visualize()}")
-#         print(f"  Simplified expression: {model.expression_visualize_simplified()}")
-#         print("-" * 60)
+        # Show initial expression before training
+        print(f"Initial expression for Dimension {dim}:")
+        print(f"  Full expression: {model.expression_visualize()}")
+        print(f"  Simplified expression: {model.expression_visualize_simplified()}")
+        print("-" * 60)
         
 
-#     print("="*60)
-#     # # Replace the hardcoded symbols with a dimension-variable approach
+    print("="*60)
+    # # Replace the hardcoded symbols with a dimension-variable approach
               
-#     #if dim == 1: # torch.tensor([1, 0, 0, 1, 2, 0, 0, 2, 0, 0, 2, 2], device=DEVICE)
-#     #elif dim == 2: # torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
-#     #elif dim == 3:#torch.tensor([0, 0, 2, 2, 2, 0, 2, 2, 5, 0, 7, 1], device=DEVICE)
-#     # print(f"the coefficents_history is {coefficents_history}")
-#     loss_history = []
-#     # # Create optimizer for all parameters
-#     all_params = []
-#     for model in models.values():
-#         all_params.extend(model.parameters())
-#     model_optim = torch.optim.Adam(all_params, lr=FEX_LR)
+    #if dim == 1: # torch.tensor([1, 0, 0, 1, 2, 0, 0, 2, 0, 0, 2, 2], device=DEVICE)
+    #elif dim == 2: # torch.tensor([2, 1, 2, 2, 0, 0, 1, 2, 0, 0, 2, 2], device=DEVICE)
+    #elif dim == 3:#torch.tensor([0, 0, 2, 2, 2, 0, 2, 2, 5, 0, 7, 1], device=DEVICE)
+    # print(f"the coefficents_history is {coefficents_history}")
+    loss_history = []
+    # # Create optimizer for all parameters
+    all_params = []
+    for model in models.values():
+        all_params.extend(model.parameters())
+    model_optim = torch.optim.Adam(all_params, lr=FEX_LR)
     
-#     # # Training loop
-#     for train_idx in range(TRAIN_EPOCHS_SECOND):
-#         adjust_learning_rate(model_optim, train_idx, FEX_LR, TRAIN_EPOCHS_SECOND)
-#         model_optim.zero_grad()
-#         total_pred_loss = 0
+    # # Training loop
+    for train_idx in range(TRAIN_EPOCHS_SECOND):
+        adjust_learning_rate(model_optim, train_idx, FEX_LR, TRAIN_EPOCHS_SECOND)
+        model_optim.zero_grad()
+        total_pred_loss = 0
 
-#         # Prediction and extra loss
-#         for dim in range(1, dimension+1):
-#             model = models[str(dim)]
-#             # Step 1: Get coefficients with autograd enabled
-#             coeff_x1, coeff_x2, coeff_x3 = model.get_all_linear_nonlinear_coeffs_autograd(dim=dim-1)
-#             # Step 2: Compute rounded values
+        # Prediction and extra loss
+        for dim in range(1, dimension+1):
+            model = models[str(dim)]
+          
+            integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim, params_name=args.params_name)
+            current_state = dataset_tensor[:, :, :-1]
+            u_current = current_state[:, 0, :]
+            u_pred, u_target = integrator.integrate(integration_args)
 
-#             integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor, integration_func=model, index=dim)
-#             current_state = dataset_tensor[:, :, :-1]
-#             u_current = current_state[:, 0, :]
-#             u_pred, u_target = integrator.integrate(integration_args)
-
-#             du_pred = torch.gradient(u_pred, dim=0)[0]
-#             loss = mse(u_pred, u_target)
-#             total_pred_loss += loss
+            du_pred = torch.gradient(u_pred, dim=0)[0]
+            loss = mse(u_pred, u_target)
+            total_pred_loss += loss
         
-#         # Call backward only once after all dimensions are processed
-#         total_pred_loss.backward(retain_graph=True)
-#         model_optim.step()
+        # Call backward only once after all dimensions are processed
+        total_pred_loss.backward(retain_graph=True)
+        model_optim.step()
         
-#         with torch.no_grad():
-#             if train_idx % 50 == 0:
-#                 loss_history.append(total_pred_loss.item())
-#                 for dim in range(1, dimension+1):
-#                     model = models[str(dim)]
-#                     expr = model.expression_visualize_simplified()
-#                     coeffs = extract_coefficients_from_expr(expr, dim)
-#                     for term, value in coeffs.items():
-#                         coefficents_history[dim][term].append(value)
-#                 #print(f"the coefficents_history is {coefficents_history}")
-#             if train_idx % 100 == 0:
-#                 print("\n"+"="*60)
-#                 print(f"Training index: {train_idx}")
-#                 print(f"Loss: {total_pred_loss.item():.6f}")
-#                 # Print expressions for each dimension
-#                 expressions = {}
-#                 for dim in range(1, dimension+1):
-#                     expressions[f'Dimension {dim}'] = models[str(dim)].expression_visualize_simplified()
-#                 print(f"Expression: {expressions}")
-#                 print("="*60)
+        with torch.no_grad():
+            if train_idx % 50 == 0:
+                loss_history.append(total_pred_loss.item())
+                for dim in range(1, dimension+1):
+                    model = models[str(dim)]
+                    expr = model.expression_visualize_simplified()
+                    coeffs = extract_coefficients_from_expr(expr, dim)
+                    for term, value in coeffs.items():
+                        coefficents_history[dim][term].append(value)
+                #print(f"the coefficents_history is {coefficents_history}")
+            if train_idx % 100 == 0:
+                print("\n"+"="*60)
+                print(f"Training index: {train_idx}")
+                print(f"Loss: {total_pred_loss.item():.6f}")
+                # Print expressions for each dimension
+                expressions = {}
+                for dim in range(1, dimension+1):
+                    expressions[f'Dimension {dim}'] = models[str(dim)].expression_visualize_simplified()
+                print(f"Expression: {expressions}")
+                print("="*60)
 
-#         if train_idx == TRAIN_EPOCHS_SECOND-1:
-#             final_expressions = {}
-#             for dim in range(1, dimension+1):
-#                 final_expr = models[str(dim)].expression_visualize_simplified()
-#                 final_expressions[f'dimension_{dim}'] = final_expr
-#             loss_history_dict = {1: loss_history, 2: loss_history, 3: loss_history}
-#             save_dir = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}")
-#             plot_training_progress_grid(loss_history_dict, coefficents_history, final_expr, args.NOISE_LEVEL,save_dir=save_dir)
+        if train_idx == TRAIN_EPOCHS_SECOND-1:
+            final_expressions = {}
+            for dim in range(1, dimension+1):
+                final_expr = models[str(dim)].expression_visualize_simplified()
+                final_expressions[f'dimension_{dim}'] = final_expr
+            loss_history_dict = {1: loss_history, 2: loss_history, 3: loss_history}
+            save_dir = os.path.join(args.LOG_SAVE_PATH, f"noise_{args.NOISE_LEVEL}")
+            plot_training_progress_grid(loss_history_dict, coefficents_history, final_expr, args.NOISE_LEVEL,save_dir=save_dir)
             
-#             # Save final expressions to text file
-#             final_expr_save_path = os.path.join(save_dir, "final_expressions.txt")
-#             os.makedirs(os.path.dirname(final_expr_save_path), exist_ok=True)
-#             with open(final_expr_save_path, "w") as f:
-#                 f.write("Final Expressions After Training:\n")
-#                 f.write("=" * 50 + "\n")
-#                 for dim, expr in final_expressions.items():
-#                     f.write(f"{dim}: {expr}\n")
-#                 f.write("\nTraining completed successfully!\n")
-#             print(f"[INFO] Final expressions saved to: {final_expr_save_path}")
-#             print("[SUCCESS] First stage training completed successfully! you may need to do the second stage training")
+            # Save final expressions to text file
+            final_expr_save_path = os.path.join(save_dir, "final_expressions.txt")
+            os.makedirs(os.path.dirname(final_expr_save_path), exist_ok=True)
+            with open(final_expr_save_path, "w") as f:
+                f.write("Final Expressions After Training:\n")
+                f.write("=" * 50 + "\n")
+                for dim, expr in final_expressions.items():
+                    f.write(f"{dim}: {expr}\n")
+                f.write("\nTraining completed successfully!\n")
+            print(f"[INFO] Final expressions saved to: {final_expr_save_path}")
+            print("[SUCCESS] First stage training completed successfully! you may need to do the second stage training")
             
 
 

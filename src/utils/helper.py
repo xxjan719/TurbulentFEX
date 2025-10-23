@@ -544,3 +544,100 @@ def extract_coefficients_from_expr(expr: str, dim: int) -> dict:
 
 
 
+
+def simplify_expression_for_periodic_cascade(expr: str, dim: int) -> str:
+    """
+    Simplifies expressions for periodic cascade to show only essential terms:
+    x1, x2, x3, x1*x2, x2*x3, x1*x3, and sin(2π/8 * t)
+    """
+    import re
+    import sympy as sp
+    
+    # Parse the expression with sympy
+    try:
+        expr_sympy = sp.sympify(expr)
+    except:
+        return expr  # Return original if parsing fails
+    
+    # Define symbols
+    x1, x2, x3, t = sp.symbols('x1 x2 x3 t')
+    
+    # Collect coefficients for each term type
+    coeffs = {}
+    
+    # Linear terms
+    coeffs['x1'] = expr_sympy.coeff(x1)
+    coeffs['x2'] = expr_sympy.coeff(x2) 
+    coeffs['x3'] = expr_sympy.coeff(x3)
+    
+    # Cross terms
+    coeffs['x1x2'] = expr_sympy.coeff(x1*x2)
+    coeffs['x2x3'] = expr_sympy.coeff(x2*x3)
+    coeffs['x1x3'] = expr_sympy.coeff(x1*x3)
+    
+    # Time-dependent terms - look for sin patterns
+    sin_pattern = r'sin\([^)]*t[^)]*\)'
+    sin_matches = re.findall(sin_pattern, expr)
+    if sin_matches:
+        # Extract the sin term and try to simplify it
+        sin_term = sin_matches[0]
+        # Try to extract frequency from sin(freq*t + phase)
+        freq_match = re.search(r'sin\(([^)]*t[^)]*)\)', sin_term)
+        if freq_match:
+            sin_expr = freq_match.group(1)
+            # Try to simplify the frequency to 2π/8 ≈ 0.785
+            try:
+                sin_expr_sympy = sp.sympify(sin_expr)
+                # Check if it's close to 2π/8
+                if abs(float(sin_expr_sympy) - 2*3.14159/8) < 0.1:
+                    coeffs['sin_term'] = 'sin(2*pi/8*t)'
+                else:
+                    coeffs['sin_term'] = f'sin({sin_expr_sympy})'
+            except:
+                coeffs['sin_term'] = sin_term
+        else:
+            coeffs['sin_term'] = sin_term
+    else:
+        coeffs['sin_term'] = '0'
+    
+    # Constant term
+    constant_expr = expr_sympy.subs([(x1, 0), (x2, 0), (x3, 0), (t, 0)])
+    coeffs['constant'] = float(constant_expr) if constant_expr.is_number else 0
+    
+    # Build simplified expression
+    terms = []
+    
+    # Add linear terms
+    if abs(coeffs['x1']) > 1e-6:
+        terms.append(f"{coeffs['x1']:.1f}*x1")
+    if abs(coeffs['x2']) > 1e-6:
+        terms.append(f"{coeffs['x2']:.1f}*x2")
+    if abs(coeffs['x3']) > 1e-6:
+        terms.append(f"{coeffs['x3']:.1f}*x3")
+    
+    # Add cross terms
+    if abs(coeffs['x1x2']) > 1e-6:
+        terms.append(f"{coeffs['x1x2']:.1f}*x1*x2")
+    if abs(coeffs['x2x3']) > 1e-6:
+        terms.append(f"{coeffs['x2x3']:.1f}*x2*x3")
+    if abs(coeffs['x1x3']) > 1e-6:
+        terms.append(f"{coeffs['x1x3']:.1f}*x1*x3")
+    
+    # Add time-dependent term
+    if coeffs['sin_term'] != '0':
+        terms.append(coeffs['sin_term'])
+    
+    # Add constant term
+    if abs(coeffs['constant']) > 1e-6:
+        terms.append(f"{coeffs['constant']:.1f}")
+    
+    # Join terms with ' + '
+    simplified = ' + '.join(terms)
+    
+    # Handle negative signs properly
+    simplified = simplified.replace(' + -', ' - ')
+    
+    return simplified
+
+
+

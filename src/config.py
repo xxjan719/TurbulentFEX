@@ -250,7 +250,7 @@ class Config:
                             help='Quantile method for controller')
         # FEX training settings
         parser.add_argument('--EXPLORATION_ITERS', type=int, 
-                            default=10,
+                            default=20,
                             help='Number of exploration iterations')
         parser.add_argument('--NUM_TREES', type=int, 
                             default=200,
@@ -289,6 +289,8 @@ class Config:
                             default = 2048,
                             help='Short size for FEX-DM')
         
+
+        
         parser.add_argument('--NN_SOLVER_LR',type=float,
                             default = 0.01,
                             help='Learning rate for NN solver')
@@ -322,7 +324,7 @@ class Config:
                             default = None,
                             help='Path to save figure.')
         parser.add_argument('--TRAIN_THREE_DIMENSION_INTEGRATED',type=bool,
-                            default = False,
+                            default = True,
                             help='Whether to train the FEX with ground truth data.')
         return parser
     
