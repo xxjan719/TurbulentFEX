@@ -321,13 +321,7 @@ def FEX_with_force_model_learned(x,
         
         expr_str = expressions[dim_key]
         
-        # Replace x1, x2, x3, t with the actual tensor variables
-        # Note: We need to handle the expressions carefully to avoid tensor operations issues
-        expr_str = expr_str.replace('x1', 'x1_tensor')
-        expr_str = expr_str.replace('x2', 'x2_tensor') 
-        expr_str = expr_str.replace('x3', 'x3_tensor')
-        expr_str = expr_str.replace('t', 't_tensor')
-        
+        # The expressions already use x1, x2, x3, t directly - no need to replace
         # Create local variables for evaluation
         x1_tensor = x1
         x2_tensor = x2
@@ -342,14 +336,37 @@ def FEX_with_force_model_learned(x,
             x3_np = x3.detach().cpu().numpy() if hasattr(x3, 'detach') else x3
             t_np = t.detach().cpu().numpy() if hasattr(t, 'detach') else t
             
-            # Replace variables in expression
-            expr_np = expr_str.replace('x1_tensor', 'x1_np')
-            expr_np = expr_np.replace('x2_tensor', 'x2_np')
-            expr_np = expr_np.replace('x3_tensor', 'x3_np')
-            expr_np = expr_np.replace('t_tensor', 't_np')
+            # Replace variables in expression using word boundaries to avoid conflicts
+            import re
+            expr_np = re.sub(r'\bx1\b', 'x1_np', expr_str)
+            expr_np = re.sub(r'\bx2\b', 'x2_np', expr_np)
+            expr_np = re.sub(r'\bx3\b', 'x3_np', expr_np)
+            expr_np = re.sub(r'\bt\b', 't_np', expr_np)
             
-            # Evaluate the expression
-            result = eval(expr_np)
+            # Import necessary mathematical functions for evaluation
+            import numpy as np
+            import math
+            
+            # Create a safe evaluation context with mathematical functions
+            safe_dict = {
+                'x1_np': x1_np,
+                'x2_np': x2_np, 
+                'x3_np': x3_np,
+                't_np': t_np,
+                'sin': np.sin,
+                'cos': np.cos,
+                'tan': np.tan,
+                'exp': np.exp,
+                'log': np.log,
+                'sqrt': np.sqrt,
+                'abs': np.abs,
+                'pi': np.pi,
+                'e': np.e,
+                'np': np
+            }
+            
+            # Evaluate the expression with safe context
+            result = eval(expr_np, {"__builtins__": {}}, safe_dict)
             
             # Convert back to tensor if needed
             if hasattr(x1, 'detach'):

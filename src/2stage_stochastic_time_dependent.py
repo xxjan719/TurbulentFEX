@@ -87,21 +87,35 @@ if choice == '1':
     # residuals, u_current, residual_cov_truth = generate_euler_residue(FEX_model_ground_truth_equipart, data, dt)
     def learned_model_wrapper(x):
         return FEX_model_learned(x, 
-                                 model_name = args.Model,
-                                 params_name = args.params_name,
-                                 noise_level = args.NOISE_LEVEL,
-                                 device=device)
-    
-    residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_wrapper, data, dt)
+                                    model_name = args.Model,
+                                    params_name = args.params_name,
+                                    noise_level = args.NOISE_LEVEL,
+                                    device=device)
+    def learned_model_with_force_wrapper(x):
+        return FEX_with_force_model_learned(x, 
+                                                model_name = args.Model,
+                                                params_name = args.params_name,
+                                                noise_level = args.NOISE_LEVEL,
+                                                device=device)
+    if args.params_name in ['equipart', 'cascade','dual_cascade']:
+        residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_wrapper, data, dt)
+    elif args.params_name == 'periodic_cascade':
+        residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_with_force_wrapper, data, dt)
     print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
     np.save(os.path.join(common_save_dir,'residual_cov_truth.npy'), residual_cov_truth)
     print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
     scaler = np.ones(3) * args.DIFF_SCALE
     train_size = args.RESIDUAL_SAMPLES
+    
+    # Select only the first train_size samples for processing
+    u_current_subset = u_current[:train_size]
+    residuals_subset = residuals[:train_size]
+    print(f'[INFO] Selected subset: {u_current_subset.shape} samples for processing')
+    
     #===================================================================================
     if not os.path.exists(os.path.join(common_save_dir,'ODE_Solution.npy')) and not os.path.exists(os.path.join(common_save_dir,'ZT_Solution.npy')):
         ODE_Solution,ZT_Solution = generate_second_step(
-        u_current, residuals, scaler, dt, train_size, device,
+        u_current_subset, residuals_subset, scaler, dt, train_size, device,
         num_time_points=1001  # Only process 100 time points
     )
         print(f'[INFO] the ODE solution shape is: {ODE_Solution.shape}')
