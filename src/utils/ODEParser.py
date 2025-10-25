@@ -166,7 +166,18 @@ def generate_euler_residue(func, data, dt):
         u_current_reshaped[:, :, t] = u_current
         
         # Euler prediction
-        func_output = func(u_current)
+        # Check if this is the learned_model_with_force_wrapper (for periodic_cascade)
+        if func.__name__ == 'learned_model_with_force_wrapper':
+            # Add time dimension: current time = t * dt to match forcing calculation
+            # Forcing is calculated with j=0,1,2... and time_point = j * Dt
+            # Simulation uses i=1,2,3... and t = i * Dt, but tmM[i-1] corresponds to time_point = (i-1) * Dt
+            # So for residual calculation with t=0,1,2..., the time should be t * dt
+            current_time = t * dt
+            time_column = np.full((u_current.shape[0], 1), current_time)
+            u_current_with_time = np.concatenate([u_current, time_column], axis=1)
+            func_output = func(u_current_with_time)
+        else:
+            func_output = func(u_current)
         u_euler_pred = u_current + dt * func_output
         
         # Calculate residuals for this time step

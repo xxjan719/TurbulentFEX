@@ -101,6 +101,7 @@ if choice == '1':
         residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_wrapper, data, dt)
     elif args.params_name == 'periodic_cascade':
         residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_with_force_wrapper, data, dt)
+    print(residuals)
     print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
     np.save(os.path.join(common_save_dir,'residual_cov_truth.npy'), residual_cov_truth)
     print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
@@ -788,7 +789,11 @@ elif choice == '2':
     print("\n[INFO] Running comprehensive trajectory testing...")
     m0,var0 = MC_triad_initial_value()
     params = params_init(args.params_name)
-    FEX_model_check = FEX_model_learned
+    # Choose the correct model based on params_name
+    if args.params_name in ['equipart', 'cascade', 'dual_cascade']:
+        FEX_model_check = FEX_model_learned
+    elif args.params_name == 'periodic_cascade':
+        FEX_model_check = FEX_with_force_model_learned
 
     L = params['L']
     G = params['G']
@@ -938,15 +943,28 @@ elif choice == '2':
     
         # RK4 for the deterministic part (FEX model)
         # Step 1
-        # Step 1
-        k1_det = FEX_model_check(current_tensor,params_name=args.params_name,noise_level = args.NOISE_LEVEL,device =device) * dt
+        if args.params_name == 'periodic_cascade':
+            # For periodic_cascade, add time dimension
+            current_time = idx * dt
+            time_column = torch.full((current_tensor.shape[0], 1), current_time, dtype=torch.float32).to(device)
+            current_tensor_with_time = torch.cat([current_tensor, time_column], dim=1)
+            k1_det = FEX_model_check(current_tensor_with_time, model_name=args.Model, params_name=args.params_name, noise_level=args.NOISE_LEVEL, device=device) * dt
+        else:
+            # For other cases, use regular 3D input
+            k1_det = FEX_model_check(current_tensor, model_name=args.Model, params_name=args.params_name, noise_level=args.NOISE_LEVEL, device=device) * dt
+        
         k1_det_np = k1_det.cpu().detach().numpy()
         u1 = current_tensor +  k1_det
 
-      
-
-         # Step 2
-        k2_det = FEX_model_check(u1,params_name=args.params_name,noise_level = args.NOISE_LEVEL,device =device) * dt
+        # Step 2
+        if args.params_name == 'periodic_cascade':
+            # For periodic_cascade, add time dimension
+            u1_with_time = torch.cat([u1, time_column], dim=1)
+            k2_det = FEX_model_check(u1_with_time, model_name=args.Model, params_name=args.params_name, noise_level=args.NOISE_LEVEL, device=device) * dt
+        else:
+            # For other cases, use regular 3D input
+            k2_det = FEX_model_check(u1, model_name=args.Model, params_name=args.params_name, noise_level=args.NOISE_LEVEL, device=device) * dt
+        
         k2_det_np = k2_det.cpu().detach().numpy()
         u2 = current_tensor +  k2_det
     
