@@ -811,6 +811,10 @@ elif choice == '2':
     tmS = np.zeros(Nt, dtype=np.float32)
     if args.params_name == 'dual_cascade':
          tmM[:] = np.array([0.0, -1.0, 1.0], dtype=np.float32)  
+    elif args.params_name == 'periodic_cascade':
+         # Load forcing from params
+        tmM = params['tmM'].astype(np.float32)
+        tmS = params['tmS'].astype(np.float32)  
     
     initial_state = np.random.normal(loc=m0, scale=np.sqrt(var0), size=(NPATH, 3))    
     x_pred_initial = torch.ones(NPATH, 3).to(device,dtype=torch.float32) * torch.tensor(m0).to(device,dtype=torch.float32)
@@ -939,7 +943,7 @@ elif choice == '2':
         # u_pred_all[:,:,idx] = current_pred_state
         current_state = next_state
 
-        current_tensor = torch.tensor(current_pred_state, dtype=torch.float32)
+        current_tensor = torch.tensor(current_pred_state, dtype=torch.float32).to(device)
     
         # RK4 for the deterministic part (FEX model)
         # Step 1
