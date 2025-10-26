@@ -97,6 +97,38 @@ def params_init(case_name = None,
         period_value = 1/params['fr'] * 2*np.pi
         params['namefig'] = f"periodic_cascade{period_value:.4f}"
     
+
+    elif case_name == 'random_cascade_deterministic':
+        # System matrices
+        params['L'] = np.zeros((3,3))
+        params['G'] = np.diag([1,2,2])
+        params['B'] = np.array([2,-1,-1])
+        # Noise settings - same as periodic_cascade (constant noise)
+        params['SS'] = np.diag([np.sqrt(10), np.sqrt(10**(-2)), np.sqrt(10**(-2))])
+        params['SSt'] = np.diag([np.sqrt(1),np.sqrt(2),np.sqrt(2)])
+
+        # OU process parameters
+        params['fr'] = 2*np.pi/2 # frequency of the forcing
+        theta = params['fr']/(2*np.pi) 
+        sigma = np.sqrt(2*theta)
+
+        # Generate OU process forcing
+        tmM = np.zeros((params['Nt'], 3))
+        tmt = 0.0
+
+        for j in range(params['Nt']):
+            dW = np.sqrt(params['Dt'])*np.random.randn()
+            tmt = tmt - theta*tmt*params['Dt'] + sigma*dW
+            tmM[j,:] = tmt*np.array([1, 1, 1])
+        
+        params['tmM'] = tmM
+        params['tmS'] = np.zeros(params['Nt'])  # No tmS needed
+        
+        # Figure title
+        period = (1/params['fr'])*2*np.pi
+        params['namefig'] = f"random_deterministic_{period:.4f}"
+
+
     elif case_name == 'random_cascade': # random oscillation between 1-2
         # System matrices
         params['L'] = np.zeros((3,3))
@@ -447,10 +479,11 @@ if __name__ == "__main__":
     #params = params_init('equipart')
     #plot_latex_formula(params, model_path)
     # #print("Matrix coefficients extraction completed.")
-    noise_level = 2.0
+    noise_level = 1.0
     m0, var0 = MC_triad_initial_value()
-    params = params_init('equipart')
-    data_save_path = Path(os.path.join(os.path.dirname(__file__), 'Results', 'equipart', f'noise_{noise_level}',f'simulation_results_noise_{noise_level}.npz'))
+    params = params_init('random_cascade_deterministic')
+    data_save_path = Path(os.path.join(os.path.dirname(__file__), 'Results', 'random_cascade_deterministic', f'noise_{noise_level}',f'simulation_results_noise_{noise_level}.npz'))
+    os.makedirs(os.path.dirname(data_save_path), exist_ok=True)
     dataset, mean_MC, cov_MC, moment3_MC, moment3_MC_norm,Energy_MC, Energy_dyn = MC_triad_direct(params, m0, var0, noise_level=noise_level)
     print(dataset.shape)
     np.savez(
