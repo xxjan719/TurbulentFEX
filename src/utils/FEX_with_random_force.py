@@ -71,9 +71,9 @@ class ForceFEX(BaseFEX):
         # Forward: unary(op_seq[3], x) -> binary(op_seq[1], ...) -> unary(op_seq[0], ...)
         
         # First unary operation (op_seq[3])
-        first = self._op_to_str(self.op_seq[3].item(), "x")
+        first = self._op_to_str(self.op_seq[3].item(), "m")
         # Second unary operation (op_seq[2])  
-        second = self._op_to_str(self.op_seq[2].item(), "x")
+        second = self._op_to_str(self.op_seq[2].item(), "m")
         # Binary operation (op_seq[1])
         third = self._binary_to_str(self.op_seq[1].item(), first, second)
         # Final unary operation (op_seq[0])

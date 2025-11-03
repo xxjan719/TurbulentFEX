@@ -57,7 +57,7 @@ print("="*60)
 while True:
 # choice = '1' #
     choice = input("\nChoose option (1 or 2 ):").strip()
-    if choice in ['1','2','3']:
+    if choice in ['1','2']:
         break
     else:
         print("Please enter '1' or '2'.")

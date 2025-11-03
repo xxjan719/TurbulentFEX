@@ -66,7 +66,8 @@ class Body4TrainIntegrator:
             # Use the same structure as current_state for time, then reshape
             time_flat = time_steps.unsqueeze(0).expand(current_state.shape[0], -1).reshape(-1, 1)
             u_flat = torch.cat([u1_flat, u2_flat, u3_flat, time_flat], dim=1)
-
+        elif params_name == 'random_cascade_deterministic':
+            pass
         
         ui_next = next_state[:,index-1,:]
         ui = current_state[:,index-1,:]

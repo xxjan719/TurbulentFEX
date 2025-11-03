@@ -124,6 +124,8 @@ pool = Pool()
 
 if args.params_name == 'periodic_cascade':
     PMF_SIZES = tuple([len(unary_ops), len(binary_ops), len(unary_ops), len(binary_ops)] * dimension)+(len(unary_ops),)
+elif args.params_name == 'random_cascade_deterministic':
+    PMF_SIZES = tuple([len(unary_ops), len(binary_ops), len(unary_ops), len(binary_ops)] * (dimension+1))
 else:
     PMF_SIZES = tuple([len(unary_ops), len(binary_ops), len(unary_ops), len(binary_ops)] * dimension)
 NUM_NODES = len(PMF_SIZES)
@@ -203,12 +205,16 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
                 print(f"Generated operator sequence {tree_idx}: {op_seqs[tree_idx, :].tolist()}")
                 if args.params_name == 'periodic_cascade':
                     model = FEX_with_force(op_seqs[tree_idx,:], dim=3).to(DEVICE)
+                elif args.params_name == 'random_cascade_deterministic':
+                    model = FEX_with_random_force(op_seqs[tree_idx,:], dim=3).to(DEVICE)
                 else:
                     model = FEX(op_seqs[tree_idx,:], dim=3).to(DEVICE)
                 model.apply(weights_init)
+                    
                 expression = model.expression_visualize()
                 parts = expression.split(') + (')
                 nonlinear_expr = parts[1].strip()
+
                     
                 # Skip trivial expressions
                 if ("x1" not in nonlinear_expr and "x2" not in nonlinear_expr and "x3" not in nonlinear_expr) or \
