@@ -19,14 +19,12 @@ from utils.Train_Integrator import Body4TrainIntegrationArgs, Body4TrainIntegrat
 from Example.MC_triad.MC_triad import params_init, MC_triad_direct, MC_triad_initial_value
 from config import DIR_EXAMPLE
 
-def test_fex_dim1_ground_truth(use_ground_truth_tmM=False, hardcode_ou=False):
+def test_fex_dim1_ground_truth(use_ground_truth_tmM=False):
     """
     Test and optimize FEX_with_random_force model for dimension 1 using random_cascade_deterministic dataset
     
     Args:
         use_ground_truth_tmM: If True, use ground truth tmM values for OU loss (easier).
-        hardcode_ou: If True, hardcode Force_FEX to return -0.5*m (known OU formula) instead of learning it.
-                     This helps diagnose if the problem is with learning the formula or with m_t values.
                               If False, learn m_t from state dynamics only (more challenging).
     """
     
@@ -62,7 +60,7 @@ def test_fex_dim1_ground_truth(use_ground_truth_tmM=False, hardcode_ou=False):
         print(f"[INFO] Generated and saved dataset shape: {dataset_full.shape}")
     
     # Select subset for testing
-    test_samples = 10000
+    test_samples = 1000
     np.random.seed(42)
     selected_indices = np.random.choice(dataset_full.shape[0], size=min(test_samples, dataset_full.shape[0]), replace=False)
     dataset = dataset_full[selected_indices]  # Shape: (test_samples, 3, time_steps)
@@ -92,12 +90,10 @@ def test_fex_dim1_ground_truth(use_ground_truth_tmM=False, hardcode_ou=False):
     
     print(f"\n{'='*80}")
     print(f"Testing Operator Sequence: {test_op_seq}")
-    if hardcode_ou:
-        print(f"[HARDCODED OU] Force_FEX(m) = -0.5*m (not learning the formula)")
     print(f"{'='*80}")
     
     op_seqs = torch.tensor(test_op_seq)
-    model = FEX_with_random_force(op_seqs, dim=3, hardcode_ou=hardcode_ou)
+    model = FEX_with_random_force(op_seqs, dim=3)
     
     # Setup integrator (same as in 1stage_deterministic.py)
     integrator_params = Body4TrainIntegrationParams(dt=dt)
@@ -119,6 +115,16 @@ def test_fex_dim1_ground_truth(use_ground_truth_tmM=False, hardcode_ou=False):
     print(f"  force_bias_1: {model.Force_FEX.force_bias_1.item():.6f}")
     print(f"  force_bias_2: {model.Force_FEX.force_bias_2.item():.6f}")
     print(f"  force_bias_3: {model.Force_FEX.force_bias_3.item():.6f}")
+    
+    # Initialize m_t_expanded from ground truth tmM if available
+    # This helps m(t) start at the correct scale to capture the random forcing
+    # NOTE: We don't initialize here because the parameter is created dynamically during forward pass
+    # Instead, we'll let it be created naturally and just ensure m_t base parameter has correct scale
+    if 'tmM' in params:
+        tmM_gt = params['tmM']  # Shape: (Nt, 3)
+        print(f"[INFO] Ground truth tmM available - mean: {tmM_gt.mean():.6f}, std: {tmM_gt.std():.6f}")
+        print(f"  Note: m_t_expanded will be initialized with OU process scale (std ≈ 1.0)")
+        print(f"  It will be learned from state dynamics during training")
     
     # Initial evaluation
     print(f"\n[Initial Evaluation]")
@@ -175,8 +181,26 @@ def test_fex_dim1_ground_truth(use_ground_truth_tmM=False, hardcode_ou=False):
         # Forward pass - get predictions and m_t values from model
         pred_train, label_train, m_t_train, m_t_next_train = integrator.integrate(integration_args)
         
-        # State dynamics loss
+        # State dynamics loss: ||ẋ_target - (FEX(x) + m_t)||
         mse_state_train = mse_loss_fn(pred_train, label_train)
+        
+        # RESIDUAL MATCHING LOSS: Ensure m_t = r_t = ẋ_t - FEX(x_t)
+        # According to the formulation: ẋ_t = FEX(x_t) + m_t, so m_t should equal the residual
+        # This enforces that m_t captures the unexplained residual, not just any value
+        # Compute FEX(x_t) = pred_train - m_t_train (deterministic part, since pred_train = FEX(x_t) + m_t)
+        # Then r_t = label_train - FEX(x_t) should equal m_t_train
+        fex_deterministic = pred_train - m_t_train  # FEX(x_t) without m_t
+        residual_actual = label_train - fex_deterministic  # r_t = ẋ_t - FEX(x_t)
+        mse_residual = mse_loss_fn(residual_actual, m_t_train)  # ||r_t - m_t||^2
+        
+        # Debug: Print residual matching info
+        if (epoch + 1) % 1000 == 0 or epoch == 0:
+            print(f"  [Residual Matching Epoch {epoch+1}]:")
+            print(f"    Residual r_t = ẋ_t - FEX(x_t) sample: {residual_actual[:5].detach().cpu().flatten()}")
+            print(f"    m_t sample: {m_t_train[:5].detach().cpu().flatten()}")
+            print(f"    Residual loss: {mse_residual.item():.6f}")
+            print(f"    Residual mean: {residual_actual.mean().item():.6f}, m_t mean: {m_t_train.mean().item():.6f}")
+            print(f"    Residual std: {residual_actual.std().item():.6f}, m_t std: {m_t_train.std().item():.6f}")
         
         # OU process evolution loss
         # Use model's learned m_t values - they should learn to match the OU process
@@ -406,33 +430,8 @@ def test_fex_dim1_ground_truth(use_ground_truth_tmM=False, hardcode_ou=False):
             dm_dt_pred_train = model.Force_FEX(m_t_train)
             mse_ou_train = mse_loss_fn(dm_dt_actual_train, dm_dt_pred_train)
             
-            # ADDITIONAL CONSTRAINT: Regularize m_t to follow OU process structure
-            # (Only if not hardcoded - if hardcoded, Force_FEX already returns -0.5*m)
-            if not hardcode_ou:
-                # We know the OU process should be: dm/dt = -theta*m + noise
-                # So we add a regularization term: ||Force_FEX(m_t) - (-theta*m_t)||
-                # This encourages Force_FEX to learn the correct deterministic part: -0.5*m
-                theta = 0.5  # Known OU parameter
-                ou_deterministic_target = -theta * m_t_train  # Expected deterministic part: -0.5*m
-                ou_regularization = mse_loss_fn(dm_dt_pred_train, ou_deterministic_target)
-                
-                # Weight the regularization (start small, increase if needed)
-                regularization_weight = 0.1  # Can be tuned
-                mse_ou_train = mse_ou_train + regularization_weight * ou_regularization
-                
-                # Debug: Print regularization effect
-                if (epoch + 1) % 1000 == 0 or epoch == 0:
-                    print(f"  [OU Regularization Epoch {epoch+1}]:")
-                    print(f"    Force_FEX(m_t) sample: {dm_dt_pred_train[:5].detach().cpu().flatten()}")
-                    print(f"    Expected -0.5*m_t: {ou_deterministic_target[:5].detach().cpu().flatten()}")
-                    print(f"    Regularization loss: {ou_regularization.item():.6f}")
-                    print(f"    Weighted reg: {regularization_weight * ou_regularization.item():.6f}")
-            else:
-                # If hardcoded, Force_FEX already returns -0.5*m, so no regularization needed
-                if (epoch + 1) % 1000 == 0 or epoch == 0:
-                    print(f"  [Hardcoded OU Epoch {epoch+1}]: Force_FEX(m) = -0.5*m (hardcoded)")
-                    print(f"    Force_FEX(m_t) sample: {dm_dt_pred_train[:5].detach().cpu().flatten()}")
-                    print(f"    Expected -0.5*m_t: {(-0.5 * m_t_train)[:5].detach().cpu().flatten()}")
+            # Let Force_FEX learn the OU process formula naturally from the data
+            # No hardcoding or regularization - just learn from (m_t_next - m_t)/dt
             
             # Note: This is more challenging because:
             # - m_t is learned from state dynamics (not ground truth)
@@ -542,7 +541,10 @@ def test_fex_dim1_ground_truth(use_ground_truth_tmM=False, hardcode_ou=False):
             print(f"  [Debug Epoch {epoch+1}] ========================================")
         
         # Total loss
-        total_loss_train = mse_state_train + mse_ou_train
+        # Total loss: state dynamics + residual matching + OU process evolution
+        # Weight the residual loss to balance with other terms
+        residual_weight = 1.0  # Can be tuned if needed
+        total_loss_train = mse_state_train + residual_weight * mse_residual + mse_ou_train
         
         # Adjust learning rate based on loss
         if total_loss_train.item() > 2.0:
@@ -568,12 +570,13 @@ def test_fex_dim1_ground_truth(use_ground_truth_tmM=False, hardcode_ou=False):
                 'epoch': epoch + 1,
                 'total_loss': total_loss_train.item(),
                 'mse_state': mse_state_train.item(),
+                'mse_residual': mse_residual.item(),
                 'mse_ou': mse_ou_train.item(),
                 'learning_rate': current_lr,
             })
             
             print(f"  Epoch {epoch + 1:6d}/{train_epochs}: Total Loss = {total_loss_train.item():.6f} "
-                  f"(State: {mse_state_train.item():.6f}, OU: {mse_ou_train.item():.6f}, LR: {current_lr:.2f})")
+                  f"(State: {mse_state_train.item():.6f}, Residual: {mse_residual.item():.6f}, OU: {mse_ou_train.item():.6f}, LR: {current_lr:.4f})")
             
             # Print simplified formula every 100 epochs
             try:
@@ -636,9 +639,9 @@ def test_fex_dim1_ground_truth(use_ground_truth_tmM=False, hardcode_ou=False):
 
 
 if __name__ == "__main__":
-    # Test with hardcoded OU process formula (-0.5*m) to see what happens
+    # Test with original FEX learning the OU process formula from data
     print("="*80)
-    print("Testing with HARDCODED OU process: Force_FEX(m) = -0.5*m")
-    print("This will show if the problem is with learning the formula or with m_t values")
+    print("Testing with FEX learning OU process formula from data")
+    print("Force_FEX will learn dm/dt = Force_FEX(m_t) from (m_t_next - m_t)/dt")
     print("="*80)
-    test_fex_dim1_ground_truth(use_ground_truth_tmM=False, hardcode_ou=True)
+    test_fex_dim1_ground_truth(use_ground_truth_tmM=False)

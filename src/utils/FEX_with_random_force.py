@@ -43,10 +43,9 @@ class BaseFEX(nn.Module):
 
 
 class ForceFEX(BaseFEX):
-    def __init__(self, op_seq: torch.Tensor, hardcode_ou: bool = False)-> None:
+    def __init__(self, op_seq: torch.Tensor)-> None:
         super().__init__()
         self.op_seq = op_seq
-        self.hardcode_ou = hardcode_ou  # If True, return -0.5*m directly
         self.force_weight_1 = nn.Parameter(torch.ones(1))
         self.force_weight_2 = nn.Parameter(torch.ones(1))
         self.force_weight_3 = nn.Parameter(torch.ones(1))
@@ -61,13 +60,7 @@ class ForceFEX(BaseFEX):
         self.exprs_2 = ""
 
     def forward(self, x: Tensor) -> Tensor:
-        # If hardcode_ou is True, directly return -0.5*m (known OU process formula)
-        if self.hardcode_ou:
-            theta = 0.5  # Known OU parameter
-            return -theta * x
-        
-        # Otherwise, learn the formula using weights and biases
-        # Apply weights and biases following the pattern from FEX models
+        # Learn the formula using weights and biases following the pattern from FEX models
         # op_seq[3] -> first unary with weight_1 and bias_1
         first_part = self.force_weight_1.to(x.device) * self.unary(self.op_seq[3], x) + self.force_bias_1.to(x.device)
         # op_seq[2] -> second unary with weight_2 and bias_2
@@ -80,11 +73,7 @@ class ForceFEX(BaseFEX):
     
     def expression_visualize(self,) -> str:
         """Generate expression string by following the forward pass structure"""
-        # If hardcoded, return the known formula
-        if self.hardcode_ou:
-            return "-0.5*m"
-        
-        # Otherwise, reconstruct the expression based on the forward pass with weights and biases
+        # Reconstruct the expression based on the forward pass with weights and biases
         # Forward: weight_1 * unary(op_seq[3], m) + bias_1 -> binary(op_seq[1], ...) -> unary(op_seq[0], ...)
         
         # First unary operation (op_seq[3]) with weight_1 and bias_1
@@ -143,11 +132,7 @@ class ForceFEX(BaseFEX):
     def expression_visualize_simplified(self,) -> str:
         """Generate and simplify the expression"""
         expr = self.expression_visualize()
-        # If hardcoded, return as is
-        if self.hardcode_ou:
-            return expr
-        
-        # Otherwise, convert to sympy and expand
+        # Convert to sympy and expand
         try:
             expr_sympy = sp.sympify(expr)
             expanded = sp.expand(expr_sympy)
@@ -157,7 +142,7 @@ class ForceFEX(BaseFEX):
 
 
 class FEX_with_random_force(BaseFEX):
-    def __init__(self, op_seq: torch.Tensor, dim: int = 3, Force_FEX: ForceFEX = ForceFEX, hardcode_ou: bool = False)-> None:
+    def __init__(self, op_seq: torch.Tensor, dim: int = 3, Force_FEX: ForceFEX = ForceFEX)-> None:
         super().__init__()
         # Store full operator sequence for compatibility
         self.op_seq = op_seq  # Full 16 operators (12 state + 4 force)
@@ -165,7 +150,6 @@ class FEX_with_random_force(BaseFEX):
         self.op_seq_for_state = op_seq[:-4]  # First 12 operators
         self.op_seq_for_force = op_seq[-4:]  # Last 4 operators for force
         self.dim = dim
-        self.hardcode_ou = hardcode_ou  # Pass to ForceFEX
         
         # Define the linear element
         self.linear_a = nn.Parameter(torch.ones(dim))
@@ -177,11 +161,12 @@ class FEX_with_random_force(BaseFEX):
 
         # Create model for m(t) - the OU process
         # This will be a simple learnable parameter that gets updated during training
-        # Initialize with small random value instead of zero to ensure it's trainable
-        self.m_t = nn.Parameter(torch.randn(1) * 0.01)  # Initialize m(t) with small random value
+        # Initialize with scale matching OU process variance: sigma^2/(2*theta) = 1.0/(2*0.5) = 1.0
+        # So std ≈ 1.0, initialize with this scale instead of 0.01
+        self.m_t = nn.Parameter(torch.randn(1) * 1.0)  # Initialize m(t) with OU process scale
         
         # Create ForceFEX instance with last 4 operators
-        self.Force_FEX = Force_FEX(self.op_seq_for_force, hardcode_ou=hardcode_ou)
+        self.Force_FEX = Force_FEX(self.op_seq_for_force)
         
     
     def linear(self, x: Tensor) -> Tensor:
@@ -206,6 +191,12 @@ class FEX_with_random_force(BaseFEX):
         nonlinear_output = nonlinear_outputs[0]*nonlinear_outputs[1]*nonlinear_outputs[2]
         return nonlinear_output
     
+    def forward_deterministic(self, x: Tensor) -> Tensor:
+        """Compute FEX(x) without m(t) - the deterministic part only"""
+        linear_output = self.linear(x)
+        nonlinear_output = self.nonlinear(x)
+        return linear_output + nonlinear_output
+    
     def forward(self, x: Tensor) -> Tensor:
         # x should have shape (batch_size, dim) where dim is the number of state variables
         batch_size = x.shape[0]
@@ -222,11 +213,11 @@ class FEX_with_random_force(BaseFEX):
         # Check if we already have a parameter registered for this batch size
         param_name = f'_m_t_expanded_{batch_size}'
         if not hasattr(self, param_name) or getattr(self, param_name) is None:
-            # Create new parameter initialized from self.m_t with small random variation per element
-            # This ensures each element can have different values and is not all zeros
+            # Create new parameter initialized from self.m_t with OU process scale variation per element
+            # OU process has variance = sigma^2/(2*theta) = 1.0/(2*0.5) = 1.0, so std ≈ 1.0
             m_t_init = m_t_base.repeat(batch_size, 1).clone().detach()
-            # Add small random variation to each element so they're not all the same
-            m_t_init = m_t_init + torch.randn(batch_size, 1, device=x.device) * 0.01
+            # Add random variation with OU process scale (std ≈ 1.0) so m(t) can capture the forcing
+            m_t_init = m_t_init + torch.randn(batch_size, 1, device=x.device) * 1.0
             m_t_expanded_param = nn.Parameter(m_t_init, requires_grad=True)
             # Register it as a parameter so optimizer tracks it
             self.register_parameter(param_name, m_t_expanded_param)
