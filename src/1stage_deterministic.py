@@ -236,12 +236,44 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
                     
                 # Train the model
                 model_optim = torch.optim.Adam(model.parameters(), lr=FEX_LR)
+
                 for train_idx in range(TRAIN_EPOCHS_FIRST):
                     model_optim.zero_grad()
-                    integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor.to(DEVICE), integration_func=model, index=args.TRAIN_WORKING_DIM, params_name=args.params_name)
+                    integration_args = Body4TrainIntegrationArgs(
+                        y0=dataset_tensor.to(DEVICE), 
+                        integration_func=model, 
+                        index=args.TRAIN_WORKING_DIM, 
+                        params_name=args.params_name,
+                    )
+                    
+                    # Handle return values - for random_cascade_deterministic, get m_t and m_t_next
+                    if args.params_name == 'random_cascade_deterministic':
+                        du_pred, du_target, m_t, m_t_next = integrator.integrate(integration_args)
+                    else:
+                        du_pred, du_target = integrator.integrate(integration_args)
+                    
+                    if args.params_name != 'random_cascade_deterministic':
+                        loss = mse(du_pred, du_target)
+                    else:
+                        # For random_cascade_deterministic, add OU process evolution loss
+                        # Loss = ||du_pred - du_target|| + ||(m(t+1) - m(t))/dt - ForceFEX(m(t))||
                         
-                    du_pred, du_target = integrator.integrate(integration_args)
-                    loss = mse(du_pred, du_target)
+                        # Get current m(t) values from data (flattened, same shape as label)
+                        # m_t and m_t_next are already flattened to match label shape
+                        
+                        # Compute ForceFEX(m(t)) - ForceFEX can handle batched input
+                        # m_t has shape (batch*time_steps, 1), ForceFEX expects (batch, 1)
+                        dm_dt_pred = model.Force_FEX(m_t)  # Shape: (batch*time_steps, 1)
+                        
+                        # Compute actual dm/dt from data: (m(t+1) - m(t))/dt
+                        dt = integrator._integratorparams.dt
+                        dm_dt_actual = (m_t_next - m_t) / dt  # Shape: (batch*time_steps, 1)
+                        
+                        # Loss term: ||dm/dt_actual - dm/dt_pred||
+                        m_evolution_loss = mse(dm_dt_actual, dm_dt_pred)
+                        
+                        # Total loss: state dynamics loss + OU process evolution loss
+                        loss = mse(du_pred, du_target) + m_evolution_loss
                     loss.backward()
                     model_optim.step()
                     
@@ -251,9 +283,33 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
                     
                 def lbfgs_closure():
                     lbfgs_optim.zero_grad()
-                    integration_args = Body4TrainIntegrationArgs(y0=dataset_tensor.to(DEVICE), integration_func=model, index=args.TRAIN_WORKING_DIM, params_name=args.params_name)
-                    du_pred, du_target = integrator.integrate(integration_args)
-                    loss = mse(du_pred, du_target)
+                    integration_args = Body4TrainIntegrationArgs(
+                        y0=dataset_tensor.to(DEVICE), 
+                        integration_func=model, 
+                        index=args.TRAIN_WORKING_DIM, 
+                        params_name=args.params_name,
+                    )
+                    
+                    # Handle return values - for random_cascade_deterministic, get m_t and m_t_next
+                    if args.params_name == 'random_cascade_deterministic':
+                        du_pred, du_target, m_t, m_t_next = integrator.integrate(integration_args)
+                         # Add OU process evolution loss using m(t) from data
+                        # Compute ForceFEX(m(t)) - ForceFEX can handle batched input
+                        dm_dt_pred = model.Force_FEX(m_t)  # Shape: (batch*time_steps, 1)
+                        
+                        # Compute actual dm/dt from data: (m(t+1) - m(t))/dt
+                        dt = integrator._integratorparams.dt
+                        dm_dt_actual = (m_t_next - m_t) / dt  # Shape: (batch*time_steps, 1)
+                        
+                        # Loss term: ||dm/dt_actual - dm/dt_pred||
+                        m_evolution_loss = mse(dm_dt_actual, dm_dt_pred)
+                        
+                        loss = mse(du_pred, du_target) + m_evolution_loss
+                        
+                    else:
+                        du_pred, du_target = integrator.integrate(integration_args)
+                        loss = mse(du_pred, du_target)               
+                    
                     if torch.isnan(loss):
                         return torch.tensor(1e6, requires_grad=True)
                     loss.backward()
@@ -287,6 +343,8 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
                             loss = 20*(loss)
                         elif args.TRAIN_WORKING_DIM == 3:
                             loss = 20*(loss)
+                    elif args.params_name == 'random_cascade_deterministic':
+                        print(f" the component of the loss is {loss.item():.6f}, with {m_evolution_loss.item():.6f}")
                     else:
                         loss = 80*loss
                 # Calculate score and add to pool

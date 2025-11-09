@@ -217,7 +217,7 @@ class Config:
         # Case selection
         parser.add_argument('--params_name', type=str, 
                             choices = ['cascade', 'equipart','dual_cascade','periodic_cascade','random_cascade'],
-                            default='periodic_cascade',
+                            default='random_cascade_deterministic',
                             help='Case to use')
         # Seed
         parser.add_argument('--SEED', type=int, 
@@ -303,7 +303,7 @@ class Config:
                             help='Number of samples for DM training.')
         
         parser.add_argument('--TRAIN_WORKING_DIM',type=int,
-                            default = 2,
+                            default = 1,
                             help='Working dimension for DM training.')
 
         parser.add_argument('--NOISE_LEVEL',type=float,
@@ -324,7 +324,7 @@ class Config:
                             default = None,
                             help='Path to save figure.')
         parser.add_argument('--TRAIN_THREE_DIMENSION_INTEGRATED',type=bool,
-                            default = True,
+                            default = False,
                             help='Whether to train the FEX with ground truth data.')
         return parser
     
