@@ -110,7 +110,7 @@ def params_init(case_name = None,
         # OU process parameters
         params['fr'] = 2*np.pi/2 # frequency of the forcing
         theta = params['fr']/(2*np.pi) 
-        sigma = np.sqrt(0.01)
+        sigma = np.sqrt(2*theta)
 
         # Generate OU process forcing
         tmM = np.zeros((params['Nt'], 3))
