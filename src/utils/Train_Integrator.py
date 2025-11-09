@@ -58,8 +58,7 @@ class Body4TrainIntegrator:
         
         
         if params_name == 'random_cascade_deterministic':
-            # Use FEX_with_random_force - only state variables (first 12 operators)
-            # m(t) is handled internally by the model as a learnable parameter
+            # Use FEX_with_random_force - m(t) is computed by a neural network from (u1, u2, u3, t)
             
             # Get all states (current and next) - state has shape (batch, dim, time_steps)
             # Flatten to (batch*time_steps, dim) for processing
@@ -69,40 +68,8 @@ class Body4TrainIntegrator:
             u2_all = state[:,1,:]  # Shape: (batch, time_steps)
             u3_all = state[:,2,:]  # Shape: (batch, time_steps)
             
-            # Reshape to (batch*time_steps, 1) then concatenate to (batch*time_steps, 3)
-            # This preserves the time step ordering: for each batch, all time steps are consecutive
-            u1_flat_all = u1_all.reshape(-1, 1)  # Shape: (batch*time_steps, 1)
-            u2_flat_all = u2_all.reshape(-1, 1)  # Shape: (batch*time_steps, 1)
-            u3_flat_all = u3_all.reshape(-1, 1)  # Shape: (batch*time_steps, 1)
-            u_flat_all = torch.cat([u1_flat_all, u2_flat_all, u3_flat_all], dim=1)  # Shape: (batch*time_steps, 3)
-            
-            # Verify structure: u_flat_all[i] corresponds to batch i//time_steps, time i%time_steps
-            # This ensures m_t_expanded[i] corresponds to the same time step
-           
-            # Call model with all states to create m_t_expanded parameter
-            _ = integration_func(u_flat_all)  # Forward pass creates/updates m_t_expanded parameter
-            
-            # Extract m_t and m_t_next from the parameter
-            param_name_all = f'_m_t_expanded_{u_flat_all.shape[0]}'  # Parameter for all states
-            
-            if hasattr(integration_func, param_name_all):
-                m_all = getattr(integration_func, param_name_all)  # Get all m values, shape: (batch*time_steps, 1)
-                # Reshape to (batch, time_steps, 1) to properly extract consecutive pairs
-                # Structure matches u_flat_all: batch 0 (all time steps), batch 1 (all time steps), ...
-                batch_size = state.shape[0]
-                time_steps = state.shape[2]
-                m_all_reshaped = m_all.reshape(batch_size, time_steps)
-                # Extract m_t (time 0 to time_steps-2) and m_t_next (time 1 to time_steps-1)
-                # This gives consecutive time step pairs for each batch
-                m_t = m_all_reshaped[:, :-1].reshape(-1, 1).clone()  # Shape: (batch*(time_steps-1), 1)
-                m_t_next = m_all_reshaped[:, 1:].reshape(-1, 1).clone()  # Shape: (batch*(time_steps-1), 1)
-                # Structure: m_t[i] and m_t_next[i] are from the same batch, consecutive time steps
-            else:
-                # Fallback if parameter doesn't exist
-                batch_size = state.shape[0]
-                time_steps = state.shape[2]
-                m_t = torch.zeros(batch_size * (time_steps - 1), 1, device=u_flat_all.device)
-                m_t_next = torch.zeros(batch_size * (time_steps - 1), 1, device=u_flat_all.device)
+            batch_size = state.shape[0]
+            time_steps = state.shape[2]
             
             # Compute expression_pred using current states (all except last time step per batch)
             # Need to match the shape of label: (batch, time_steps-1) -> (batch*(time_steps-1), 1)
@@ -117,7 +84,16 @@ class Body4TrainIntegrator:
             u_flat_current = torch.cat([u1_flat_current, u2_flat_current, u3_flat_current], dim=1)
             # Shape: (batch*(time_steps-1), 3)
             
-            expression_pred = integration_func(u_flat_current)
+            # Generate time values for current states
+            # For each batch, time goes from 0 to (time_steps-2)*dt
+            time_values = torch.arange(time_steps - 1, dtype=torch.float32, device=u_flat_current.device) * self._integratorparams.dt
+            # Expand to match batch dimension: (batch, time_steps-1)
+            time_expanded = time_values.unsqueeze(0).expand(batch_size, -1)
+            # Flatten to (batch*(time_steps-1), 1)
+            time_flat = time_expanded.reshape(-1, 1)
+            
+            # Call model with states and time to compute m(t) using the neural network
+            expression_pred = integration_func(u_flat_current, t=time_flat)
             # Shape: (batch*(time_steps-1), 1)
             
             # Compute label using derivative: (u_next - u_current) / dt
@@ -138,9 +114,8 @@ class Body4TrainIntegrator:
             label = ((ui_next - ui_current) / self._integratorparams.dt).reshape(-1, 1)
             # Shape: (batch*(time_steps-1), 1)
           
-            # Now m_t and m_t_next are from consecutive time steps, so they should be different
-            # They can be used to compute (m_t_next - m_t)/dt for training
-            return expression_pred, label, m_t, m_t_next
+            # Return states and time so that test script can use compute_dm_dt() with autograd
+            return expression_pred, label, u_flat_current, time_flat
         
         # Determine which model to use based on params_name
         elif params_name in ['cascade', 'equipart', 'dual_cascade']:

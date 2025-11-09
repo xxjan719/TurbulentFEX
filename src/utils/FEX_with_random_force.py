@@ -159,11 +159,22 @@ class FEX_with_random_force(BaseFEX):
         self.nonlinear_a = nn.ParameterList([nn.Parameter(torch.ones(dim)) for _ in range(dim)])
         self.nonlinear_b = nn.ParameterList([nn.Parameter(torch.ones(dim)) for _ in range(dim)])
 
-        # Create model for m(t) - the OU process
-        # This will be a simple learnable parameter that gets updated during training
-        # Initialize with scale matching OU process variance: sigma^2/(2*theta) = 1.0/(2*0.5) = 1.0
-        # So std ≈ 1.0, initialize with this scale instead of 0.01
-        self.m_t = nn.Parameter(torch.randn(1) * 1.0)  # Initialize m(t) with OU process scale
+        # Create a small neural network to compute m(t) from (u1, u2, u3, t)
+        # Input: (u1, u2, u3, t) -> Output: m(t)
+        # Use ReLU activations as requested
+        self.m_network = nn.Sequential(
+            nn.Linear(4, 16),  # Input: (u1, u2, u3, t) -> 16 hidden units
+            nn.ReLU(),
+            nn.Linear(16, 16),  # Hidden layer
+            nn.ReLU(),
+            nn.Linear(16, 1)    # Output: m(t)
+        )
+        
+        # Initialize network weights to small random values
+        for layer in self.m_network:
+            if isinstance(layer, nn.Linear):
+                nn.init.normal_(layer.weight, mean=0.0, std=0.1)
+                nn.init.zeros_(layer.bias)
         
         # Create ForceFEX instance with last 4 operators
         self.Force_FEX = Force_FEX(self.op_seq_for_force)
@@ -197,59 +208,83 @@ class FEX_with_random_force(BaseFEX):
         nonlinear_output = self.nonlinear(x)
         return linear_output + nonlinear_output
     
-    def forward(self, x: Tensor) -> Tensor:
-        # x should have shape (batch_size, dim) where dim is the number of state variables
+    def forward(self, x: Tensor, t: Tensor = None) -> Tensor:
+        """
+        Forward pass: compute state dynamics with random forcing m(t)
+        
+        Args:
+            x: State variables, shape (batch_size, dim) where dim=3 for (u1, u2, u3)
+            t: Time values, shape (batch_size, 1) or (batch_size,). If None, uses zeros.
+        
+        Returns:
+            State derivative with forcing: FEX(x) + m(t)
+        """
         batch_size = x.shape[0]
         
         # Compute linear and nonlinear outputs for state variables
         linear_output = self.linear(x)
         nonlinear_output = self.nonlinear(x)
         
-        # Get m(t) value from the model parameter and create trainable expanded version
-        # m_t_expanded will be a registered parameter where each element can be different and trainable
-        m_t_base = self.m_t.to(x.device)  # Shape: (1,)
+        # Prepare time input: if t is None, use zeros (for backward compatibility)
+        if t is None:
+            t = torch.zeros(batch_size, 1, device=x.device)
+        elif t.dim() == 1:
+            t = t.unsqueeze(1)  # Shape: (batch_size, 1)
+        elif t.shape[1] != 1:
+            t = t[:, 0:1]  # Take first column if multiple columns
         
-        # Create m_t_expanded as a registered parameter so optimizer can track and update it
-        # Check if we already have a parameter registered for this batch size
-        param_name = f'_m_t_expanded_{batch_size}'
-        if not hasattr(self, param_name) or getattr(self, param_name) is None:
-            # Initialize each element independently from OU process distribution
-            # OU process has variance = sigma^2/(2*theta) = 1.0/(2*0.5) = 1.0, so std ≈ 1.0
-            # CRITICAL: Each m_t[i] must be independently initialized and trainable
-            # Use torch.randn to ensure each element gets a different random value
-            # Each element in m_t_expanded is a separate trainable parameter
-            m_t_init = torch.randn(batch_size, 1, device=x.device, requires_grad=True) * 1.0
-            # Create as Parameter - each element is independently trainable
-            m_t_expanded_param = nn.Parameter(m_t_init, requires_grad=True)
-            # Register it as a parameter so optimizer tracks it
-            # Each element m_t_expanded[i] can be updated independently during training
-            self.register_parameter(param_name, m_t_expanded_param)
-            m_t_expanded = m_t_expanded_param.to(x.device)
-            
-            # Verify initialization: check that values are different
-            if batch_size > 1:
-                unique_values = torch.unique(m_t_expanded.flatten())
-                if len(unique_values) < batch_size:
-                    # If we have duplicates, add small random noise to ensure uniqueness
-                    noise = torch.randn_like(m_t_expanded) * 0.01
-                    with torch.no_grad():
-                        m_t_expanded_param.data = m_t_expanded_param.data + noise
-        else:
-            # Use existing parameter (optimizer is already tracking it)
-            # Each element is already independently trainable
-            m_t_expanded = getattr(self, param_name).to(x.device)
-        
-        # Now m_t_expanded is a registered parameter where each element can be trained
-        # When you train with (m_{t+1} - m_t)/dt loss, gradients will update m_t_expanded
-        # The optimizer will automatically track and update this parameter
-        
-        # Apply ForceFEX to m(t) to learn how it evolves (used for OU loss: dm/dt = Force_FEX(m(t)))
-        # But for state dynamics, we add m(t) itself, not dm/dt
-        # force_output = self.Force_FEX(m_t_expanded)  # This is dm/dt, NOT what we need here
+        # Compute m(t) using the neural network: m(t) = m_network(u1, u2, u3, t)
+        # Concatenate state and time: (batch_size, 4) = (u1, u2, u3, t)
+        x_with_time = torch.cat([x, t], dim=1)  # Shape: (batch_size, 4)
+        m_t = self.m_network(x_with_time)  # Shape: (batch_size, 1)
         
         # Combine: state dynamics + m(t) contribution
-        # m(t) is added as a forcing term to each equation (the value of m(t), not its derivative)
-        return linear_output + nonlinear_output + m_t_expanded
+        # m(t) is added as a forcing term to each equation
+        return linear_output + nonlinear_output + m_t
+    
+    def compute_dm_dt(self, x: Tensor, t: Tensor) -> Tensor:
+        """
+        Compute dm/dt using autograd
+        
+        Args:
+            x: State variables, shape (batch_size, dim)
+            t: Time values, shape (batch_size, 1) or (batch_size,)
+        
+        Returns:
+            dm/dt computed using autograd, shape (batch_size, 1)
+        """
+        batch_size = x.shape[0]
+        
+        # Prepare time input
+        if t.dim() == 1:
+            t = t.unsqueeze(1)
+        elif t.shape[1] != 1:
+            t = t[:, 0:1]
+        
+        # Ensure t requires gradient for autograd
+        t = t.clone().detach().requires_grad_(True)
+        
+        # Concatenate state and time
+        x_with_time = torch.cat([x, t], dim=1)
+        
+        # Compute m(t)
+        m_t = self.m_network(x_with_time)  # Shape: (batch_size, 1)
+        
+        # Compute dm/dt using autograd: dm/dt = d(m_network(x, t))/dt
+        # Create grad_outputs with ones to compute gradient for each batch element
+        grad_outputs = torch.ones_like(m_t)
+        
+        # Compute gradient of m_t with respect to t
+        grad_t = torch.autograd.grad(
+            outputs=m_t,
+            inputs=t,
+            grad_outputs=grad_outputs,
+            create_graph=True,
+            retain_graph=True,
+            only_inputs=True
+        )[0]  # Shape: (batch_size, 1)
+        
+        return grad_t
     
     def _op_to_str(self, op_idx: int, x_str: str) -> str:
         """Convert operator index to string representation"""
