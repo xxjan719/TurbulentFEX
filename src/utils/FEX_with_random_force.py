@@ -213,17 +213,30 @@ class FEX_with_random_force(BaseFEX):
         # Check if we already have a parameter registered for this batch size
         param_name = f'_m_t_expanded_{batch_size}'
         if not hasattr(self, param_name) or getattr(self, param_name) is None:
-            # Create new parameter initialized from self.m_t with OU process scale variation per element
+            # Initialize each element independently from OU process distribution
             # OU process has variance = sigma^2/(2*theta) = 1.0/(2*0.5) = 1.0, so std ≈ 1.0
-            m_t_init = m_t_base.repeat(batch_size, 1).clone().detach()
-            # Add random variation with OU process scale (std ≈ 1.0) so m(t) can capture the forcing
-            m_t_init = m_t_init + torch.randn(batch_size, 1, device=x.device) * 1.0
+            # CRITICAL: Each m_t[i] must be independently initialized and trainable
+            # Use torch.randn to ensure each element gets a different random value
+            # Each element in m_t_expanded is a separate trainable parameter
+            m_t_init = torch.randn(batch_size, 1, device=x.device, requires_grad=True) * 1.0
+            # Create as Parameter - each element is independently trainable
             m_t_expanded_param = nn.Parameter(m_t_init, requires_grad=True)
             # Register it as a parameter so optimizer tracks it
+            # Each element m_t_expanded[i] can be updated independently during training
             self.register_parameter(param_name, m_t_expanded_param)
             m_t_expanded = m_t_expanded_param.to(x.device)
+            
+            # Verify initialization: check that values are different
+            if batch_size > 1:
+                unique_values = torch.unique(m_t_expanded.flatten())
+                if len(unique_values) < batch_size:
+                    # If we have duplicates, add small random noise to ensure uniqueness
+                    noise = torch.randn_like(m_t_expanded) * 0.01
+                    with torch.no_grad():
+                        m_t_expanded_param.data = m_t_expanded_param.data + noise
         else:
             # Use existing parameter (optimizer is already tracking it)
+            # Each element is already independently trainable
             m_t_expanded = getattr(self, param_name).to(x.device)
         
         # Now m_t_expanded is a registered parameter where each element can be trained

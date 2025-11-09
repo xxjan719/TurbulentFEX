@@ -483,11 +483,23 @@ def test_fex_dim1_ground_truth(use_ground_truth_tmM=False):
                 print(f"  [Debug Epoch {epoch+1}] m_t_expanded parameter std: {m_t_expanded_param_all.std().item():.6f}")
                 print(f"  [Debug Epoch {epoch+1}] m_t_expanded parameter requires_grad: {m_t_expanded_param_all.requires_grad}")
                 
+                # Verify that each element is different (independent parameters)
+                unique_count = len(torch.unique(m_t_expanded_param_all.flatten()))
+                total_elements = m_t_expanded_param_all.numel()
+                print(f"  [Debug Epoch {epoch+1}] m_t_expanded unique values: {unique_count}/{total_elements} (should be close to {total_elements} if all different)")
+                if unique_count < total_elements * 0.9:  # If less than 90% are unique, warn
+                    print(f"  [WARNING] Many m_t_expanded values are identical! This suggests they're not learning independently.")
+                
                 # Extract the same slice that m_t_train comes from
                 # m_t_train comes from m_all_reshaped[:, :-1, :] where m_all_reshaped is (batch, time_steps, 1)
                 m_t_expanded_reshaped = m_t_expanded_param_all.reshape(batch_size, time_steps, 1)
                 m_t_expanded_sliced = m_t_expanded_reshaped[:, :-1, :].reshape(-1, 1)
                 print(f"  [Debug Epoch {epoch+1}] m_t_expanded (sliced to match m_t_train) sample: {m_t_expanded_sliced[:5].flatten()}")
+                
+                # Check variation in the sliced values
+                sliced_std = m_t_expanded_sliced.std().item()
+                sliced_unique = len(torch.unique(m_t_expanded_sliced.flatten()))
+                print(f"  [Debug Epoch {epoch+1}] m_t_expanded_sliced std: {sliced_std:.6f}, unique values: {sliced_unique}/{m_t_expanded_sliced.numel()}")
                 
                 # Check if m_t_expanded matches m_t_train (they should be the same)
                 if m_t_train.shape[0] == m_t_expanded_sliced.shape[0]:
