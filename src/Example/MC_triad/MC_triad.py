@@ -5,7 +5,6 @@ import numpy as np
 import random
 import torch
 from pathlib import Path
-import os
 import sympy as sp
 import matplotlib.pyplot as plt
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..",'..')))
@@ -114,7 +113,7 @@ def params_init(case_name = None,
 
         # Generate OU process forcing
         tmM = np.zeros((params['Nt'], 3))
-        tmt = 0.0
+        tmt = 1.5
 
         for j in range(params['Nt']):
             dW = np.sqrt(params['Dt'])*np.random.randn()

@@ -55,7 +55,7 @@ class Body4TrainIntegrator:
         u3_flat = u3.reshape(-1, 1)
         
         # Determine which model to use based on params_name
-        if params_name in ['cascade', 'equipart', 'dual_cascade']:
+        if params_name in ['cascade', 'equipart', 'dual_cascade', 'random_cascade_deterministic']:
             # Use regular FEX for these cases - state variables only
             u_flat = torch.cat([u1_flat, u2_flat, u3_flat], dim=1)
             
