@@ -9,18 +9,18 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.FEX import FEX
+from utils.FEX_with_force import FEX_with_force
 from utils.Train_Integrator import Body4TrainIntegrationArgs, Body4TrainIntegrationParams, Body4TrainIntegrator
 from Example.MC_triad.MC_triad import params_init, MC_triad_direct, MC_triad_initial_value
 from config import DIR_EXAMPLE
 
 def test_fex_dim1_ground_truth():
     """
-    Test and optimize FEX model for dimension 1 using random_cascade_deterministic dataset
+    Test and optimize FEX_with_force model for dimension 1 using random_cascade_deterministic dataset
     """
 
     print("="*80)
-    print("FEX Test for Dimension 1 - random_cascade_deterministic Dataset")
+    print("FEX_with_force Test for Dimension 1 - random_cascade_deterministic Dataset")
     print("="*80)
 
     # Load random_cascade_deterministic dataset
@@ -73,17 +73,18 @@ def test_fex_dim1_ground_truth():
         print(f"[INFO] Ground truth tmM shape: {tmM.shape}")
         print(f"[INFO] Ground truth tmM - mean: {tmM.mean():.6f}, std: {tmM.std():.6f}")
 
-    # Use single operator sequence for dimension 1 testing (12 operators for 3 dimensions)
+    # Use single operator sequence for dimension 1 testing (13 operators: 12 state + 1 time)
     test_op_seq = [1, 1, 2, 1,    # x1 operators
                    1, 1, 2, 2,    # x2 operators
-                   0, 1, 2, 2]    # x3 operators
+                   0, 1, 2, 2,    # x3 operators
+                   6]             # time operator
 
     print(f"\n{'='*80}")
     print(f"Testing Operator Sequence: {test_op_seq}")
     print(f"{'='*80}")
 
     op_seqs = torch.tensor(test_op_seq)
-    model = FEX(op_seqs, dim=3)
+    model = FEX_with_force(op_seqs, dim=3)
 
     # Setup integrator (same as in 1stage_deterministic.py)
     integrator_params = Body4TrainIntegrationParams(dt=dt)
@@ -222,8 +223,8 @@ def test_fex_dim1_ground_truth():
 
 
 if __name__ == "__main__":
-    # Test with regular FEX for random_cascade_deterministic
+    # Test with FEX_with_force for random_cascade_deterministic
     print("="*80)
-    print("Testing with FEX for random_cascade_deterministic")
+    print("Testing with FEX_with_force for random_cascade_deterministic")
     print("="*80)
     test_fex_dim1_ground_truth()

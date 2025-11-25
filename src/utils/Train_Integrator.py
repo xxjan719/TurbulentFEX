@@ -55,12 +55,12 @@ class Body4TrainIntegrator:
         u3_flat = u3.reshape(-1, 1)
         
         # Determine which model to use based on params_name
-        if params_name in ['cascade', 'equipart', 'dual_cascade', 'random_cascade_deterministic']:
+        if params_name in ['cascade', 'equipart', 'dual_cascade']:
             # Use regular FEX for these cases - state variables only
             u_flat = torch.cat([u1_flat, u2_flat, u3_flat], dim=1)
             
-        elif params_name == 'periodic_cascade':
-            # Use FEX_with_force for periodic_cascade - need to add time dimension
+        elif params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+            # Use FEX_with_force for these cases - need to add time dimension
             # Generate time vector using current_state structure - much more efficient
             num_time_steps = current_state.shape[2]
             time_steps = torch.arange(num_time_steps, dtype=torch.float32) * self._integratorparams.dt

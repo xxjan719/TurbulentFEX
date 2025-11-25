@@ -122,7 +122,7 @@ integratorParams = Body4TrainIntegrationParams(dt=params['Dt'],)
 integrator = Body4TrainIntegrator(integratorParams,method=INTEGRATOR_METHOD)
 pool = Pool()
 
-if args.params_name == 'periodic_cascade':
+if args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
     PMF_SIZES = tuple([len(unary_ops), len(binary_ops), len(unary_ops), len(binary_ops)] * dimension)+(len(unary_ops),)
 else:
     PMF_SIZES = tuple([len(unary_ops), len(binary_ops), len(unary_ops), len(binary_ops)] * dimension)
@@ -201,7 +201,7 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
             for tree_idx in range(NUM_TREES):
                 op_seqs[tree_idx, :] = sampler(pmfs, output=torch.zeros(NUM_NODES, dtype=torch.int, device=DEVICE))
                 print(f"Generated operator sequence {tree_idx}: {op_seqs[tree_idx, :].tolist()}")
-                if args.params_name == 'periodic_cascade':
+                if args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
                     model = FEX_with_force(op_seqs[tree_idx,:], dim=3).to(DEVICE)
                 else:
                     model = FEX(op_seqs[tree_idx,:], dim=3).to(DEVICE)
@@ -471,7 +471,7 @@ else:
         op_seqs_all[dim] = op_seqs
         print(f"[INFO] {dim} dimension data found. Now let us train integrated FEX model")
         print("\n")
-        if args.params_name == 'periodic_cascade':
+        if args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
             model = FEX_with_force(op_seqs, dim=dimension).to(DEVICE)
         else:
             model = FEX(op_seqs, dim=dimension).to(DEVICE)
