@@ -5,7 +5,6 @@
 
 from .FEX import (FEX,FEX_model_ground_truth_equipart,FEX_model_learned)
 from .FEX_with_force import (FEX_with_force,FEX_with_force_model_learned,FEX_with_force_ground_truth_periodic_cascade)
-from .FEX_with_random_force import (FEX_with_random_force,ForceFEX)
 from .controller import Controller
 from .ODEParser import (ODE_solver, FN_Net,process_chunk_faiss_cpu,
                         train_FN_each_dimension,train_FN_ensemble,generate_euler_residue, 
@@ -42,5 +41,5 @@ __all__ = [
     "generate_euler_residue","generate_second_step","generate_mean_and_std","simple_step_update",
     "plot_energy_comparison","plot_third_order_moments","plot_energy_conservation","plot_probability_distributions",
     "train_FN_multi", "FN_multi_update","FEX_with_force","FEX_with_force_model_learned","FEX_with_force_ground_truth_periodic_cascade",
-    "check_allowed_terms_periodic_cascade","FEX_with_random_force","ForceFEX"
+    "check_allowed_terms_periodic_cascade"
 ]
