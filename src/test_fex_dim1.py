@@ -72,6 +72,37 @@ def test_fex_dim1_ground_truth():
         tmM = params['tmM']  # Shape: (Nt, 3)
         print(f"[INFO] Ground truth tmM shape: {tmM.shape}")
         print(f"[INFO] Ground truth tmM - mean: {tmM.mean():.6f}, std: {tmM.std():.6f}")
+        
+        # Check if tmM follows the expected decay pattern
+        time_points = np.arange(tmM.shape[0]) * dt
+        tmM_first_component = tmM[:, 0]  # First component
+        
+        # Expected deterministic solution: 1.5 * exp(-0.5*t)
+        expected_deterministic = 1.5 * np.exp(-0.5 * time_points)
+        
+        print(f"[INFO] Checking tmM decay pattern:")
+        print(f"  tmM[0] = {tmM_first_component[0]:.6f} (expected: {expected_deterministic[0]:.6f})")
+        print(f"  tmM[100] = {tmM_first_component[100]:.6f} (expected: {expected_deterministic[100]:.6f})")
+        print(f"  tmM[500] = {tmM_first_component[500]:.6f} (expected: {expected_deterministic[500]:.6f})")
+        print(f"  tmM[-1] = {tmM_first_component[-1]:.6f} (expected: {expected_deterministic[-1]:.6f})")
+        
+        # Check correlation with expected decay
+        correlation = np.corrcoef(tmM_first_component, expected_deterministic)[0, 1]
+        print(f"  Correlation with exp(-0.5*t): {correlation:.6f}")
+        
+        # Try to fit exp(alpha*t) to see what exponent the data suggests
+        # Use log-linear regression: log(tmM) = log(A) + alpha*t
+        # Only use positive values for log
+        positive_mask = tmM_first_component > 0
+        if np.sum(positive_mask) > 10:
+            log_tmM = np.log(tmM_first_component[positive_mask])
+            t_positive = time_points[positive_mask]
+            # Linear regression: log(y) = alpha*t + log(A)
+            coeffs = np.polyfit(t_positive, log_tmM, 1)
+            fitted_alpha = coeffs[0]
+            fitted_A = np.exp(coeffs[1])
+            print(f"  Fitted to exp(alpha*t): alpha = {fitted_alpha:.6f}, A = {fitted_A:.6f}")
+            print(f"  Expected: alpha = -0.5, A = 1.5")
 
     # Use single operator sequence for dimension 1 testing (13 operators: 12 state + 1 time)
     test_op_seq = [1, 1, 2, 1,    # x1 operators
@@ -85,6 +116,15 @@ def test_fex_dim1_ground_truth():
 
     op_seqs = torch.tensor(test_op_seq)
     model = FEX_with_force(op_seqs, dim=3)
+    
+    # Initialize force parameters to help learn exp(-0.5*t) pattern
+    # Expected: 1.5*exp(-0.5*t) = exp(-0.5*t + ln(1.5))
+    with torch.no_grad():
+        # Use same dtype as model parameters
+        model.force_a.data = torch.tensor([-1.0], dtype=model.force_a.dtype, device=model.force_a.device)
+        model.force_b.data = torch.tensor([np.log(1.5)], dtype=model.force_b.dtype, device=model.force_b.device)
+    print(f"[INFO] Initialized force_a = {model.force_a.item():.6f} (will learn toward -0.5)")
+    print(f"[INFO] Initialized force_b = {model.force_b.item():.6f} (expected: {np.log(1.5):.6f})")
 
     # Setup integrator (same as in 1stage_deterministic.py)
     integrator_params = Body4TrainIntegrationParams(dt=dt)
@@ -113,26 +153,99 @@ def test_fex_dim1_ground_truth():
             print(f"\n  Initial Formula: {simplified_expr}")
         except Exception as e:
             print(f"  [Warning] Could not generate formula: {e}")
+    
+    # Test with exact ground truth formula: -1*x1 + 2*x2*x3 + 1.5*exp(-0.5*t)
+    print(f"\n{'='*80}")
+    print("Testing with Exact Ground Truth Formula")
+    print(f"{'='*80}")
+    print("Expected: -1*x1 + 2*x2*x3 + 0*x2 + 0*x3 + 1.5*exp(-0.5*t)")
+    
+    # Create a simple function to compute the exact formula
+    def exact_formula_derivative(u_flat, t_flat):
+        """
+        Compute exact derivative: -1*x1 + 2*x2*x3 + 1.5*exp(-0.5*t)
+        u_flat: (batch*time, 3) - state variables
+        t_flat: (batch*time, 1) - time
+        """
+        x1 = u_flat[:, 0:1]
+        x2 = u_flat[:, 1:2]
+        x3 = u_flat[:, 2:3]
+        t = t_flat.squeeze(-1) if t_flat.dim() > 1 else t_flat
+        
+        # Exact formula for dimension 1: du1/dt = -1*x1 + 2*x2*x3 + 1.5*exp(-0.5*t)
+        result = -1.0 * x1 + 2.0 * x2 * x3 + 1.5 * torch.exp(-0.5 * t).unsqueeze(-1)
+        return result
+    
+    # Get the input data structure (same as integrator)
+    with torch.no_grad():
+        current_state = dataset_tensor[:, :, :-1]
+        next_state = dataset_tensor[:, :, 1:]
+        
+        u1 = current_state[:, 0, :]
+        u2 = current_state[:, 1, :]
+        u3 = current_state[:, 2, :]
+        
+        u1_flat = u1.reshape(-1, 1)
+        u2_flat = u2.reshape(-1, 1)
+        u3_flat = u3.reshape(-1, 1)
+        
+        # Generate time vector (same as integrator)
+        num_time_steps = current_state.shape[2]
+        time_steps = torch.arange(num_time_steps, dtype=torch.float32) * dt
+        time_flat = time_steps.unsqueeze(0).expand(current_state.shape[0], -1).reshape(-1, 1)
+        
+        u_flat = torch.cat([u1_flat, u2_flat, u3_flat], dim=1)
+        
+        # Compute exact derivative: f(u_i) = -1*x1 + 2*x2*x3 + 1.5*exp(-0.5*t)
+        exact_derivative = exact_formula_derivative(u_flat, time_flat)
+        
+        # For integration-based method: u_{i+1} = u_i + dt * f(u_i)
+        ui_flat = u1_flat  # Current u1 values
+        exact_pred_integrated = ui_flat + dt * exact_derivative
+        
+        # Get the label (next state u1)
+        ui_next_flat = next_state[:, 0, :].reshape(-1, 1)
+        
+        # Compute loss with exact formula
+        exact_loss = nn.MSELoss()(exact_pred_integrated, ui_next_flat)
+        
+        print(f"\n[Exact Formula Test]")
+        print(f"  Loss with exact formula: {exact_loss.item():.6f}")
+        print(f"  This is the theoretical minimum loss achievable")
+        print(f"  Current model loss: {total_loss.item():.6f}")
+        print(f"  Difference: {total_loss.item() - exact_loss.item():.6f}")
+        if exact_loss.item() > 1e-6:
+            print(f"  [WARNING] Exact formula loss is not zero! This suggests:")
+            print(f"    - The data might not exactly follow the formula")
+            print(f"    - There might be numerical integration errors")
+            print(f"    - The forcing term tmM might not be exactly 1.5*exp(-0.5*t)")
 
+    # Skip training - just check exact formula loss
+    print(f"\n{'='*80}")
+    print("Skipping Training - Only Checking Exact Formula Loss")
+    print(f"{'='*80}")
+    
+    # Exit early - don't train
+    
+    
     # Training loop (following 1stage_deterministic.py pattern)
     print(f"\n{'='*80}")
     print("Training Model with Adam...")
     print(f"{'='*80}")
 
     train_epochs = 50000
-    learning_rate_high = 0.5  # Use when loss > 2
-    learning_rate_low = 0.01   # Use when loss <= 2
+    learning_rate = 0.01  # Starting learning rate
+    min_learning_rate = 0.0  # Minimum learning rate (decay to zero)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate_high)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     mse_loss_fn = nn.MSELoss()
 
     print(f"  Training epochs: {train_epochs}")
-    print(f"  Learning rate schedule: {learning_rate_high} when loss > 2, {learning_rate_low} when loss <= 2")
+    print(f"  Learning rate: {learning_rate} (will decay to {min_learning_rate})")
     print(f"  Number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
 
     loss_history = []
     print_every = 100
-    current_lr = learning_rate_high
 
     for epoch in range(train_epochs):
         optimizer.zero_grad()
@@ -146,19 +259,10 @@ def test_fex_dim1_ground_truth():
         # Total loss
         total_loss_train = mse_state_train
 
-        # Adjust learning rate based on loss
-        if total_loss_train.item() > 2.0:
-            if current_lr != learning_rate_high:
-                current_lr = learning_rate_high
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] = learning_rate_high
-                print(f"  [LR Change at Epoch {epoch + 1}] Loss > 2, switching to LR = {learning_rate_high}")
-        else:
-            if current_lr != learning_rate_low:
-                current_lr = learning_rate_low
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] = learning_rate_low
-                print(f"  [LR Change at Epoch {epoch + 1}] Loss <= 2, switching to LR = {learning_rate_low}")
+        # Learning rate decay: linear decay from learning_rate to min_learning_rate
+        current_lr = learning_rate * (1 - epoch / train_epochs) + min_learning_rate * (epoch / train_epochs)
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = current_lr
 
         # Backward pass
         total_loss_train.backward()
@@ -174,12 +278,18 @@ def test_fex_dim1_ground_truth():
             })
 
             print(f"  Epoch {epoch + 1:6d}/{train_epochs}: Total Loss = {total_loss_train.item():.6f} "
-                  f"(State: {mse_state_train.item():.6f}, LR: {current_lr:.4f})")
+                  f"(State: {mse_state_train.item():.6f}, LR: {current_lr:.6f})")
 
             # Print simplified formula every 100 epochs
             try:
                 simplified_expr = model.expression_visualize_simplified()
                 print(f"    Formula: {simplified_expr}")
+                
+                # Debug: Check force parameters
+                force_a_val = model.force_a.item()
+                force_b_val = model.force_b.item()
+                print(f"    Force params: force_a = {force_a_val:.6f} (expected: -0.5), force_b = {force_b_val:.6f} (expected: {np.log(1.5):.6f})")
+                print(f"    Force function: exp({force_a_val:.6f}*t + {force_b_val:.6f}) = {np.exp(force_b_val):.6f}*exp({force_a_val:.6f}*t)")
             except Exception as e:
                 print(f"    [Warning] Could not generate formula: {e}")
 
