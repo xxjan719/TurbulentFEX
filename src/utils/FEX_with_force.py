@@ -23,7 +23,11 @@ class FEX_with_force(nn.Module):
         self.nonlinear_b = nn.ParameterList([nn.Parameter(torch.ones(dim)) for _ in range(dim)])
         
         # Define the force element
-        self.force_a = nn.Parameter(torch.ones(1))
+        # If exp (index 6) is used as unary operator for force, initialize force_a to -1
+        if operator_sequence[-1].item() == 6:  # exp operator
+            self.force_a = nn.Parameter(torch.tensor([-1.0]))
+        else:
+            self.force_a = nn.Parameter(torch.ones(1))
         self.force_b = nn.Parameter(torch.ones(1))
         
     def unary(self, op_idx: int, x: Tensor):
