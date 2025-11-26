@@ -77,18 +77,18 @@ def test_fex_dim1_ground_truth():
         time_points = np.arange(tmM.shape[0]) * dt
         tmM_first_component = tmM[:, 0]  # First component
         
-        # Expected deterministic solution: 1.5 * exp(-0.5*t)
-        expected_deterministic = 1.5 * np.exp(-0.5 * time_points)
+        # Expected deterministic solution: 1.5 * exp(-5*t)
+        expected_deterministic = 1.5 * np.exp(-5.0 * time_points)
         
         print(f"[INFO] Checking tmM decay pattern:")
         print(f"  tmM[0] = {tmM_first_component[0]:.6f} (expected: {expected_deterministic[0]:.6f})")
-        print(f"  tmM[100] = {tmM_first_component[100]:.6f} (expected: {expected_deterministic[100]:.6f})")
-        print(f"  tmM[500] = {tmM_first_component[500]:.6f} (expected: {expected_deterministic[500]:.6f})")
+        print(f"  tmM[10] = {tmM_first_component[10]:.6f} (expected: {expected_deterministic[10]:.6f})")
+        print(f"  tmM[50] = {tmM_first_component[50]:.6f} (expected: {expected_deterministic[50]:.6f})")
         print(f"  tmM[-1] = {tmM_first_component[-1]:.6f} (expected: {expected_deterministic[-1]:.6f})")
         
         # Check correlation with expected decay
         correlation = np.corrcoef(tmM_first_component, expected_deterministic)[0, 1]
-        print(f"  Correlation with exp(-0.5*t): {correlation:.6f}")
+        print(f"  Correlation with exp(-5*t): {correlation:.6f}")
         
         # Try to fit exp(alpha*t) to see what exponent the data suggests
         # Use log-linear regression: log(tmM) = log(A) + alpha*t
@@ -102,7 +102,7 @@ def test_fex_dim1_ground_truth():
             fitted_alpha = coeffs[0]
             fitted_A = np.exp(coeffs[1])
             print(f"  Fitted to exp(alpha*t): alpha = {fitted_alpha:.6f}, A = {fitted_A:.6f}")
-            print(f"  Expected: alpha = -0.5, A = 1.5")
+            print(f"  Expected: alpha = -5.0, A = 1.5")
 
     # Use single operator sequence for dimension 1 testing (13 operators: 12 state + 1 time)
     test_op_seq = [1, 1, 2, 1,    # x1 operators
@@ -117,13 +117,13 @@ def test_fex_dim1_ground_truth():
     op_seqs = torch.tensor(test_op_seq)
     model = FEX_with_force(op_seqs, dim=3)
     
-    # Initialize force parameters to help learn exp(-0.5*t) pattern
-    # Expected: 1.5*exp(-0.5*t) = exp(-0.5*t + ln(1.5))
+    # Initialize force parameters to help learn exp(-5*t) pattern
+    # Expected: 1.5*exp(-5*t) = exp(-5*t + ln(1.5))
     with torch.no_grad():
         # Use same dtype as model parameters
-        model.force_a.data = torch.tensor([-1.0], dtype=model.force_a.dtype, device=model.force_a.device)
+        model.force_a.data = torch.tensor([-5.0], dtype=model.force_a.dtype, device=model.force_a.device)
         model.force_b.data = torch.tensor([np.log(1.5)], dtype=model.force_b.dtype, device=model.force_b.device)
-    print(f"[INFO] Initialized force_a = {model.force_a.item():.6f} (will learn toward -0.5)")
+    print(f"[INFO] Initialized force_a = {model.force_a.item():.6f} (expected: -5.0)")
     print(f"[INFO] Initialized force_b = {model.force_b.item():.6f} (expected: {np.log(1.5):.6f})")
 
     # Setup integrator (same as in 1stage_deterministic.py)
@@ -154,16 +154,16 @@ def test_fex_dim1_ground_truth():
         except Exception as e:
             print(f"  [Warning] Could not generate formula: {e}")
     
-    # Test with exact ground truth formula: -1*x1 + 2*x2*x3 + 1.5*exp(-0.5*t)
+    # Test with exact ground truth formula: -1*x1 + 2*x2*x3 + 1.5*exp(-5*t)
     print(f"\n{'='*80}")
     print("Testing with Exact Ground Truth Formula")
     print(f"{'='*80}")
-    print("Expected: -1*x1 + 2*x2*x3 + 0*x2 + 0*x3 + 1.5*exp(-0.5*t)")
+    print("Expected: -1*x1 + 2*x2*x3 + 0*x2 + 0*x3 + 1.5*exp(-5*t)")
     
     # Create a simple function to compute the exact formula
     def exact_formula_derivative(u_flat, t_flat):
         """
-        Compute exact derivative: -1*x1 + 2*x2*x3 + 1.5*exp(-0.5*t)
+        Compute exact derivative: -1*x1 + 2*x2*x3 + 1.5*exp(-5*t)
         u_flat: (batch*time, 3) - state variables
         t_flat: (batch*time, 1) - time
         """
@@ -172,8 +172,8 @@ def test_fex_dim1_ground_truth():
         x3 = u_flat[:, 2:3]
         t = t_flat.squeeze(-1) if t_flat.dim() > 1 else t_flat
         
-        # Exact formula for dimension 1: du1/dt = -1*x1 + 2*x2*x3 + 1.5*exp(-0.5*t)
-        result = -1.0 * x1 + 2.0 * x2 * x3 + 1.5 * torch.exp(-0.5 * t).unsqueeze(-1)
+        # Exact formula for dimension 1: du1/dt = -1*x1 + 2*x2*x3 + 1.5*exp(-5*t)
+        result = -1.0 * x1 + 2.0 * x2 * x3 + 1.5 * torch.exp(-5.0 * t).unsqueeze(-1)
         return result
     
     # Get the input data structure (same as integrator)
@@ -218,7 +218,7 @@ def test_fex_dim1_ground_truth():
             print(f"  [WARNING] Exact formula loss is not zero! This suggests:")
             print(f"    - The data might not exactly follow the formula")
             print(f"    - There might be numerical integration errors")
-            print(f"    - The forcing term tmM might not be exactly 1.5*exp(-0.5*t)")
+            print(f"    - The forcing term tmM might not be exactly 1.5*exp(-5*t)")
 
     # Skip training - just check exact formula loss
     print(f"\n{'='*80}")
@@ -288,7 +288,17 @@ def test_fex_dim1_ground_truth():
                 # Debug: Check force parameters
                 force_a_val = model.force_a.item()
                 force_b_val = model.force_b.item()
-                print(f"    Force params: force_a = {force_a_val:.6f} (expected: -0.5), force_b = {force_b_val:.6f} (expected: {np.log(1.5):.6f})")
+                expected_force_a = -5.0
+                expected_force_b = np.log(1.5)
+                
+                # Calculate errors
+                error_force_a = abs(force_a_val - expected_force_a)
+                error_force_b = abs(force_b_val - expected_force_b)
+                rel_error_force_a = error_force_a / abs(expected_force_a) * 100
+                rel_error_force_b = error_force_b / abs(expected_force_b) * 100
+                
+                print(f"    Force params: force_a = {force_a_val:.6f} (expected: {expected_force_a:.6f}), force_b = {force_b_val:.6f} (expected: {expected_force_b:.6f})")
+                print(f"    Errors: force_a error = {error_force_a:.6f} ({rel_error_force_a:.2f}%), force_b error = {error_force_b:.6f} ({rel_error_force_b:.2f}%)")
                 print(f"    Force function: exp({force_a_val:.6f}*t + {force_b_val:.6f}) = {np.exp(force_b_val):.6f}*exp({force_a_val:.6f}*t)")
             except Exception as e:
                 print(f"    [Warning] Could not generate formula: {e}")

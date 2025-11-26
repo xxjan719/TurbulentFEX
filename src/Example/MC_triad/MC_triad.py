@@ -103,12 +103,12 @@ def params_init(case_name = None,
         params['G'] = np.diag([1,2,2])
         params['B'] = np.array([2,-1,-1])
         # Noise settings - set SS =0 and SSt =0 so no additive noise enters dynamics
-        params['SS'] = np.zeros((3,3))
-        params['SSt'] = np.zeros((3,3))
+        params['SS'] = np.diag([np.sqrt(1), np.sqrt(10**(-2)), np.sqrt(10**(-2))])
+        params['SSt'] = np.diag([np.sqrt(1),np.sqrt(2),np.sqrt(2)])
 
         # OU process parameters
         params['fr'] = 2*np.pi/2 # frequency of the forcing
-        theta = params['fr']/(2*np.pi) 
+        theta = 5
         sigma = 0.2
 
         # Generate OU process forcing
