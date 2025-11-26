@@ -99,7 +99,7 @@ if choice == '1':
                                                 device=device)
     if args.params_name in ['equipart', 'cascade','dual_cascade']:
         residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_wrapper, data, dt)
-    elif args.params_name == 'periodic_cascade':
+    elif args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
         residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_with_force_wrapper, data, dt)
     print(residuals)
     print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
@@ -792,7 +792,7 @@ elif choice == '2':
     # Choose the correct model based on params_name
     if args.params_name in ['equipart', 'cascade', 'dual_cascade']:
         FEX_model_check = FEX_model_learned
-    elif args.params_name == 'periodic_cascade':
+    elif args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
         FEX_model_check = FEX_with_force_model_learned
 
     L = params['L']
@@ -814,7 +814,30 @@ elif choice == '2':
     elif args.params_name == 'periodic_cascade':
          # Load forcing from params
         tmM = params['tmM'].astype(np.float32)
-        tmS = params['tmS'].astype(np.float32)  
+        tmS = params['tmS'].astype(np.float32)
+    elif args.params_name == 'random_cascade_deterministic':
+        # NOTE: tmM is ONLY used for ground truth simulation, NOT for prediction
+        # The prediction uses FEX_with_force model which has learned the forcing term internally
+        # We use tmM from params to ensure ground truth matches training data for fair comparison
+        if 'tmM' in params and params['tmM'].shape[0] >= Nt:
+            tmM = params['tmM'][:Nt, :].astype(np.float32)
+        else:
+            # Regenerate OU process with same parameters as MC_triad.py (only for ground truth)
+            # OU process parameters (matching MC_triad.py exactly)
+            theta = 5.0
+            sigma = 0.2
+            tmt = 1.5  # Initial condition
+            
+            # Use same dt as params to ensure consistency
+            ou_dt = params.get('Dt', dt)  # Use params['Dt'] if available, otherwise use dt
+            
+            # Generate OU process forcing for ground truth simulation
+            for j in range(Nt):
+                dW = np.sqrt(ou_dt) * np.random.randn()
+                tmt = tmt - theta * tmt * ou_dt + sigma * dW
+                tmM[j, :] = tmt * np.array([1, 1, 1])
+        
+        tmS = np.zeros(Nt, dtype=np.float32)  # No tmS needed for random_cascade_deterministic  
     
     initial_state = np.random.normal(loc=m0, scale=np.sqrt(var0), size=(NPATH, 3))    
     x_pred_initial = torch.ones(NPATH, 3).to(device,dtype=torch.float32) * torch.tensor(m0).to(device,dtype=torch.float32)
@@ -947,8 +970,8 @@ elif choice == '2':
     
         # RK4 for the deterministic part (FEX model)
         # Step 1
-        if args.params_name == 'periodic_cascade':
-            # For periodic_cascade, add time dimension
+        if args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+            # For periodic_cascade and random_cascade_deterministic, add time dimension
             current_time = idx * dt
             time_column = torch.full((current_tensor.shape[0], 1), current_time, dtype=torch.float32).to(device)
             current_tensor_with_time = torch.cat([current_tensor, time_column], dim=1)
@@ -961,8 +984,8 @@ elif choice == '2':
         u1 = current_tensor +  k1_det
 
         # Step 2
-        if args.params_name == 'periodic_cascade':
-            # For periodic_cascade, add time dimension
+        if args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+            # For periodic_cascade and random_cascade_deterministic, add time dimension
             u1_with_time = torch.cat([u1, time_column], dim=1)
             k2_det = FEX_model_check(u1_with_time, model_name=args.Model, params_name=args.params_name, noise_level=args.NOISE_LEVEL, device=device) * dt
         else:
