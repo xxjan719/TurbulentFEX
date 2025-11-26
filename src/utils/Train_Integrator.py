@@ -67,7 +67,8 @@ class Body4TrainIntegrator:
             device = u1_flat.device
             time_steps = torch.arange(num_time_steps, dtype=torch.float32, device=device) * self._integratorparams.dt
             # Use the same structure as current_state for time, then reshape
-            time_flat = time_steps.unsqueeze(0).expand(current_state.shape[0], -1).reshape(-1, 1)
+            # Explicitly ensure time_flat is on the correct device
+            time_flat = time_steps.unsqueeze(0).expand(current_state.shape[0], -1).reshape(-1, 1).to(device)
             u_flat = torch.cat([u1_flat, u2_flat, u3_flat, time_flat], dim=1)
 
         
