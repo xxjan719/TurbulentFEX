@@ -63,7 +63,9 @@ class Body4TrainIntegrator:
             # Use FEX_with_force for these cases - need to add time dimension
             # Generate time vector using current_state structure - much more efficient
             num_time_steps = current_state.shape[2]
-            time_steps = torch.arange(num_time_steps, dtype=torch.float32) * self._integratorparams.dt
+            # Ensure time tensor is on the same device as the state tensors
+            device = u1_flat.device
+            time_steps = torch.arange(num_time_steps, dtype=torch.float32, device=device) * self._integratorparams.dt
             # Use the same structure as current_state for time, then reshape
             time_flat = time_steps.unsqueeze(0).expand(current_state.shape[0], -1).reshape(-1, 1)
             u_flat = torch.cat([u1_flat, u2_flat, u3_flat, time_flat], dim=1)

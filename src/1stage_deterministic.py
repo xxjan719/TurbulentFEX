@@ -222,12 +222,13 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
                     logprint(f"[INFO] Skipping model with trivial nonlinear expression: {expression}")
                     continue
                 
-                # if args.params_name == 'periodic_cascade':
-                #     force_expr = parts[-1].strip()
-                #     if "t" not in force_expr:
-                #         print(f"[INFO] Skipping model with trivial time variable: {expression}")
-                #         logprint(f"[INFO] Skipping model with trival time variable: {expression}")
-                #         continue
+                # Check for time variable in force term for cases using FEX_with_force
+                if args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+                    force_expr = parts[-1].strip()
+                    if "t" not in force_expr:
+                        print(f"[INFO] Skipping model with trivial time variable: {expression}")
+                        logprint(f"[INFO] Skipping model with trivial time variable: {expression}")
+                        continue
                 trained_count += 1
                     
                 # Train the model
@@ -297,7 +298,7 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
                         elif args.TRAIN_WORKING_DIM == 3:
                             loss = 20*(loss)
                     elif args.params_name == 'random_cascade_deterministic':
-                        loss = 100000*(loss)
+                        loss = 100*(loss)
                     else:
                         loss = 80*loss
                 # Calculate score and add to pool
@@ -362,15 +363,15 @@ if args.TRAIN_THREE_DIMENSION_INTEGRATED == False:
                 current_score = candidate_.score  # assuming .score exists
                             
                 # Check if expression follows the allowed terms for this dimension
-                if args.params_name == 'periodic_cascade':
-                    # For periodic_cascade, use a modified check that allows sin, cos, exp
+                if args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+                    # For periodic_cascade and random_cascade_deterministic, use a modified check that allows sin, cos, exp
                     check_result = check_allowed_terms_periodic_cascade(current_expr, args.TRAIN_WORKING_DIM)
                 else:
                     check_result = check_allowed_terms(current_expr, args.TRAIN_WORKING_DIM)
                 if not check_result['valid']:
                     continue
-                elif args.params_name == 'periodic_cascade':
-                    # For periodic_cascade, check for time-dependent forcing term
+                elif args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+                    # For periodic_cascade and random_cascade_deterministic, check for time-dependent forcing term
                     if 't' not in current_expr:
                         continue
                     # Also check for the required interaction terms
