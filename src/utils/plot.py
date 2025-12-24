@@ -1201,3 +1201,172 @@ def plot_energy_conservation(coefficients, noise_levels=None, save_dir=None):
     plt.show()
     
     return fig
+
+
+def plot_comparative_grid(u_all, u_pred_single, u_pred_ensemble, Energy_MC_all, 
+                          Energy_MC_single, Energy_MC_ensemble, Time_record, dt, 
+                          save_path=None, title_suffix="FEX-framework"):
+    """
+    Create a 4x6 grid comparison plot similar to the image:
+    - Top 3 rows: Phase space projections (u1-u2, u2-u3, u1-u3) for Ground Truth, Single, Ensemble
+    - Bottom row: Energy spectra/evolution over time
+    
+    Args:
+        u_all (np.ndarray): Ground truth trajectories (NPATH, 3, time_steps)
+        u_pred_single (np.ndarray): Single model predictions (NPATH, 3, time_steps)
+        u_pred_ensemble (np.ndarray): Ensemble model predictions (NPATH, 3, time_steps)
+        Energy_MC_all (np.ndarray): Ground truth energy (4, time_steps) - [total, u1, u2, u3]
+        Energy_MC_single (np.ndarray): Single model energy (4, time_steps)
+        Energy_MC_ensemble (np.ndarray): Ensemble model energy (4, time_steps)
+        Time_record (np.ndarray): Time points
+        dt (float): Time step
+        save_path (str): Path to save the plot
+        title_suffix (str): Suffix for the title
+    """
+    # Set publication style
+    mpl.rcParams.update({
+        "font.family": "serif",
+        "font.size": 10,
+        "axes.labelsize": 9,
+        "legend.fontsize": 8,
+        "xtick.labelsize": 8,
+        "ytick.labelsize": 8,
+        "figure.dpi": 150,
+    })
+    
+    # Select 6 time snapshots
+    total_steps = len(Time_record)
+    # Calculate time indices based on actual time values (similar to image: t=0, 1, 5, 7, 10, 20s)
+    target_times = [0, 1, 5, 7, 10, min(20, (total_steps - 1) * dt)]
+    time_indices = []
+    time_values = []
+    
+    for target_t in target_times:
+        # Find closest time index
+        time_idx = min(int(target_t / dt), total_steps - 1)
+        time_indices.append(time_idx)
+        # Time_record is indices, so multiply by dt to get actual time
+        actual_time = time_idx * dt
+        time_values.append(actual_time)
+    
+    # Create 4x6 grid
+    fig, axs = plt.subplots(4, 6, figsize=(18, 12))
+    fig.suptitle(f'Comparative Analysis: Ground Truth vs Predictions - {title_suffix}', 
+                 fontsize=14, fontweight='bold')
+    
+    # Color schemes
+    colors_truth = ['#1f77b4', '#ff7f0e', '#2ca02c']  # Blue, Orange, Green for u1, u2, u3
+    colors_single = ['#9467bd', '#8c564b', '#e377c2']  # Purple tones
+    colors_ensemble = ['#7f7f7f', '#bcbd22', '#17becf']  # Gray tones
+    
+    # Phase space projection pairs
+    proj_pairs = [(0, 1), (1, 2), (0, 2)]  # (u1-u2), (u2-u3), (u1-u3)
+    proj_labels = [('u1', 'u2'), ('u2', 'u3'), ('u1', 'u3')]
+    
+    # Sample trajectories for visualization (use subset to avoid overcrowding)
+    sample_size = min(200, u_all.shape[0])
+    sample_indices = np.random.choice(u_all.shape[0], sample_size, replace=False)
+    
+    # Top 3 rows: Phase space projections
+    row_labels = ['Numerical model', 'Emulator (Single)', 'Thermalized (Ensemble)']
+    data_sets = [u_all, u_pred_single, u_pred_ensemble]
+    data_colors = [colors_truth, colors_single, colors_ensemble]
+    
+    for row in range(3):
+        for col in range(6):
+            ax = axs[row, col]
+            time_idx = time_indices[col]
+            t_val = time_values[col]
+            
+            # Get data at this time step
+            data = data_sets[row][sample_indices, :, time_idx]
+            
+            # Plot phase space projection (u1-u2)
+            if row == 0:
+                # Ground truth - use u1-u2 projection
+                ax.scatter(data[:, 0], data[:, 1], s=1, alpha=0.3, c=colors_truth[0], 
+                          rasterized=True)
+                ax.set_xlabel('u1', fontsize=8)
+                ax.set_ylabel('u2', fontsize=8)
+            elif row == 1:
+                # Single model - use u1-u2 projection
+                ax.scatter(data[:, 0], data[:, 1], s=1, alpha=0.3, c=colors_single[0], 
+                          rasterized=True)
+                ax.set_xlabel('u1', fontsize=8)
+                ax.set_ylabel('u2', fontsize=8)
+            else:
+                # Ensemble - use u1-u2 projection
+                ax.scatter(data[:, 0], data[:, 1], s=1, alpha=0.3, c=colors_ensemble[0], 
+                          rasterized=True)
+                ax.set_xlabel('u1', fontsize=8)
+                ax.set_ylabel('u2', fontsize=8)
+            
+            # Set title with time info
+            if row == 0:
+                ax.set_title(f't={t_val:.1f}s, step={time_idx}', fontsize=9, pad=5)
+            
+            # Set row label on first column
+            if col == 0:
+                ax.text(-0.15, 0.5, row_labels[row], transform=ax.transAxes,
+                       fontsize=10, fontweight='bold', rotation=90, va='center', ha='right')
+            
+            ax.grid(True, alpha=0.3)
+            ax.set_aspect('auto')
+    
+    # Bottom row: Energy spectra/evolution
+    for col in range(6):
+        ax = axs[3, col]
+        time_idx = time_indices[col]
+        t_val = time_values[col]
+        
+        # Plot energy up to this time point
+        # Time_record is indices, so multiply by dt to get actual time
+        time_slice = np.arange(time_idx + 1) * dt
+        
+        # Ground truth energy (total)
+        if Energy_MC_all.shape[1] > time_idx:
+            ax.plot(time_slice, Energy_MC_all[0, :time_idx+1], 'r-', linewidth=1.5, 
+                   label='Numerical', alpha=0.8)
+        
+        # Single model energy
+        if Energy_MC_single is not None and Energy_MC_single.shape[1] > time_idx:
+            ax.plot(time_slice, Energy_MC_single[0, :time_idx+1], 'gray', linewidth=1, 
+                   label='Emulator', alpha=0.6, linestyle='--')
+        
+        # Ensemble model energy
+        if Energy_MC_ensemble is not None and Energy_MC_ensemble.shape[1] > time_idx:
+            ax.plot(time_slice, Energy_MC_ensemble[0, :time_idx+1], 'purple', linewidth=1, 
+                   label='Thermalized', alpha=0.6, linestyle='-.')
+        
+        ax.set_xlabel('Time', fontsize=8)
+        if col == 0:
+            ax.set_ylabel('Energy', fontsize=8)
+            ax.legend(loc='upper right', fontsize=7, frameon=False)
+        
+        ax.set_title(f't={t_val:.1f}s', fontsize=9, pad=5)
+        ax.grid(True, alpha=0.3)
+        ax.set_yscale('log')
+    
+    # Add column headers
+    for col in range(6):
+        time_idx = time_indices[col]
+        t_val = time_values[col]
+        fig.text(0.15 + col * 0.14, 0.96, f't={t_val:.1f}s, step={time_idx}', 
+                ha='center', fontsize=9, fontweight='bold')
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    
+    # Save the figure
+    if save_path is not None:
+        save_file = os.path.join(save_path, f'comparative_grid_{title_suffix.replace(" ", "_")}.pdf')
+        plt.savefig(save_file, dpi=300, bbox_inches='tight')
+        print(f"[INFO] Saved comparative grid plot to: {save_file}")
+        
+        # Also save as PNG
+        save_file_png = os.path.join(save_path, f'comparative_grid_{title_suffix.replace(" ", "_")}.png')
+        plt.savefig(save_file_png, dpi=300, bbox_inches='tight')
+        print(f"[INFO] Saved comparative grid plot (PNG) to: {save_file_png}")
+    
+    plt.show()
+    
+    return fig

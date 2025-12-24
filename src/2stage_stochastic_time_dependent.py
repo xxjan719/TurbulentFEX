@@ -814,7 +814,7 @@ elif choice == '2':
     elif args.params_name == 'periodic_cascade':
          # Load forcing from params
         tmM = params['tmM'].astype(np.float32)
-        tmS = params['tmS'].astype(np.float32)
+        tmS = params['tmS'].astype(np.float32)  
     elif args.params_name == 'random_cascade_deterministic':
         # NOTE: tmM is ONLY used for ground truth simulation, NOT for prediction
         # The prediction uses FEX_with_force model which has learned the forcing term internally
@@ -885,6 +885,8 @@ elif choice == '2':
 
     Energy_MC_all = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     Energy_MC_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_MC_single = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_MC_ensemble = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
 
     current_state = initial_state
     current_pred_state = initial_state
@@ -910,6 +912,17 @@ elif choice == '2':
         0.5 * (mean_state_record[2, 0] ** 2 + cov_state_record[2, 2, 0]),
     ]
     Energy_dyn_record[:, 0] = Energy_update_record
+    
+    # Initialize energy for single and ensemble at t=0
+    Energy_MC_single[0, 0] = 0.5 * np.sum(mean_state_single[:, 0] ** 2) + 0.5 * np.trace(cov_state_single[:, :, 0])
+    Energy_MC_single[1, 0] = 0.5 * (mean_state_single[0, 0] ** 2 + cov_state_single[0, 0, 0])
+    Energy_MC_single[2, 0] = 0.5 * (mean_state_single[1, 0] ** 2 + cov_state_single[1, 1, 0])
+    Energy_MC_single[3, 0] = 0.5 * (mean_state_single[2, 0] ** 2 + cov_state_single[2, 2, 0])
+    
+    Energy_MC_ensemble[0, 0] = 0.5 * np.sum(mean_state_ensemble[:, 0] ** 2) + 0.5 * np.trace(cov_state_ensemble[:, :, 0])
+    Energy_MC_ensemble[1, 0] = 0.5 * (mean_state_ensemble[0, 0] ** 2 + cov_state_ensemble[0, 0, 0])
+    Energy_MC_ensemble[2, 0] = 0.5 * (mean_state_ensemble[1, 0] ** 2 + cov_state_ensemble[1, 1, 0])
+    Energy_MC_ensemble[3, 0] = 0.5 * (mean_state_ensemble[2, 0] ** 2 + cov_state_ensemble[2, 2, 0])
 
     # Load neural network models once at the beginning
     print("Loading neural network models...")
@@ -1116,6 +1129,17 @@ elif choice == '2':
         Energy_MC_pred[1, idx] = 0.5 * (mean_state_pred[0, idx] ** 2 + cov_state_pred[0, 0, idx])
         Energy_MC_pred[2, idx] = 0.5 * (mean_state_pred[1, idx] ** 2 + cov_state_pred[1, 1, idx])
         Energy_MC_pred[3, idx] = 0.5 * (mean_state_pred[2, idx] ** 2 + cov_state_pred[2, 2, idx])
+        
+        # Calculate energy for single and ensemble models
+        Energy_MC_single[0, idx] = 0.5 * np.sum(mean_state_single[:, idx] ** 2) + 0.5 * np.trace(cov_state_single[:, :, idx])
+        Energy_MC_single[1, idx] = 0.5 * (mean_state_single[0, idx] ** 2 + cov_state_single[0, 0, idx])
+        Energy_MC_single[2, idx] = 0.5 * (mean_state_single[1, idx] ** 2 + cov_state_single[1, 1, idx])
+        Energy_MC_single[3, idx] = 0.5 * (mean_state_single[2, idx] ** 2 + cov_state_single[2, 2, idx])
+        
+        Energy_MC_ensemble[0, idx] = 0.5 * np.sum(mean_state_ensemble[:, idx] ** 2) + 0.5 * np.trace(cov_state_ensemble[:, :, idx])
+        Energy_MC_ensemble[1, idx] = 0.5 * (mean_state_ensemble[0, idx] ** 2 + cov_state_ensemble[0, 0, idx])
+        Energy_MC_ensemble[2, idx] = 0.5 * (mean_state_ensemble[1, idx] ** 2 + cov_state_ensemble[1, 1, idx])
+        Energy_MC_ensemble[3, idx] = 0.5 * (mean_state_ensemble[2, idx] ** 2 + cov_state_ensemble[2, 2, idx])
     
         # Calculate third-order moments for prediction
         moment3_pred, _ = compute_third_order_moments(next_pred_state)
@@ -1152,7 +1176,7 @@ elif choice == '2':
     print(f"Saving plots to: {save_dir}")
 
     # Import plotting functions
-    from utils.plot import plot_mean_comparison, plot_covariance_comparison, plot_energy_comparison, plot_third_order_moments, plot_probability_distributions
+    from utils.plot import plot_mean_comparison, plot_covariance_comparison, plot_energy_comparison, plot_third_order_moments, plot_probability_distributions, plot_comparative_grid
 
     # Plot mean and covariance comparisons
     plot_mean_comparison(mean_state_record, mean_state_pred, Time_record, 
@@ -1171,6 +1195,12 @@ elif choice == '2':
     # Plot probability distributions
     plot_probability_distributions(u_all, u_pred_all, Time_record, 
                               save_path=save_dir, title_suffix=" - FEX-framework")
+    
+    # Plot comparative grid (4x6 grid similar to the image)
+    print("\nGenerating comparative grid plot...")
+    plot_comparative_grid(u_all, u_pred_single, u_pred_ensemble, 
+                         Energy_MC_all, Energy_MC_single, Energy_MC_ensemble,
+                         Time_record, dt, save_path=save_dir, title_suffix="FEX-framework")
 
     print("[INFO] All plots saved successfully!")
     print("\n")
