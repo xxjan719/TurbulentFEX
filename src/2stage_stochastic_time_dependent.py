@@ -1176,7 +1176,7 @@ elif choice == '2':
     print(f"Saving plots to: {save_dir}")
 
     # Import plotting functions
-    from utils.plot import plot_mean_comparison, plot_covariance_comparison, plot_energy_comparison, plot_third_order_moments, plot_probability_distributions, plot_comparative_grid
+    from utils.plot import plot_mean_comparison, plot_covariance_comparison, plot_energy_comparison, plot_third_order_moments, plot_probability_distributions, plot_comparative_grid,plot_triad_3d_snapshot,plot_triad_3d_grid
 
     # Plot mean and covariance comparisons
     plot_mean_comparison(mean_state_record, mean_state_pred, Time_record, 
@@ -1201,7 +1201,18 @@ elif choice == '2':
     plot_comparative_grid(u_all, u_pred_single, u_pred_ensemble, 
                          Energy_MC_all, Energy_MC_single, Energy_MC_ensemble,
                          Time_record, dt, save_path=save_dir, title_suffix="FEX-framework")
-
+    
+    
+    Time_record = np.arange(int(TIME_AMOUNT/dt)+1)
+    plot_triad_3d_grid(
+    u_all=u_all,
+    u_pred_single=u_pred_single,
+    u_pred_ensemble=u_pred_ensemble,
+    Time_record=Time_record,
+    dt=dt,
+    save_path=save_dir,
+    title_suffix=args.params_name
+)
     print("[INFO] All plots saved successfully!")
     print("\n")
     print("[SUCCESS] have already finished prediction! Now you finish the work!")

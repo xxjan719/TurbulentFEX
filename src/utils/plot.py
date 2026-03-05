@@ -1,7 +1,9 @@
 from ast import Dict
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+
 import numpy as np
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401, needed for 3D
 import os
 def set_figure_position(x=100, y=100, width=800, height=600):
     """Set the position and size of the current figure window (only if supported)."""
@@ -1203,27 +1205,35 @@ def plot_energy_conservation(coefficients, noise_levels=None, save_dir=None):
     return fig
 
 
-def plot_comparative_grid(u_all, u_pred_single, u_pred_ensemble, Energy_MC_all, 
-                          Energy_MC_single, Energy_MC_ensemble, Time_record, dt, 
-                          save_path=None, title_suffix="FEX-framework"):
+
+def plot_comparative_grid(u_all, u_pred_single, u_pred_ensemble,
+                             Energy_MC_all, Energy_MC_single, Energy_MC_ensemble,
+                             Time_record, dt,
+                             save_path=None, title_suffix="FEX-framework-3D"):
     """
-    Create a 4x6 grid comparison plot similar to the image:
-    - Top 3 rows: Phase space projections (u1-u2, u2-u3, u1-u3) for Ground Truth, Single, Ensemble
-    - Bottom row: Energy spectra/evolution over time
-    
-    Args:
-        u_all (np.ndarray): Ground truth trajectories (NPATH, 3, time_steps)
-        u_pred_single (np.ndarray): Single model predictions (NPATH, 3, time_steps)
-        u_pred_ensemble (np.ndarray): Ensemble model predictions (NPATH, 3, time_steps)
-        Energy_MC_all (np.ndarray): Ground truth energy (4, time_steps) - [total, u1, u2, u3]
-        Energy_MC_single (np.ndarray): Single model energy (4, time_steps)
-        Energy_MC_ensemble (np.ndarray): Ensemble model energy (4, time_steps)
-        Time_record (np.ndarray): Time points
-        dt (float): Time step
-        save_path (str): Path to save the plot
-        title_suffix (str): Suffix for the title
+    4x6 comparison figure for 3D triad system:
+
+      Rows 1–3 (3D scatter, one panel = one time snapshot):
+        - Row 1: Numerical model (u_all)
+        - Row 2: Emulator (single)
+        - Row 3: Thermalized (ensemble)
+
+      Row 4:
+        - Energy vs time (log scale), up to that column's snapshot time.
+
+    Args
+    ----
+    u_all, u_pred_single, u_pred_ensemble : np.ndarray
+        Shape (NPATH, 3, Nt) or (NPATH, 3, Nt+1).
+    Energy_MC_* : np.ndarray
+        Shape (4, Nt)  # [total, u1, u2, u3]
+    Time_record : np.ndarray
+        Time indices (0..Nt-1 or Nt), length Nt.
+    dt : float
+        Time step.
     """
-    # Set publication style
+
+    # -------- style --------
     mpl.rcParams.update({
         "font.family": "serif",
         "font.size": 10,
@@ -1233,140 +1243,312 @@ def plot_comparative_grid(u_all, u_pred_single, u_pred_ensemble, Energy_MC_all,
         "ytick.labelsize": 8,
         "figure.dpi": 150,
     })
-    
-    # Select 6 time snapshots
-    total_steps = len(Time_record)
-    # Calculate time indices based on actual time values (similar to image: t=0, 1, 5, 7, 10, 20s)
-    target_times = [0, 1, 5, 7, 10, min(20, (total_steps - 1) * dt)]
+
+    Nt = Time_record.shape[0]
+    total_steps = Nt
+    # target physical times (秒)
+    target_times = [0.0, 1.0, 5.0, 7.0, 10.0, min(20.0, (total_steps - 1) * dt)]
+
     time_indices = []
     time_values = []
-    
-    for target_t in target_times:
-        # Find closest time index
-        time_idx = min(int(target_t / dt), total_steps - 1)
-        time_indices.append(time_idx)
-        # Time_record is indices, so multiply by dt to get actual time
-        actual_time = time_idx * dt
-        time_values.append(actual_time)
-    
-    # Create 4x6 grid
-    fig, axs = plt.subplots(4, 6, figsize=(18, 12))
-    fig.suptitle(f'Comparative Analysis: Ground Truth vs Predictions - {title_suffix}', 
+    for t in target_times:
+        idx = min(int(round(t / dt)), total_steps - 1)
+        time_indices.append(idx)
+        time_values.append(idx * dt)
+
+    # -------- 全局坐标范围 (u1,u2,u3) 保证所有 3D 面板范围一致 --------
+    all_states = np.concatenate([
+        u_all.reshape(-1, 3),
+        u_pred_single.reshape(-1, 3),
+        u_pred_ensemble.reshape(-1, 3)
+    ], axis=0)
+    u1_min, u1_max = np.percentile(all_states[:, 0], [1, 99])
+    u2_min, u2_max = np.percentile(all_states[:, 1], [1, 99])
+    u3_min, u3_max = np.percentile(all_states[:, 2], [1, 99])
+
+    # -------- figure 布局 --------
+    fig = plt.figure(figsize=(18, 10))
+    fig.suptitle(f'3D triad: Numerical vs Emulator vs Thermalized – {title_suffix}',
                  fontsize=14, fontweight='bold')
-    
-    # Color schemes
-    colors_truth = ['#1f77b4', '#ff7f0e', '#2ca02c']  # Blue, Orange, Green for u1, u2, u3
-    colors_single = ['#9467bd', '#8c564b', '#e377c2']  # Purple tones
-    colors_ensemble = ['#7f7f7f', '#bcbd22', '#17becf']  # Gray tones
-    
-    # Phase space projection pairs
-    proj_pairs = [(0, 1), (1, 2), (0, 2)]  # (u1-u2), (u2-u3), (u1-u3)
-    proj_labels = [('u1', 'u2'), ('u2', 'u3'), ('u1', 'u3')]
-    
-    # Sample trajectories for visualization (use subset to avoid overcrowding)
-    sample_size = min(200, u_all.shape[0])
-    sample_indices = np.random.choice(u_all.shape[0], sample_size, replace=False)
-    
-    # Top 3 rows: Phase space projections
-    row_labels = ['Numerical model', 'Emulator (Single)', 'Thermalized (Ensemble)']
+
+    row_labels = ['Numerical model', 'Emulator', 'Thermalized']
     data_sets = [u_all, u_pred_single, u_pred_ensemble]
-    data_colors = [colors_truth, colors_single, colors_ensemble]
-    
+
+    # 固定随机种子，保证截图可复现
+    np.random.seed(0)
+    NPATH = u_all.shape[0]
+    sample_size = min(1000, NPATH)
+    sample_idx = np.random.choice(NPATH, sample_size, replace=False)
+
+    # -------- 上三行：3D scatter --------
     for row in range(3):
+        U = data_sets[row]  # (NPATH, 3, Nt)
+
         for col in range(6):
-            ax = axs[row, col]
-            time_idx = time_indices[col]
-            t_val = time_values[col]
-            
-            # Get data at this time step
-            data = data_sets[row][sample_indices, :, time_idx]
-            
-            # Plot phase space projection (u1-u2)
-            if row == 0:
-                # Ground truth - use u1-u2 projection
-                ax.scatter(data[:, 0], data[:, 1], s=1, alpha=0.3, c=colors_truth[0], 
-                          rasterized=True)
-                ax.set_xlabel('u1', fontsize=8)
-                ax.set_ylabel('u2', fontsize=8)
-            elif row == 1:
-                # Single model - use u1-u2 projection
-                ax.scatter(data[:, 0], data[:, 1], s=1, alpha=0.3, c=colors_single[0], 
-                          rasterized=True)
-                ax.set_xlabel('u1', fontsize=8)
-                ax.set_ylabel('u2', fontsize=8)
-            else:
-                # Ensemble - use u1-u2 projection
-                ax.scatter(data[:, 0], data[:, 1], s=1, alpha=0.3, c=colors_ensemble[0], 
-                          rasterized=True)
-                ax.set_xlabel('u1', fontsize=8)
-                ax.set_ylabel('u2', fontsize=8)
-            
-            # Set title with time info
-            if row == 0:
-                ax.set_title(f't={t_val:.1f}s, step={time_idx}', fontsize=9, pad=5)
-            
-            # Set row label on first column
+            tidx = time_indices[col]
+            snapshot = U[sample_idx, :, tidx]  # (sample_size, 3)
+
+            # subplot index: 4 行 × 6 列
+            ax_idx = row * 6 + col + 1
+            ax = fig.add_subplot(4, 6, ax_idx, projection='3d')
+
+            ax.scatter(snapshot[:, 0],
+                       snapshot[:, 1],
+                       snapshot[:, 2],
+                       s=2, alpha=0.25, c='tab:purple')
+
+            ax.set_xlim([u1_min, u1_max])
+            ax.set_ylim([u2_min, u2_max])
+            ax.set_zlim([u3_min, u3_max])
+
+            # 只在左边几列标轴，避免太乱
             if col == 0:
-                ax.text(-0.15, 0.5, row_labels[row], transform=ax.transAxes,
-                       fontsize=10, fontweight='bold', rotation=90, va='center', ha='right')
-            
-            ax.grid(True, alpha=0.3)
-            ax.set_aspect('auto')
-    
-    # Bottom row: Energy spectra/evolution
+                ax.set_xlabel('u1')
+                ax.set_ylabel('u2')
+                ax.set_zlabel('u3')
+            else:
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.set_zticks([])
+
+            # 第一行加时间标题
+            if row == 0:
+                ax.set_title(f't={time_values[col]:.1f}s\nstep={tidx}',
+                             fontsize=9, pad=2)
+
+            # 每行左边加行标题
+            if col == 0:
+                ax.text2D(-0.25, 0.5, row_labels[row],
+                          transform=ax.transAxes,
+                          fontsize=11, fontweight='bold',
+                          rotation=90, va='center', ha='right')
+
+    # -------- 最后一行：energy vs time (log) --------
+    t_full = Time_record * dt
+
     for col in range(6):
-        ax = axs[3, col]
-        time_idx = time_indices[col]
-        t_val = time_values[col]
-        
-        # Plot energy up to this time point
-        # Time_record is indices, so multiply by dt to get actual time
-        time_slice = np.arange(time_idx + 1) * dt
-        
-        # Ground truth energy (total)
-        if Energy_MC_all.shape[1] > time_idx:
-            ax.plot(time_slice, Energy_MC_all[0, :time_idx+1], 'r-', linewidth=1.5, 
-                   label='Numerical', alpha=0.8)
-        
-        # Single model energy
-        if Energy_MC_single is not None and Energy_MC_single.shape[1] > time_idx:
-            ax.plot(time_slice, Energy_MC_single[0, :time_idx+1], 'gray', linewidth=1, 
-                   label='Emulator', alpha=0.6, linestyle='--')
-        
-        # Ensemble model energy
-        if Energy_MC_ensemble is not None and Energy_MC_ensemble.shape[1] > time_idx:
-            ax.plot(time_slice, Energy_MC_ensemble[0, :time_idx+1], 'purple', linewidth=1, 
-                   label='Thermalized', alpha=0.6, linestyle='-.')
-        
-        ax.set_xlabel('Time', fontsize=8)
-        if col == 0:
-            ax.set_ylabel('Energy', fontsize=8)
-            ax.legend(loc='upper right', fontsize=7, frameon=False)
-        
-        ax.set_title(f't={t_val:.1f}s', fontsize=9, pad=5)
-        ax.grid(True, alpha=0.3)
+        tidx = time_indices[col]
+        ax_idx = 3 * 6 + col + 1
+        ax = fig.add_subplot(4, 6, ax_idx)
+
+        t_slice = t_full[:tidx + 1]
+
+        # Numerical
+        if Energy_MC_all is not None and Energy_MC_all.shape[1] > tidx:
+            ax.plot(t_slice, Energy_MC_all[0, :tidx+1],
+                    color='tab:red', lw=1.5, label='Numerical')
+
+        # Emulator
+        if Energy_MC_single is not None and Energy_MC_single.shape[1] > tidx:
+            ax.plot(t_slice, Energy_MC_single[0, :tidx+1],
+                    color='gray', lw=1.0, ls='--', label='Emulator')
+
+        # Thermalized
+        if Energy_MC_ensemble is not None and Energy_MC_ensemble.shape[1] > tidx:
+            ax.plot(t_slice, Energy_MC_ensemble[0, :tidx+1],
+                    color='tab:blue', lw=1.2, ls='-', label='Thermalized')
+
         ax.set_yscale('log')
-    
-    # Add column headers
-    for col in range(6):
-        time_idx = time_indices[col]
-        t_val = time_values[col]
-        fig.text(0.15 + col * 0.14, 0.96, f't={t_val:.1f}s, step={time_idx}', 
-                ha='center', fontsize=9, fontweight='bold')
-    
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-    
-    # Save the figure
+        ax.grid(True, alpha=0.3)
+        ax.set_xlabel('Time')
+
+        if col == 0:
+            ax.set_ylabel('Total kinetic energy')
+            ax.legend(frameon=False, fontsize=8)
+
+    fig.text(0.5, 0.03,
+             'Energy evolution from different models (log scale)',
+             ha='center', fontsize=11)
+
+    plt.tight_layout(rect=[0.03, 0.06, 0.98, 0.93])
+
+    # -------- save --------
     if save_path is not None:
-        save_file = os.path.join(save_path, f'comparative_grid_{title_suffix.replace(" ", "_")}.pdf')
-        plt.savefig(save_file, dpi=300, bbox_inches='tight')
-        print(f"[INFO] Saved comparative grid plot to: {save_file}")
-        
-        # Also save as PNG
-        save_file_png = os.path.join(save_path, f'comparative_grid_{title_suffix.replace(" ", "_")}.png')
-        plt.savefig(save_file_png, dpi=300, bbox_inches='tight')
-        print(f"[INFO] Saved comparative grid plot (PNG) to: {save_file_png}")
-    
-    plt.show()
-    
+        base = f'comparative_grid_3D_{title_suffix.replace(" ", "_")}'
+        pdf_path = os.path.join(save_path, base + '.pdf')
+        png_path = os.path.join(save_path, base + '.png')
+        fig.savefig(pdf_path, dpi=300, bbox_inches='tight')
+        fig.savefig(png_path, dpi=300, bbox_inches='tight')
+        print(f"[INFO] Saved: {pdf_path}")
+        print(f"[INFO] Saved: {png_path}")
+
+    return fig
+
+
+def plot_triad_3d_snapshot(u,
+                           time_idx,
+                           dt,
+                           title="Numerical model",
+                           cmap="viridis",
+                           sample_size=5000,
+                           save_path=None):
+    """
+    u: np.ndarray, shape (NPATH, 3, Nt+1)
+       Triad trajectories (can be u_all, u_pred_single, etc.)
+    time_idx: int
+       Index in time (0..Nt)
+    dt: float
+       Time step (only for labeling)
+    """
+    NPATH = u.shape[0]
+    Nt = u.shape[2]
+
+    time_idx = min(time_idx, Nt - 1)
+    t_val = time_idx * dt
+
+    # sample trajectories if too many
+    if sample_size is not None and sample_size < NPATH:
+        np.random.seed(0)
+        idx = np.random.choice(NPATH, sample_size, replace=False)
+        snapshot = u[idx, :, time_idx]
+    else:
+        snapshot = u[:, :, time_idx]
+
+    x = snapshot[:, 0]
+    y = snapshot[:, 1]
+    z = snapshot[:, 2]
+
+    # color by radius in state space (like "magnitude")
+    r = np.sqrt(x**2 + y**2 + z**2)
+
+    # global bounds to make a nice box
+    pad = 0.1 * (np.max(snapshot) - np.min(snapshot) + 1e-8)
+    xmin, xmax = x.min() - pad, x.max() + pad
+    ymin, ymax = y.min() - pad, y.max() + pad
+    zmin, zmax = z.min() - pad, z.max() + pad
+
+    fig = plt.figure(figsize=(8, 5))
+    ax = fig.add_subplot(111, projection="3d")
+
+    sc = ax.scatter(x, y, z, c=r, s=2, alpha=0.25, cmap=cmap)
+
+    ax.set_xlim([xmin, xmax])
+    ax.set_ylim([ymin, ymax])
+    ax.set_zlim([zmin, zmax])
+
+    ax.set_xlabel(r"$u_1$")
+    ax.set_ylabel(r"$u_2$")
+    ax.set_zlabel(r"$u_3$")
+
+    ax.set_title(f"{title}\n t = {t_val:.2f}, step = {time_idx}")
+
+    # make it look more "DNS box"-like
+    ax.view_init(elev=20, azim=-60)
+    fig.colorbar(sc, ax=ax, shrink=0.6, label=r"$|\mathbf{u}|$")
+
+    plt.tight_layout()
+
+    if save_path is not None:
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"[INFO] Saved 3D snapshot to {save_path}")
+
+    return fig
+
+
+def plot_triad_3d_grid(u_all, u_pred_single, u_pred_ensemble,
+                       Time_record, dt,
+                       save_path=None,
+                       title_suffix="triad_3D"):
+    """
+    3x6 grid:
+      rows: Numerical / Emulator / Thermalized
+      cols: t = 0, 1, 5, 7, 10, 20 (or max available)
+    """
+    import matplotlib as mpl
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+
+    mpl.rcParams.update({
+        "font.family": "serif",
+        "font.size": 9,
+        "axes.labelsize": 8,
+        "legend.fontsize": 8,
+        "xtick.labelsize": 7,
+        "ytick.labelsize": 7,
+        "figure.dpi": 150,
+    })
+
+    Nt = Time_record.shape[0]
+    total_steps = Nt
+    target_times = [0.0, 1.0, 5.0, 7.0, 10.0, min(20.0, (total_steps - 1) * dt)]
+
+    time_indices = []
+    time_values = []
+    for t in target_times:
+        idx = min(int(round(t / dt)), total_steps - 1)
+        time_indices.append(idx)
+        time_values.append(idx * dt)
+
+    # global ranges over all models & times
+    all_states = np.concatenate([
+        u_all.reshape(-1, 3),
+        u_pred_single.reshape(-1, 3),
+        u_pred_ensemble.reshape(-1, 3)
+    ], axis=0)
+    u1_min, u1_max = np.percentile(all_states[:, 0], [1, 99])
+    u2_min, u2_max = np.percentile(all_states[:, 1], [1, 99])
+    u3_min, u3_max = np.percentile(all_states[:, 2], [1, 99])
+
+    fig = plt.figure(figsize=(16, 8))
+    fig.suptitle(f"Triad phase-space clouds – {title_suffix}",
+                 fontsize=14, fontweight="bold")
+
+    row_labels = ['Numerical model', 'Emulator', 'Thermalized']
+    data_sets = [u_all, u_pred_single, u_pred_ensemble]
+
+    np.random.seed(0)
+    NPATH = u_all.shape[0]
+    sample_size = min(2500, NPATH)
+    sample_idx = np.random.choice(NPATH, sample_size, replace=False)
+
+    for row in range(3):
+        U = data_sets[row]
+        for col in range(6):
+            tidx = time_indices[col]
+            t_val = time_values[col]
+
+            snapshot = U[sample_idx, :, tidx]
+            x = snapshot[:, 0]
+            y = snapshot[:, 1]
+            z = snapshot[:, 2]
+
+            r = np.sqrt(x**2 + y**2 + z**2)
+
+            ax_idx = row * 6 + col + 1
+            ax = fig.add_subplot(3, 6, ax_idx, projection="3d")
+            sc = ax.scatter(x, y, z, c=r, s=2, alpha=0.25, cmap="viridis")
+
+            ax.set_xlim([u1_min, u1_max])
+            ax.set_ylim([u2_min, u2_max])
+            ax.set_zlim([u3_min, u3_max])
+
+            if col == 0:
+                ax.set_xlabel(r"$u_1$")
+                ax.set_ylabel(r"$u_2$")
+                ax.set_zlabel(r"$u_3$")
+                ax.text2D(-0.22, 0.5, row_labels[row],
+                          transform=ax.transAxes,
+                          fontsize=10, fontweight="bold",
+                          rotation=90, va="center", ha="right")
+            else:
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.set_zticks([])
+
+            if row == 0:
+                ax.set_title(f"t={t_val:.1f}s\nstep={tidx}",
+                             fontsize=8, pad=2)
+
+            ax.view_init(elev=20, azim=-60)
+
+    plt.tight_layout(rect=[0.03, 0.03, 0.97, 0.93])
+
+    if save_path is not None:
+        base = f"triad_3D_grid_{title_suffix.replace(' ', '_')}"
+        pdf_path = os.path.join(save_path, base + ".pdf")
+        png_path = os.path.join(save_path, base + ".png")
+        fig.savefig(pdf_path, dpi=300, bbox_inches="tight")
+        fig.savefig(png_path, dpi=300, bbox_inches="tight")
+        print(f"[INFO] Saved: {pdf_path}")
+        print(f"[INFO] Saved: {png_path}")
+
     return fig
