@@ -255,7 +255,7 @@ class Config:
         parser.add_argument('--NUM_TREES', type=int, 
                             default=200,
                             help='Number of trees in inner iteration')
-        parser.add_argument('--TRAINING_DETER_SAMPLES',type=int, default=1000, help ='Number of experiment for testing fewer sample')
+        parser.add_argument('--TRAINING_DETER_SAMPLES',type=int, default=7000, help ='Number of experiment for testing fewer sample')
         
         # FEX training integration
         parser.add_argument('--INTEGRATOR_METHOD', type=str, 
@@ -324,7 +324,7 @@ class Config:
                             default = None,
                             help='Path to save figure.')
         parser.add_argument('--TRAIN_THREE_DIMENSION_INTEGRATED',type=bool,
-                            default = False,
+                            default = True,
                             help='Whether to train the FEX with ground truth data.')
         return parser
     

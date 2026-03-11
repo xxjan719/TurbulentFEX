@@ -232,11 +232,14 @@ def get_coefficients(load_dir: str = "",
     
     print(f"DEBUG: get_coefficients called with load_dir='{load_dir}', DEVICE='{DEVICE}'")
     
-    # Define path to FINAL_EXPR.txt
+    # Define path to FINAL_EXPR.txt (preferred) or FINAL_EXPR_1000.txt (fallback, e.g. equipart)
     if str(DEVICE) == "cuda:0":
-        file_path = os.path.join(load_dir, "Results", "Results1", "Results", model_name, "FINAL_EXPR.txt")
+        base_dir = os.path.join(load_dir, "Results", "Results1", "Results", model_name)
     else:
-        file_path = os.path.join(load_dir, "Results", model_name, "FINAL_EXPR.txt")
+        base_dir = os.path.join(load_dir, "Results", model_name)
+
+    file_path = os.path.join(base_dir, "FINAL_EXPR.txt")
+    alt_file_path = os.path.join(base_dir, "FINAL_EXPR_1000.txt")
     
     print(f"DEBUG: Looking for file at: {file_path}")
     print(f"DEBUG: File exists: {os.path.exists(file_path)}")
@@ -247,12 +250,17 @@ def get_coefficients(load_dir: str = "",
         "dim_3":{"x1":[], "x2":[], "x3":[], "x1x2":[]}}
     
     if not os.path.exists(file_path):
-        print(f"Error: FINAL_EXPR.txt not found at {file_path}")
-        return coefficients_data
+        # Try the alternative FINAL_EXPR_1000.txt if the default is missing
+        if os.path.exists(alt_file_path):
+            print(f"Warning: FINAL_EXPR.txt not found at {file_path}, using FINAL_EXPR_1000.txt instead.")
+            file_path = alt_file_path
+        else:
+            print(f"Error: Neither FINAL_EXPR.txt nor FINAL_EXPR_1000.txt found in {base_dir}")
+            return coefficients_data
     
     print(f"Loading coefficients from: {file_path}")
     
-    # Read the FINAL_EXPR.txt file
+    # Read the FINAL_EXPR file
     with open(file_path, 'r') as f:
         content = f.read()
     print(noise_levels)
@@ -261,16 +269,15 @@ def get_coefficients(load_dir: str = "",
         # Find the section for this noise level
         if noise_level == 0.0:
             noise_pattern = rf'(?:NOISE|Noise)\s*{noise_level}(?:\s*ODE|\s*total noise)?\s*(?:#=+|=+)\s*(.*?)(?=\n(?:NOISE|Noise)|\Z)'
-            #noise_pattern = r'NOISE 0\.0 ODE\s*#=+\s*(.*?)(?=\n\nNOISE|\n\nNoise|\Z)'
         elif noise_level == 1.0:
             noise_pattern = rf'(?:NOISE|Noise)\s*{noise_level}(?:\s*ODE|\s*total noise)?\s*(?:#=+|=+)\s*(.*?)(?=\n(?:NOISE|Noise)|\Z)'
-            #noise_pattern = r'Noise 1\.0 total noise\s*#.*?\n(.*?)(?=\n\nNOISE|\Z)'
         elif noise_level == 1.8:
-            # Special case for the last section (1.8)
-            noise_pattern = rf'NOISE {noise_level}\s*=+\s*(.*?)(?=\Z)'
+            # Special case for the last section (1.8); include optional "ODE" text
+            noise_pattern = rf'(?:NOISE|Noise)\s*{noise_level}(?:\s*ODE|\s*total noise)?\s*=+\s*(.*?)(?=\Z)'
         else:
-            # Handle both formats: with #= and with ==, and ensure we capture the last section
-            noise_pattern = rf'NOISE {noise_level}\s*(?:#=+|=+)\s*(.*?)(?=\n\nNOISE|\n\nNoise|\Z)'
+            # Handle both formats: with #= and with ==, optionally followed by "ODE" or "total noise".
+            # Accept both "NOISE" and "Noise" as in FINAL_EXPR_1000.txt.
+            noise_pattern = rf'(?:NOISE|Noise)\s*{noise_level}(?:\s*ODE|\s*total noise)?\s*(?:#=+|=+)\s*(.*?)(?=\n(?:NOISE|Noise)|\Z)'
         
         noise_match = re.search(noise_pattern, content, re.DOTALL)
         if noise_match:

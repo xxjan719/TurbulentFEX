@@ -101,14 +101,31 @@ else:
 
     
 
-# Select 1000 trajectories for training
+# Select trajectories for training (filter out invalid trajectories first)
 print(f"[INFO] The case now is {args.params_name}")
 print("\n")
 print(f'[INFO] Full dataset shape: {dataset_full.shape}')
-print(f'[INFO] Selecting {args.TRAINING_DETER_SAMPLES} trajectories for training...')
+
+# Filter out trajectories that contain non-finite values (NaN/Inf) to avoid NaN loss during training
+finite_mask = np.isfinite(dataset_full).all(axis=(1, 2))
+valid_dataset = dataset_full[finite_mask]
+num_invalid = dataset_full.shape[0] - valid_dataset.shape[0]
+
+if num_invalid > 0:
+    print(f"[WARNING] Detected {num_invalid} trajectories with NaN/Inf values. They will be excluded from training.")
+
+if valid_dataset.shape[0] < args.TRAINING_DETER_SAMPLES:
+    print(f"[WARNING] Requested TRAINING_DETER_SAMPLES={args.TRAINING_DETER_SAMPLES} "
+          f"but only {valid_dataset.shape[0]} valid trajectories are available. "
+          f"Using all valid trajectories instead.")
+    effective_train_samples = valid_dataset.shape[0]
+else:
+    effective_train_samples = args.TRAINING_DETER_SAMPLES
+
+print(f'[INFO] Selecting {effective_train_samples} trajectories for training...')
 np.random.seed(SEED)  # Use same seed for reproducibility
-selected_indices = np.random.choice(dataset_full.shape[0], size=args.TRAINING_DETER_SAMPLES, replace=False)
-dataset = dataset_full[selected_indices]  # (1000, 3, 1001)
+selected_indices = np.random.choice(valid_dataset.shape[0], size=effective_train_samples, replace=False)
+dataset = valid_dataset[selected_indices]
 print(f'[INFO] Selected dataset shape: {dataset.shape}')
 print(f'[INFO] Right now it is ok for data. We use it for the first stage training: FEX'.center(60,'='))
 
