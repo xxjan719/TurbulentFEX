@@ -728,6 +728,125 @@ def plot_cross_term_vs_noise(coeff,
     plt.show()
 
 
+def plot_cross_term_vs_sample(coeff,
+                              sample_sizes: list = None,
+                              save_dir: str = "",
+                              filename: str = "cross_terms_vs_sample.pdf",
+                              panel_labels: list = None,
+                              ground_truths_list: list = None):
+    """
+    Plot log10-error of cross-term coefficients vs sample size in a 1x3 layout.
+    Same style as plot_cross_term_vs_noise but x-axis is sample size (from FINAK_EXPR_SAMPLE.txt).
+    Left: equipart, center: cascade, right: dual_cascade (when coeff is a list of 3).
+
+    Args:
+        coeff: Single dict or list of 3 dicts [equipart, cascade, dual_cascade].
+        sample_sizes: List of sample sizes for x-axis (e.g. [1000, 2000, ..., 10000]).
+        save_dir: Directory to save the plot.
+        filename: Output PDF filename.
+        panel_labels: Optional list of 3 strings for subplot titles.
+        ground_truths_list: Optional list of 3 tuples (B1, B2, B3) per panel.
+    """
+    if isinstance(coeff, dict):
+        coeff_list = [coeff, coeff, coeff]
+        ground_truths_list = ground_truths_list or [(1.0, -0.6, -0.4)] * 3
+    else:
+        coeff_list = list(coeff)
+        if len(coeff_list) != 3:
+            raise ValueError("coeff must be a dict or a list of 3 coefficient dicts")
+        ground_truths_list = ground_truths_list or [
+            (1.0, -0.6, -0.4),   # equipart
+            (2.0, -1.0, -1.0),   # cascade
+            (2.0, -1.0, -1.0),   # dual_cascade
+        ]
+    if panel_labels is None:
+        panel_labels = ['Equipart', 'Forward Cascade', 'Dual Cascade']
+    if sample_sizes is None:
+        sample_sizes = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
+
+    term_names = {'dim_1': 'x2x3', 'dim_2': 'x1x3', 'dim_3': 'x1x2'}
+    styles = {
+        'dim_1': {'color': '#1f77b4', 'marker': 'o'},
+        'dim_2': {'color': '#ff7f0e', 'marker': 's'},
+        'dim_3': {'color': '#2ca02c', 'marker': 'D'},
+    }
+    legend_labels = [
+        r'$\log_{10}(|\hat{B}_1-B_1|)$',
+        r'$\log_{10}(|\hat{B}_2-B_2|)$',
+        r'$\log_{10}(|\hat{B}_3-B_3|)$',
+        r'$\log_{10}(|\hat{B}_1+\hat{B}_2+\hat{B}_3-0|)$',
+    ]
+
+    fig, axes = plt.subplots(1, 3, figsize=(12, 3.5), sharey=True)
+    set_figure_position(x=100, y=100, width=1400, height=600)
+    legend_handles = []
+
+    for idx, ax in enumerate(axes):
+        c = coeff_list[idx]
+        gt_B1, gt_B2, gt_B3 = ground_truths_list[idx]
+        gts = {'dim_1': gt_B1, 'dim_2': gt_B2, 'dim_3': gt_B3}
+
+        for dim_key in ['dim_1', 'dim_2', 'dim_3']:
+            term_name = term_names[dim_key]
+            if dim_key not in c or term_name not in c[dim_key] or not c[dim_key][term_name]:
+                continue
+            values = c[dim_key][term_name]
+            n_vals = len(values)
+            x = sample_sizes[:n_vals]
+            err = np.abs(np.array(values) - gts[dim_key])
+            err = np.maximum(err, 1e-16)
+            y = np.log10(err)
+            style = styles[dim_key]
+            h = ax.plot(x, y, linestyle='-', marker=style['marker'], color=style['color'],
+                        linewidth=2, markersize=5)
+            if idx == 0:
+                legend_handles.append(h[0])
+
+        x2x3 = c.get('dim_1', {}).get('x2x3', [])
+        x1x3 = c.get('dim_2', {}).get('x1x3', [])
+        x1x2 = c.get('dim_3', {}).get('x1x2', [])
+        n_pts = min(len(x2x3), len(x1x3), len(x1x2))
+        if n_pts > 0:
+            summed = np.array(x2x3[:n_pts]) + np.array(x1x3[:n_pts]) + np.array(x1x2[:n_pts])
+            err_sum = np.maximum(np.abs(summed - 0.0), 1e-16)
+            y_sum = np.log10(err_sum)
+            h_sum = ax.plot(sample_sizes[:n_pts], y_sum, linestyle='-', marker='^', color='#d62728',
+                           linewidth=2, markersize=5)
+            if idx == 0:
+                legend_handles.append(h_sum[0])
+
+        if idx == 0:
+            ax.set_ylabel(r'semi-log scale error', fontsize=11)
+        ax.set_xlabel('Sample size', fontsize=11)
+        ax.set_title(panel_labels[idx], fontsize=11)
+        ax.grid(True, which='both', alpha=0.3)
+        ax.tick_params(labelleft=True)
+
+    fig.tight_layout(rect=[0, 0, 1, 0.86])
+    if legend_handles:
+        fig.legend(
+            legend_handles,
+            legend_labels,
+            loc='upper center',
+            bbox_to_anchor=(0.5, 0.97),
+            ncol=len(legend_handles),
+            frameon=True,
+            fancybox=True,
+            borderaxespad=0.6,
+            fontsize=12,
+            handlelength=2.0,
+            handletextpad=0.6,
+            columnspacing=1.2,
+        )
+
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, filename)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Cross-term vs sample plot saved to {save_path}")
+    plt.show()
+
+
 def to_latex(expr):
     expr = str(expr)
     expr = expr.replace('**', '^')

@@ -343,6 +343,71 @@ def get_coefficients(load_dir: str = "",
     return coefficients_data
 
 
+def get_coefficients_from_finak_sample_file(file_path: str, verbose: bool = False) -> tuple:
+    """
+    Parse a FINAK_EXPR_SAMPLE.txt (or FINAL_EXPR_SAMPLE) file and extract
+    coefficients for each sample-size block. Same coefficient structure as
+    get_coefficients, but one entry per sample size (1000, 2000, ...).
+
+    Args:
+        file_path: Path to FINAK_EXPR_SAMPLE.txt.
+        verbose: If True, print per-block info.
+
+    Returns:
+        (coefficients_data, sample_sizes): coefficients_data has keys dim_1, dim_2, dim_3
+        with x1, x2, x3 and cross-term (x2x3, x1x3, x1x2) lists; sample_sizes is e.g. [1000, 2000, ...].
+    """
+    import re
+
+    coefficients_data = {
+        "dim_1": {"x1": [], "x2": [], "x3": [], "x2x3": []},
+        "dim_2": {"x1": [], "x2": [], "x3": [], "x1x3": []},
+        "dim_3": {"x1": [], "x2": [], "x3": [], "x1x2": []},
+    }
+    sample_sizes = []
+
+    if not os.path.exists(file_path):
+        if verbose:
+            print(f"File not found: {file_path}")
+        return coefficients_data, sample_sizes
+
+    with open(file_path, "r") as f:
+        content = f.read()
+
+    # Split by "SAMPLE <number>" blocks; content has optional "SAMPLE" header then "SAMPLE 1000", "SAMPLE 2000", ...
+    block_pattern = re.compile(r"SAMPLE\s+(\d+)\s*\n(?:[#=]+\s*\n)?(.*?)(?=SAMPLE\s+\d+\s*\n|\Z)", re.DOTALL)
+    for match in block_pattern.finditer(content):
+        sample_num = int(match.group(1))
+        block = match.group(2).strip()
+        sample_sizes.append(sample_num)
+
+        for dim in range(1, 4):
+            # Match "dimension_N:" or "ddimension_N:" (typo) and expression to next dimension or end
+            dim_pattern = re.compile(
+                r"d{1,2}imension_" + str(dim) + r":\s*(.*?)(?=\nd{1,2}imension_|\Z)", re.DOTALL
+            )
+            dim_match = dim_pattern.search(block)
+            if dim_match:
+                expression = dim_match.group(1).strip()
+                coeffs = extract_coefficients_from_expr(expression, dim)
+                if coeffs.get("x1") is not None:
+                    coefficients_data[f"dim_{dim}"]["x1"].append(coeffs["x1"])
+                if coeffs.get("x2") is not None:
+                    coefficients_data[f"dim_{dim}"]["x2"].append(coeffs["x2"])
+                if coeffs.get("x3") is not None:
+                    coefficients_data[f"dim_{dim}"]["x3"].append(coeffs["x3"])
+                if dim == 1 and coeffs.get("x2x3") is not None:
+                    coefficients_data["dim_1"]["x2x3"].append(coeffs["x2x3"])
+                elif dim == 2 and coeffs.get("x1x3") is not None:
+                    coefficients_data["dim_2"]["x1x3"].append(coeffs["x1x3"])
+                elif dim == 3 and coeffs.get("x1x2") is not None:
+                    coefficients_data["dim_3"]["x1x2"].append(coeffs["x1x2"])
+                if verbose:
+                    print(f"  SAMPLE {sample_num} dim_{dim}: cross-term extracted")
+
+    return coefficients_data, sample_sizes
+
+
 def get_score_expression_from_file(file_path: str) -> dict:
     """
     Get the score, loss, and expression from candidate 5 in the file.
