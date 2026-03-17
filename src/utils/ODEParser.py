@@ -44,6 +44,122 @@ def g(t,dt):
     return (g2(t,dt))**0.5
 
 
+def ODE_solver_chunk(
+    zt,
+    x_sample,
+    z_sample,
+    x0_test,
+    ODESOLVER_TIME_STEPS: int = 2000,
+    neighbor_chunk_size: int = 32
+):
+    """
+    Chunked ODE solver over neighbor dimension.
+
+    Parameters
+    ----------
+    zt : torch.Tensor
+        Shape (B, z_dim)
+    x_sample : torch.Tensor
+        Shape (B, K, x_dim) or (K, x_dim)
+    z_sample : torch.Tensor
+        Shape (B, K, z_dim) or (K, z_dim)
+    x0_test : torch.Tensor
+        Shape (B, x_dim)
+    ODESOLVER_TIME_STEPS : int
+        Number of solver steps
+    neighbor_chunk_size : int
+        Chunk size over K dimension
+
+    Returns
+    -------
+    zt : torch.Tensor
+        Shape (B, z_dim)
+    """
+
+    device = zt.device
+    dtype = zt.dtype
+
+    t_vec = torch.linspace(1.0, 0.0, ODESOLVER_TIME_STEPS + 1, device=device, dtype=dtype)
+
+    # Normalize shapes to (B, K, d)
+    if x_sample.ndim == 2:
+        x_sample = x_sample.unsqueeze(0).expand(x0_test.shape[0], -1, -1)
+    if z_sample.ndim == 2:
+        z_sample = z_sample.unsqueeze(0).expand(zt.shape[0], -1, -1)
+
+    B, K, x_dim = x_sample.shape
+    z_dim = z_sample.shape[2]
+
+    # Precompute likelihood weights from x0_test and x_sample, chunked
+    weight_likelihood_chunks = []
+    for k0 in range(0, K, neighbor_chunk_size):
+        k1 = min(k0 + neighbor_chunk_size, K)
+
+        x_chunk = x_sample[:, k0:k1, :]   # (B, kc, x_dim)
+
+        log_weight_likelihood_chunk = -1.0 * torch.sum(
+            (x0_test[:, None, :] - x_chunk) ** 2 / 2.0,
+            dim=2
+        )   # (B, kc)
+
+        weight_likelihood_chunks.append(torch.exp(log_weight_likelihood_chunk))
+
+        del x_chunk, log_weight_likelihood_chunk
+
+    weight_likelihood = torch.cat(weight_likelihood_chunks, dim=1)   # (B, K)
+    del weight_likelihood_chunks
+
+    for j in range(ODESOLVER_TIME_STEPS):
+        if j % 100 == 0:
+            print(f"this is {j} times / overall {ODESOLVER_TIME_STEPS} times")
+
+        t = t_vec[j + 1]
+        dt = t_vec[j] - t_vec[j + 1]
+
+        alpha = cond_alpha(t, dt)
+        sigma2 = cond_sigma2(t, dt)
+
+        # accumulate denominator and weighted score numerator
+        weight_sum = torch.zeros((B, 1), device=device, dtype=dtype)
+        score_num = torch.zeros((B, z_dim), device=device, dtype=dtype)
+
+        for k0 in range(0, K, neighbor_chunk_size):
+            k1 = min(k0 + neighbor_chunk_size, K)
+
+            z_chunk = z_sample[:, k0:k1, :]                 # (B, kc, z_dim)
+            wl_chunk = weight_likelihood[:, k0:k1]          # (B, kc)
+
+            diff = zt[:, None, :] - alpha * z_chunk         # (B, kc, z_dim)
+
+            score_gauss_chunk = -1.0 * diff / sigma2        # (B, kc, z_dim)
+
+            log_weight_gauss_chunk = -1.0 * torch.sum(
+                diff ** 2 / (2.0 * sigma2),
+                dim=2
+            )                                               # (B, kc)
+
+            weight_temp_chunk = torch.exp(log_weight_gauss_chunk) * wl_chunk   # (B, kc)
+
+            weight_sum += torch.sum(weight_temp_chunk, dim=1, keepdim=True)    # (B, 1)
+            score_num += torch.sum(
+                score_gauss_chunk * weight_temp_chunk[:, :, None],
+                dim=1
+            )                                                               # (B, z_dim)
+
+            del z_chunk, wl_chunk, diff
+            del score_gauss_chunk, log_weight_gauss_chunk, weight_temp_chunk
+
+        score = score_num / weight_sum   # (B, z_dim)
+
+        zt = zt - (f(t, dt) * zt - 0.5 * g2(t, dt) * score) * dt
+
+        del weight_sum, score_num, score
+        if zt.is_cuda:
+            torch.cuda.empty_cache()
+
+    return zt
+
+
 
 def ODE_solver(zt,x_sample,z_sample,x0_test,
                ODESOLVER_TIME_STEPS:int=2000):

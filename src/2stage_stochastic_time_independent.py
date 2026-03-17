@@ -49,7 +49,7 @@ print("2. Skip Training and generate the prediction results")
 print("="*60)
 
 while True:
-#choice = '1' #
+# choice = '1' #
     choice = input("\nChoose option (1 or 2 ):").strip()
     if choice in ['1','2']:
         break
@@ -88,8 +88,8 @@ if choice == '1':
     print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
     
     # Use original data structure to preserve proper indexing
-    residuals_current_train = residuals[:2000,:,:]  # Shape: (MC_samples, 3, 1000)
-    u_current_train = u_current[:2000,:,:]  # Shape: (MC_samples, 3, 1000)
+    residuals_current_train = residuals[:300,:,:]  # Shape: (MC_samples, 3, 1000)
+    u_current_train = u_current[:300,:,:]  # Shape: (MC_samples, 3, 1000)
     
     # Flatten while preserving trajectory structure
     residuals_train_flat = residuals_current_train.reshape(-1, residuals_current_train.shape[1])  # Shape: (MC_samples*1000, 3)
@@ -98,7 +98,7 @@ if choice == '1':
     
     print(f'[INFO] the residual shape is {residuals_train_flat.shape},the state of dyamics is {u_current_train_flat.shape}')
     scaler = np.ones(3) * args.DIFF_SCALE
-    train_size = 500000
+    train_size = 100000
     short_size = 2048
     it_size_utrain = 2000
     
@@ -112,11 +112,11 @@ if choice == '1':
     if not os.path.exists(os.path.join(independent_save_dir,'indices_uint32.npy')):
         indices = process_chunk_faiss_cpu(it_n_index, it_size_utrain, short_size, u_current_train_flat, u_train, train_size,3)
         print(indices)
-        indices = indices.astype(np.uint32)
-        np.save(os.path.join(independent_save_dir, "indices_uint32.npy"), indices)
-        print("[INFO] indices saved:", indices.shape, indices.dtype)
-    else:
-        indices = np.load(os.path.join(independent_save_dir, "indices_uint32.npy"))
+        #indices = indices.astype(np.uint32)
+        #np.save(os.path.join(independent_save_dir, "indices_uint32.npy"), indices)
+        #print("[INFO] indices saved:", indices.shape, indices.dtype)
+    #else:
+    #    indices = np.load(os.path.join(independent_save_dir, "indices_uint32.npy"))
     n_train, k = indices.shape
     u_dim = u_current_train_flat.shape[1]
 
@@ -128,7 +128,7 @@ if choice == '1':
 
     u_short = np.empty((n_train, k, u_dim), dtype=u_current_train_flat.dtype)
 
-    batch_rows = 100   # try 50 / 100 / 200
+    batch_rows = 10   # try 50 / 100 / 200
 
     for start in range(0, n_train, batch_rows):
         end = min(start + batch_rows, n_train)
@@ -164,7 +164,7 @@ if choice == '1':
 
             u_mini_batch = torch.tensor(u_short[start_indx:end_idx]).to(device)
             z_mini_batch = torch.tensor(z_short[start_indx:end_idx]).to(device)
-            ODE_Solution[start_indx:end_idx,:] = ODE_solver(it_ZT,u_mini_batch,z_mini_batch,it_u0,ODEsolver_time_steps).to('cpu').detach().numpy()
+            ODE_Solution[start_indx:end_idx,:] = ODE_solver_chunk(it_ZT,u_mini_batch,z_mini_batch,it_u0,ODEsolver_time_steps).to('cpu').detach().numpy()
             if jj % 5==0:
                 print(f'[INFO] the {jj}th iteration is done')
             
