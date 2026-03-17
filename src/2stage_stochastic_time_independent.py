@@ -88,13 +88,13 @@ if choice == '1':
     print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
     
     # Use original data structure to preserve proper indexing
-    residuals_current_train = residuals[:100,:,:]  # Shape: (100, 3, 1000)
-    u_current_train = u_current[:100,:,:]  # Shape: (100, 3, 1000)
+    residuals_current_train = residuals[:,:,:]  # Shape: (MC_samples, 3, 1000)
+    u_current_train = u_current[:,:,:]  # Shape: (MC_samples, 3, 1000)
     
     # Flatten while preserving trajectory structure
-    residuals_train_flat = residuals_current_train.reshape(-1, residuals_current_train.shape[1])  # Shape: (100000, 3)
+    residuals_train_flat = residuals_current_train.reshape(-1, residuals_current_train.shape[1])  # Shape: (MC_samples*1000, 3)
     residuals_train_flat = residuals_train_flat*args.DIFF_SCALE
-    u_current_train_flat = u_current_train.reshape(-1, u_current_train.shape[1])  # Shape: (100000, 3)
+    u_current_train_flat = u_current_train.reshape(-1, u_current_train.shape[1])  # Shape: (MC_samples*1000, 3)
     
     print(f'[INFO] the residual shape is {residuals_train_flat.shape},the state of dyamics is {u_current_train_flat.shape}')
     scaler = np.ones(3) * args.DIFF_SCALE
