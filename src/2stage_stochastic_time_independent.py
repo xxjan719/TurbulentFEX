@@ -446,6 +446,7 @@ else:
         det_update = (k1_det_np+k2_det_np)/2
     
         # Generate stochastic component (just once per step)
+        # Use scaler like 2stage_stochastic_time_dependent.py: denormalize NN output then scale back by scaler
         Npath = current_pred_state.shape[0]
         dim = current_pred_state.shape[1]
         Winc_tensor = torch.Tensor(Winc).to(device, dtype=torch.float32)
@@ -454,9 +455,9 @@ else:
         Neural_Network = FN_Net(3,3,50).to(device)
         Neural_Network_path = os.path.join(save_dir,'Neural_Network.pth')
         Neural_Network.load_state_dict(torch.load(Neural_Network_path))
-        # Try both single and ensemble neural networks
-        stoch_update = (Neural_Network(Winc_tensor)*ODE_std + ODE_mean)/diff_scale
-        stoch_update = stoch_update.cpu().detach().numpy()
+        with torch.no_grad():
+            pred = Neural_Network(Winc_tensor) * ODE_std + ODE_mean
+            stoch_update = (pred / scaler).cpu().detach().numpy()
     
         
     
