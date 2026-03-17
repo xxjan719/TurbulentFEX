@@ -93,11 +93,12 @@ if choice == '1':
     
     # Flatten while preserving trajectory structure
     residuals_train_flat = residuals_current_train.reshape(-1, residuals_current_train.shape[1])  # Shape: (MC_samples*1000, 3)
-    residuals_train_flat = residuals_train_flat*args.DIFF_SCALE
+    # Scale residuals with scaler (per-dimension) like 2stage_stochastic_time_dependent.py / generate_second_step
+    scaler = np.ones(3) * args.DIFF_SCALE
+    residuals_train_flat = residuals_train_flat * scaler
     u_current_train_flat = u_current_train.reshape(-1, u_current_train.shape[1])  # Shape: (MC_samples*1000, 3)
     
     print(f'[INFO] the residual shape is {residuals_train_flat.shape},the state of dyamics is {u_current_train_flat.shape}')
-    scaler = np.ones(3) * args.DIFF_SCALE
     train_size = 100000
     short_size = 2048
     it_size_utrain = 2000
