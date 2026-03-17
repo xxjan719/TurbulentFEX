@@ -264,7 +264,7 @@ def process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, x_sample, x
                 batch_indices.append(
                     torch.arange(sample_start, sample_end, device=device).unsqueeze(0).repeat(batch.size(0), 1)
                 )
-            print('finished percentage {}%'.format((batch_end/x0_train_chunk.size(0))*100))
+            print('finished percentage {}%'.format((batch_end/it_size_x0train)*100))
 
             # Concatenate distances and indices across all `x_sample` batches
             batch_distances = torch.cat(batch_distances, dim=1)

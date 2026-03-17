@@ -16,7 +16,7 @@ random.seed(SEED)
 
 
 def params_init(case_name = None,
-               sample:int=50000)->dict:
+               sample:int=50)->dict:
     # initializing the settings
     params = {
         'MC': sample,  # number of Monte Carlo simulations (50,000)

@@ -88,8 +88,8 @@ if choice == '1':
     print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
     
     # Use original data structure to preserve proper indexing
-    residuals_current_train = residuals[:,:,:]  # Shape: (MC_samples, 3, 1000)
-    u_current_train = u_current[:,:,:]  # Shape: (MC_samples, 3, 1000)
+    residuals_current_train = residuals[:2000,:,:]  # Shape: (MC_samples, 3, 1000)
+    u_current_train = u_current[:2000,:,:]  # Shape: (MC_samples, 3, 1000)
     
     # Flatten while preserving trajectory structure
     residuals_train_flat = residuals_current_train.reshape(-1, residuals_current_train.shape[1])  # Shape: (MC_samples*1000, 3)
@@ -98,7 +98,7 @@ if choice == '1':
     
     print(f'[INFO] the residual shape is {residuals_train_flat.shape},the state of dyamics is {u_current_train_flat.shape}')
     scaler = np.ones(3) * args.DIFF_SCALE
-    train_size = 40000
+    train_size = 500000
     short_size = 2048
     it_size_utrain = 2000
     
@@ -109,10 +109,43 @@ if choice == '1':
     residuals_train = residuals_train_flat[select_row_indices]
     print(f'[INFO] u_train shape is {u_train.shape}')
     # Use u_train as the reference set to ensure proper indexing
-    indices = process_chunk_faiss_cpu(it_n_index, it_size_utrain, short_size, u_current_train_flat, u_train, train_size,3)
-    print(indices)
-    u_short = u_current_train_flat[indices]
-    z_short = residuals_train_flat[indices]
+    if not os.path.exists(os.path.join(independent_save_dir,'indices_uint32.npy')):
+        indices = process_chunk_faiss_cpu(it_n_index, it_size_utrain, short_size, u_current_train_flat, u_train, train_size,3)
+        print(indices)
+        indices = indices.astype(np.uint32)
+        np.save(os.path.join(independent_save_dir, "indices_uint32.npy"), indices)
+        print("[INFO] indices saved:", indices.shape, indices.dtype)
+    else:
+        indices = np.load(os.path.join(independent_save_dir, "indices_uint32.npy"))
+    n_train, k = indices.shape
+    u_dim = u_current_train_flat.shape[1]
+
+    if residuals_train_flat.ndim == 1:
+        z_short = np.empty((n_train, k), dtype=residuals_train_flat.dtype)
+    else:
+        z_dim = residuals_train_flat.shape[1]
+        z_short = np.empty((n_train, k, z_dim), dtype=residuals_train_flat.dtype)
+
+    u_short = np.empty((n_train, k, u_dim), dtype=u_current_train_flat.dtype)
+
+    batch_rows = 100   # try 50 / 100 / 200
+
+    for start in range(0, n_train, batch_rows):
+        end = min(start + batch_rows, n_train)
+        idx_batch = indices[start:end]
+
+        u_short_batch = u_current_train_flat[idx_batch]
+        z_short_batch = residuals_train_flat[idx_batch]
+
+        u_short[start:end] = u_short_batch
+        z_short[start:end] = z_short_batch
+
+        print(f"[INFO] saved batch {start}:{end}, "
+          f"u_short_batch shape is {u_short_batch.shape}, "
+          f"z_short_batch shape is {z_short_batch.shape}")
+
+        del u_short_batch, z_short_batch
+
     print(f'[INFO] u_short shape is {u_short.shape}, z_short shape is {z_short.shape}')
     #===================================================================================
     if not os.path.exists(os.path.join(independent_save_dir,'ODE_Solution.npy')) and not os.path.exists(os.path.join(independent_save_dir,'ZT_Solution.npy')):
