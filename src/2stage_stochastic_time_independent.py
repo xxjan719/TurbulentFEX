@@ -109,7 +109,7 @@ if choice == '1':
     residuals_train = residuals_train_flat[select_row_indices]
     print(f'[INFO] u_train shape is {u_train.shape}')
     # Use u_train as the reference set to ensure proper indexing
-    indices = process_chunk_faiss_cpu(it_n_index, it_size_utrain, short_size, u_current_train_flat, u_train, train_size, 3)
+    indices = process_chunk_faiss_cpu(it_n_index, it_size_utrain, short_size, u_current_train_flat, u_train, train_size,3)
     print(indices)
     u_short = u_current_train_flat[indices]
     z_short = residuals_train_flat[indices]

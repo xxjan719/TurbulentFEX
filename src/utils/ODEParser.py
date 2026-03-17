@@ -206,7 +206,7 @@ def generate_euler_residue(func, data, dt):
 
 
 
-def process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, x_sample, x0_train, train_size, x_dim, batch_size=256, sample_batch_size=100):
+def process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, x_sample, x0_train, train_size, x_dim, batch_size=20, sample_batch_size=20):
     """
     A function to perform vector similarity search with large `x_sample` processed in batches.
 
@@ -242,6 +242,7 @@ def process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, x_sample, x
 
         # Process query vectors in smaller batches to avoid memory overflow
         for batch_start in range(0, x0_train_chunk.size(0), batch_size):
+            print('this is {} overall it has chunk size {}'.format(batch_start,x0_train_chunk.size(0)))
             batch_end = min(batch_start + batch_size, x0_train_chunk.size(0))
             batch = x0_train_chunk[batch_start:batch_end]
 
@@ -251,7 +252,7 @@ def process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, x_sample, x
 
             # Process `x_sample` in smaller batches
             for sample_start in range(0, x_sample.size(0), sample_batch_size):
-                # print('this is first batch size', sample_start)
+                
                 sample_end = min(sample_start + sample_batch_size, x_sample.size(0))
                 sample_batch = x_sample[sample_start:sample_end]
 
@@ -263,6 +264,7 @@ def process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, x_sample, x
                 batch_indices.append(
                     torch.arange(sample_start, sample_end, device=device).unsqueeze(0).repeat(batch.size(0), 1)
                 )
+            print('finished percentage {}%'.format((batch_end/x0_train_chunk.size(0))*100))
 
             # Concatenate distances and indices across all `x_sample` batches
             batch_distances = torch.cat(batch_distances, dim=1)
@@ -281,14 +283,11 @@ def process_chunk_faiss_cpu(it_n_index, it_size_x0train, short_size, x_sample, x
             print('Find index iteration', jj, it_size_x0train)
 
     return x0_train_index_initial
-        
- 
-
-
-
-
-
-def process_chunk(it_n_index, it_size_x0train, short_size,x_sample, x0_train, train_size,x_dim):
+    
+    
+    
+def process_chunk(it_n_index, it_size_x0train, short_size,x_sample, x0_train, train_size,x_dim=3):
+    
     x0_train_index_initial = np.empty((train_size, short_size ), dtype=int)
     gpu = faiss.StandardGpuResources()  # Initialize GPU resources each time
     index = faiss.IndexFlatL2(x_dim)  # Create a FAISS index for exact searches
