@@ -286,7 +286,7 @@ else:
     G = params['G']
     B = params['B']
     
-    TIME_AMOUNT = 10
+    TIME_AMOUNT = 50
     dt = 0.01
     NPATH = 5000
     initial_state = np.random.normal(loc=m0, scale=np.sqrt(var0), size=(NPATH, 3))    
