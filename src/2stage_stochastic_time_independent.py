@@ -377,12 +377,15 @@ else:
         independent_save_dir = f'../src/Example/MC_triad/Results/{args.params_name}/noise_1.0/second_stage_10000_independent'
 
     dataname = os.path.join(independent_save_dir,'data_inference.pt')
-    data_inference = torch.load(dataname)
-    ZT_mean = data_inference['ZT_mean']
-    ZT_std = data_inference['ZT_std']
-    ODE_mean = data_inference['ODE_mean']
-    ODE_std = data_inference['ODE_std']
+    data_inference = torch.load(dataname, map_location=device)
+    ZT_mean = data_inference['ZT_mean'].to(device)
+    ZT_std = data_inference['ZT_std'].to(device)
+    ODE_mean = data_inference['ODE_mean'].to(device)
+    ODE_std = data_inference['ODE_std'].to(device)
+    # Use scale from training (diff_scale) for stoch_update, not current args.DIFF_SCALE
     diff_scale = data_inference['diff_scale']
+    if torch.is_tensor(diff_scale):
+        diff_scale = diff_scale.item()
     tM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
     for idx in range(1,int(TIME_AMOUNT/dt)+1):
         # RK4 integration
@@ -447,7 +450,8 @@ else:
         det_update = (k1_det_np+k2_det_np)/2
     
         # Generate stochastic component (just once per step)
-        # Use scaler like 2stage_stochastic_time_dependent.py: denormalize NN output then scale back by scaler
+        # NN outputs normalized ODE; denormalize (pred = NN*ODE_std + ODE_mean) then divide by diff_scale
+        # to match training (residuals were scaled by scaler before ODE solver; use saved diff_scale).
         Npath = current_pred_state.shape[0]
         dim = current_pred_state.shape[1]
         Winc_tensor = torch.Tensor(Winc).to(device, dtype=torch.float32)
@@ -455,10 +459,10 @@ else:
        
         Neural_Network = FN_Net(3,3,50).to(device)
         Neural_Network_path = os.path.join(save_dir,'Neural_Network.pth')
-        Neural_Network.load_state_dict(torch.load(Neural_Network_path))
+        Neural_Network.load_state_dict(torch.load(Neural_Network_path, map_location=device))
         with torch.no_grad():
             pred = Neural_Network(Winc_tensor) * ODE_std + ODE_mean
-            stoch_update = (pred / scaler).cpu().detach().numpy()
+            stoch_update = (pred / diff_scale).cpu().detach().numpy()
     
         
     
