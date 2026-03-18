@@ -464,10 +464,15 @@ else:
             pred = Neural_Network(Winc_tensor) * ODE_std + ODE_mean
             stoch_update = (pred / diff_scale).cpu().detach().numpy()
     
-        
-    
-        # Simple noise for comparison
+        # Simple noise for comparison (and optional rescaling reference)
         simple_noise = np.sqrt(dt) * (Winc @ SS)
+        # Rescale NN output to match simple_noise scale so result is similar to simple noise.
+        # Training target (ODE_Solution) is from long ODE integration, not one-step increment, so NN std is often smaller.
+        std_nn = np.std(stoch_update, axis=0)
+        std_simple = np.std(simple_noise, axis=0)
+        std_simple = np.maximum(std_simple, 1e-12)
+        scale_match = np.where(std_nn > 1e-12, std_simple / std_nn, 1.0)
+        stoch_update = stoch_update * scale_match
     
         # Print comparison every 50 steps
         if idx % 50 == 0:
