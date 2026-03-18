@@ -286,7 +286,7 @@ else:
     G = params['G']
     B = params['B']
     
-    TIME_AMOUNT = 50
+    TIME_AMOUNT = 200
     dt = 0.01
     NPATH = 5000
     initial_state = np.random.normal(loc=m0, scale=np.sqrt(var0), size=(NPATH, 3))    
@@ -529,7 +529,8 @@ else:
         current_pred_state = next_pred_state
     
     np.random.seed(0)
-    Time_record = np.arange(int(TIME_AMOUNT/dt)+1)
+    # Physical time 0 to TIME_AMOUNT (e.g. 0 to 50)
+    Time_record = np.arange(int(TIME_AMOUNT/dt)+1) * dt
     plot_mean_comparison(mean_state_record, mean_state_single, Time_record, 
                     save_path=save_dir, title_suffix=" - FEX-framework")
     plot_covariance_comparison(cov_state_record, cov_state_single, Time_record, 
