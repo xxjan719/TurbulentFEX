@@ -386,6 +386,10 @@ else:
     diff_scale = data_inference['diff_scale']
     if torch.is_tensor(diff_scale):
         diff_scale = diff_scale.item()
+    # Load NN once (same as time_dependent loads models per step from disk; here we have a single model)
+    Neural_Network = FN_Net(3, 3, 50).to(device)
+    Neural_Network.load_state_dict(torch.load(os.path.join(save_dir, 'Neural_Network.pth'), map_location=device))
+    Neural_Network.eval()
     tM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
     for idx in range(1,int(TIME_AMOUNT/dt)+1):
         # RK4 integration
@@ -427,7 +431,7 @@ else:
         # u_pred_all[:,:,idx] = current_pred_state
         current_state = next_state
 
-        current_tensor = torch.tensor(current_pred_state, dtype=torch.float32)
+        current_tensor = torch.tensor(current_pred_state, dtype=torch.float32).to(device)
     
         # RK4 for the deterministic part (FEX model)
         # Step 1
@@ -456,10 +460,6 @@ else:
         dim = current_pred_state.shape[1]
         Winc_tensor = torch.Tensor(Winc).to(device, dtype=torch.float32)
         Winc_tensor = (Winc_tensor - ZT_mean) / ZT_std
-       
-        Neural_Network = FN_Net(3,3,50).to(device)
-        Neural_Network_path = os.path.join(save_dir,'Neural_Network.pth')
-        Neural_Network.load_state_dict(torch.load(Neural_Network_path, map_location=device))
         with torch.no_grad():
             pred = Neural_Network(Winc_tensor) * ODE_std + ODE_mean
             stoch_update = (pred / diff_scale).cpu().detach().numpy()
