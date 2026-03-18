@@ -286,7 +286,7 @@ else:
     G = params['G']
     B = params['B']
     
-    TIME_AMOUNT = 200
+    TIME_AMOUNT = 20
     dt = 0.01
     NPATH = 5000
     initial_state = np.random.normal(loc=m0, scale=np.sqrt(var0), size=(NPATH, 3))    
@@ -369,12 +369,14 @@ else:
     ensemble_models = {}
     ensemble_norms = {}
 
+    # Use args.NOISE_LEVEL so CPU and GPU use same paths and same FEX expressions
+    noise_str = f'noise_{args.NOISE_LEVEL}'
     if str(device) == 'cuda:0':
-        save_dir = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_1.0/second_stage_10000_constant'
-        independent_save_dir = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/noise_1.0/second_stage_10000_independent'
+        save_dir = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/{noise_str}/second_stage_10000_constant'
+        independent_save_dir = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/{noise_str}/second_stage_10000_independent'
     else:
-        save_dir = f'../src/Example/MC_triad/Results/{args.params_name}/noise_1.0/second_stage_10000_constant'
-        independent_save_dir = f'../src/Example/MC_triad/Results/{args.params_name}/noise_1.0/second_stage_10000_independent'
+        save_dir = f'../src/Example/MC_triad/Results/{args.params_name}/{noise_str}/second_stage_10000_constant'
+        independent_save_dir = f'../src/Example/MC_triad/Results/{args.params_name}/{noise_str}/second_stage_10000_independent'
 
     dataname = os.path.join(independent_save_dir,'data_inference.pt')
     data_inference = torch.load(dataname, map_location=device)
@@ -436,14 +438,14 @@ else:
         # RK4 for the deterministic part (FEX model)
         # Step 1
         # Step 1
-        k1_det = FEX_model_check(current_tensor,params_name=args.params_name,device =device) * dt
+        k1_det = FEX_model_check(current_tensor, model_name=args.Model, params_name=args.params_name, noise_level=args.NOISE_LEVEL, device=device) * dt
         k1_det_np = k1_det.cpu().detach().numpy()
         u1 = current_tensor +  k1_det
 
       
 
          # Step 2
-        k2_det = FEX_model_check(u1,params_name=args.params_name,device =device) * dt
+        k2_det = FEX_model_check(u1, model_name=args.Model, params_name=args.params_name, noise_level=args.NOISE_LEVEL, device=device) * dt
         k2_det_np = k2_det.cpu().detach().numpy()
         u2 = current_tensor +  k2_det
     
@@ -531,21 +533,22 @@ else:
     np.random.seed(0)
     # Physical time 0 to TIME_AMOUNT (e.g. 0 to 50)
     Time_record = np.arange(int(TIME_AMOUNT/dt)+1) * dt
-    plot_mean_comparison(mean_state_record, mean_state_single, Time_record, 
-                    save_path=save_dir, title_suffix=" - FEX-framework")
-    plot_covariance_comparison(cov_state_record, cov_state_single, Time_record, 
-                          save_path=save_dir, title_suffix=" - FEX-framework")
+    # Title reflects that prediction is FEX (deterministic) + NN (stochastic), not FEX only
+    plot_mean_comparison(mean_state_record, mean_state_single, Time_record,
+                    save_path=save_dir, title_suffix=" - FEX + NN")
+    plot_covariance_comparison(cov_state_record, cov_state_single, Time_record,
+                          save_path=save_dir, title_suffix=" - FEX + NN")
 
     # Plot energy comparison
-    plot_energy_comparison(Energy_MC_all, Energy_MC_pred, Time_record, 
-                      save_path=save_dir, title_suffix=" - FEX-framework")
+    plot_energy_comparison(Energy_MC_all, Energy_MC_pred, Time_record,
+                      save_path=save_dir, title_suffix=" - FEX + NN")
 
     # Plot third-order moments
-    plot_third_order_moments(moment3_state_record, moment3_state_pred, Time_record, 
-                        save_path=save_dir, title_suffix=" - FEX-framework")
+    plot_third_order_moments(moment3_state_record, moment3_state_pred, Time_record,
+                        save_path=save_dir, title_suffix=" - FEX + NN")
 
     # Plot probability distributions
-    plot_probability_distributions(u_all, u_pred_all, Time_record, 
-                              save_path=save_dir, title_suffix=" - FEX-framework")
+    plot_probability_distributions(u_all, u_pred_all, Time_record,
+                              save_path=save_dir, title_suffix=" - FEX + NN")
     
     
