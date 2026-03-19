@@ -8,9 +8,15 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 sys.path.append("../src/Example/MC_triad")
 import torch
 import torch.nn as nn
-import matplotlib.pyplot as plt
 from utils import *
 from utils.helper import ResidualVAE
+from utils.plot import (
+    plot_mean_comparison_tfdm_vae,
+    plot_covariance_comparison_tfdm_vae,
+    plot_energy_comparison_tfdm_vae,
+    plot_third_order_moments_tfdm_vae,
+    plot_probability_distributions_tfdm_vae,
+)
 
 from Example.MC_triad.MC_triad import params_init, MC_triad_initial_value
 import config
@@ -21,51 +27,6 @@ torch.manual_seed(args.SEED)
 np.random.seed(args.SEED)
 print("\n"+ "="*60)
 print("\n[INFO] Setting up the device andpath...")
-
-
-def plot_mean_comparison_tfdm_vae(mean_state_record, mean_state_tfdm, mean_state_vae, Time_record, save_path=None):
-    """Plot mean components with Ground Truth / FEX+TFDM / FEX+VAE."""
-    fig, axs = plt.subplots(3, 1, figsize=(12, 15), sharex=True)
-
-    for i in range(3):
-        axs[i].plot(
-            Time_record,
-            mean_state_record[i],
-            linestyle=':',
-            color='black',
-            linewidth=3,
-            label=fr'Ground Truth $\langle u_{i+1} \rangle$',
-        )
-        axs[i].plot(
-            Time_record,
-            mean_state_tfdm[i],
-            linestyle='-',
-            color='orange',
-            linewidth=2.5,
-            label=fr'Prediction - FEX+TFDM $\langle u_{i+1} \rangle$',
-        )
-        axs[i].plot(
-            Time_record,
-            mean_state_vae[i],
-            linestyle='-',
-            color='green',
-            linewidth=2.5,
-            label=fr'Prediction - FEX+VAE $\langle u_{i+1} \rangle$',
-        )
-
-        axs[i].set_ylabel(fr'Mean $u_{i+1}$', fontsize=15)
-        axs[i].set_title(f'Component {i+1}', fontsize=18)
-        axs[i].legend(loc='upper right', frameon=False, fontsize=11)
-        axs[i].tick_params(axis='both', labelsize=12)
-
-    axs[2].set_xlabel('Time', fontsize=15)
-    plt.tight_layout()
-    plt.suptitle('Mean Values of Components Over Time - FEX+TFDM vs FEX+VAE', fontsize=20, y=1.02)
-    plt.subplots_adjust(top=0.9)
-    if save_path:
-        plt.savefig(os.path.join(save_path, 'mean_components_over_time.pdf'), dpi=300, bbox_inches='tight')
-    plt.show()
-    return fig
 
 
 # Set device
@@ -526,6 +487,10 @@ else:
     cov_state_single[:, :, 0] = np.cov(initial_state, rowvar=False)
     cov_state_ensemble = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     cov_state_ensemble[:, :, 0] = np.cov(initial_state, rowvar=False)
+    cov_state_tfdm = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    cov_state_vae = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    cov_state_tfdm[:, :, 0] = np.cov(initial_state, rowvar=False)
+    cov_state_vae[:, :, 0] = np.cov(initial_state, rowvar=False)
 
     u_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     u_all[:,:,0] = initial_state
@@ -537,15 +502,25 @@ else:
     u_pred_single[:,:,0] = initial_state
     u_pred_ensemble = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     u_pred_ensemble[:,:,0] = initial_state
+    u_pred_tfdm = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_pred_vae = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_pred_tfdm[:, :, 0] = initial_state
+    u_pred_vae[:, :, 0] = initial_state
 
     moment3_state_record = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     moment3_state_pred = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    moment3_state_tfdm = np.zeros((3, 3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    moment3_state_vae = np.zeros((3, 3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     moment3_first,_ = compute_third_order_moments(initial_state)
     moment3_state_record[:,:,:,0] = moment3_first
     moment3_state_pred[:,:,:,0] = moment3_first
+    moment3_state_tfdm[:,:,:,0] = moment3_first
+    moment3_state_vae[:,:,:,0] = moment3_first
 
     Energy_MC_all = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     Energy_MC_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_MC_tfdm = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_MC_vae = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
 
     current_state = initial_state
     current_pred_state = initial_state
@@ -565,6 +540,8 @@ else:
         0.5 * (mean_state_pred[2, 0] ** 2 + cov_state_pred[2, 2, 0]),
     ]
     Energy_dyn_pred[:, 0] = Energy_update_pred
+    Energy_MC_tfdm[:, 0] = Energy_update_pred
+    Energy_MC_vae[:, 0] = Energy_update_pred
 
     Energy_update_record[:] = [
         0.5 * np.sum(mean_state_record[:, 0] ** 2) + 0.5 * np.trace(cov_state_record[:, :, 0]),
@@ -745,22 +722,26 @@ else:
     
         # Simple noise for comparison (and optional rescaling reference)
         simple_noise = np.sqrt(dt) * (Winc @ SS)
-        # Rescale NN output to match simple_noise scale so result is similar to simple noise.
-        # Training target (ODE_Solution) is from long ODE integration, not one-step increment, so NN std is often smaller.
+        # Match NN/VAE stochastic increments to simple-noise first/second moments.
+        # This mirrors discussion_test.py and avoids mean bias in trajectories.
         std_simple = np.std(simple_noise, axis=0)
         std_simple = np.maximum(std_simple, 1e-12)
+        mean_simple = np.mean(simple_noise, axis=0)
         if stoch_update_nn is not None:
             std_tfdm = np.std(stoch_update_nn, axis=0)
+            mean_tfdm = np.mean(stoch_update_nn, axis=0)
             scale_tfdm = np.where(std_tfdm > 1e-12, std_simple / std_tfdm, 1.0)
-            stoch_update_nn = stoch_update_nn * scale_tfdm
+            stoch_update_nn = (stoch_update_nn - mean_tfdm) * scale_tfdm + mean_simple
         if stoch_update_vae is not None:
             std_vae = np.std(stoch_update_vae, axis=0)
+            mean_vae = np.mean(stoch_update_vae, axis=0)
             scale_vae = np.where(std_vae > 1e-12, std_simple / std_vae, 1.0)
-            stoch_update_vae = stoch_update_vae * scale_vae
+            stoch_update_vae = (stoch_update_vae - mean_vae) * scale_vae + mean_simple
         if stoch_update is not None:
             std_sel = np.std(stoch_update, axis=0)
+            mean_sel = np.mean(stoch_update, axis=0)
             scale_match = np.where(std_sel > 1e-12, std_simple / std_sel, 1.0)
-            stoch_update = stoch_update * scale_match
+            stoch_update = (stoch_update - mean_sel) * scale_match + mean_simple
     
         # Print comparison every 50 steps
         if idx % 50 == 0:
@@ -804,6 +785,8 @@ else:
         # Store results for all three predictions
         u_pred_all[:,:,idx] = next_pred_state
         u_pred_single[:,:,idx] = next_pred_single
+        u_pred_tfdm[:, :, idx] = next_pred_tfdm
+        u_pred_vae[:, :, idx] = next_pred_vae
     
         # Update statistics for all three predictions
         mean_state_pred[:,idx] = np.mean(next_pred_state, axis=0)
@@ -826,16 +809,30 @@ else:
     
         cov_state_pred[:,:,idx] = np.cov(next_pred_state, rowvar=False)
         cov_state_single[:,:,idx] = np.cov(next_pred_single, rowvar=False)
+        cov_state_tfdm[:, :, idx] = np.cov(next_pred_tfdm, rowvar=False)
+        cov_state_vae[:, :, idx] = np.cov(next_pred_vae, rowvar=False)
 
         # Calculate energy directly from mean and covariance (same as ground truth)
         Energy_MC_pred[0, idx] = 0.5 * np.sum(mean_state_pred[:, idx] ** 2) + 0.5 * np.trace(cov_state_pred[:, :, idx])
         Energy_MC_pred[1, idx] = 0.5 * (mean_state_pred[0, idx] ** 2 + cov_state_pred[0, 0, idx])
         Energy_MC_pred[2, idx] = 0.5 * (mean_state_pred[1, idx] ** 2 + cov_state_pred[1, 1, idx])
         Energy_MC_pred[3, idx] = 0.5 * (mean_state_pred[2, idx] ** 2 + cov_state_pred[2, 2, idx])
+        Energy_MC_tfdm[0, idx] = 0.5 * np.sum(mean_state_tfdm[:, idx] ** 2) + 0.5 * np.trace(cov_state_tfdm[:, :, idx])
+        Energy_MC_tfdm[1, idx] = 0.5 * (mean_state_tfdm[0, idx] ** 2 + cov_state_tfdm[0, 0, idx])
+        Energy_MC_tfdm[2, idx] = 0.5 * (mean_state_tfdm[1, idx] ** 2 + cov_state_tfdm[1, 1, idx])
+        Energy_MC_tfdm[3, idx] = 0.5 * (mean_state_tfdm[2, idx] ** 2 + cov_state_tfdm[2, 2, idx])
+        Energy_MC_vae[0, idx] = 0.5 * np.sum(mean_state_vae[:, idx] ** 2) + 0.5 * np.trace(cov_state_vae[:, :, idx])
+        Energy_MC_vae[1, idx] = 0.5 * (mean_state_vae[0, idx] ** 2 + cov_state_vae[0, 0, idx])
+        Energy_MC_vae[2, idx] = 0.5 * (mean_state_vae[1, idx] ** 2 + cov_state_vae[1, 1, idx])
+        Energy_MC_vae[3, idx] = 0.5 * (mean_state_vae[2, idx] ** 2 + cov_state_vae[2, 2, idx])
     
         # Calculate third-order moments for prediction
         moment3_pred, _ = compute_third_order_moments(next_pred_state)
         moment3_state_pred[:, :, :, idx] = moment3_pred
+        moment3_tfdm, _ = compute_third_order_moments(next_pred_tfdm)
+        moment3_vae, _ = compute_third_order_moments(next_pred_vae)
+        moment3_state_tfdm[:, :, :, idx] = moment3_tfdm
+        moment3_state_vae[:, :, :, idx] = moment3_vae
     
         # Update current state
         current_pred_state = next_pred_state
@@ -854,19 +851,39 @@ else:
         Time_record,
         save_path=save_dir,
     )
-    plot_covariance_comparison(cov_state_record, cov_state_single, Time_record,
-                          save_path=save_dir, title_suffix=" - FEX + NN")
+    plot_covariance_comparison_tfdm_vae(
+        cov_state_record,
+        cov_state_tfdm,
+        cov_state_vae,
+        Time_record,
+        save_path=save_dir,
+    )
 
     # Plot energy comparison
-    plot_energy_comparison(Energy_MC_all, Energy_MC_pred, Time_record,
-                      save_path=save_dir, title_suffix=" - FEX + NN")
+    plot_energy_comparison_tfdm_vae(
+        Energy_MC_all,
+        Energy_MC_tfdm,
+        Energy_MC_vae,
+        Time_record,
+        save_path=save_dir,
+    )
 
     # Plot third-order moments
-    plot_third_order_moments(moment3_state_record, moment3_state_pred, Time_record,
-                        save_path=save_dir, title_suffix=" - FEX + NN")
+    plot_third_order_moments_tfdm_vae(
+        moment3_state_record,
+        moment3_state_tfdm,
+        moment3_state_vae,
+        Time_record,
+        save_path=save_dir,
+    )
 
     # Plot probability distributions
-    plot_probability_distributions(u_all, u_pred_all, Time_record,
-                              save_path=save_dir, title_suffix=" - FEX + NN")
+    plot_probability_distributions_tfdm_vae(
+        u_all,
+        u_pred_tfdm,
+        u_pred_vae,
+        Time_record,
+        save_path=save_dir,
+    )
     
     
