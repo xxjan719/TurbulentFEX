@@ -2,6 +2,7 @@ import os,sys,warnings
 import argparse
 import pkg_resources
 import subprocess
+import shutil
 
 warnings.filterwarnings('ignore')
 
@@ -134,17 +135,33 @@ class Config:
         """Check if the script is running in a virtual environment"""
         return hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)
     
+    def _python_executable_for_version(self, python_version: str):
+        candidates = [f"python{python_version}", f"python{python_version}m"]
+        for c in candidates:
+            exe = shutil.which(c)
+            if exe:
+                return exe
+        return None
+
+    def _get_python_version_from_executable(self, python_exe: str):
+        try:
+            out = subprocess.check_output([python_exe, "--version"], stderr=subprocess.STDOUT)
+            txt = out.decode("utf-8", errors="ignore").strip()  # e.g. "Python 3.11.7"
+            parts = txt.split()
+            if len(parts) >= 2:
+                return parts[1]
+        except Exception:
+            return None
+        return None
+
     def create_virtual_environment(self, env_name='turbulentfex_env'):
-        """Create a virtual environment for the project"""
-        import subprocess
-        import os
-        
+        """Create a virtual environment for the project (uses current Python)."""
         env_path = os.path.join(self.DIR_PROJECT, env_name)
-        
+
         if os.path.exists(env_path):
             print(f"Virtual environment '{env_name}' already exists at {env_path}")
             return env_path
-        
+
         print(f"Creating virtual environment '{env_name}'...")
         try:
             subprocess.check_call([sys.executable, "-m", "venv", env_path])

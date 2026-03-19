@@ -5,6 +5,7 @@ import matplotlib as mpl
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401, needed for 3D
 import os
+
 def set_figure_position(x=100, y=100, width=800, height=600):
     """Set the position and size of the current figure window (only if supported)."""
     try:
@@ -692,11 +693,11 @@ def plot_cross_term_vs_noise(coeff,
                 legend_handles.append(h_sum[0])
 
         if idx == 0:
-            ax.set_ylabel(r'semi-log scale error', fontsize=11)
-        ax.set_xlabel('Noise Level', fontsize=11)
-        ax.set_title(panel_labels[idx], fontsize=11)
+            ax.set_ylabel(r'semi-log scale error', fontsize=18)
+        ax.set_xlabel('Noise Level', fontsize=18)
+        ax.set_title(panel_labels[idx], fontsize=18)
         ax.grid(True, which='both', alpha=0.3)
-        ax.tick_params(labelleft=True)
+        ax.tick_params(axis='both', labelsize=18)
 
     # Overall layout first (leave a bit more headroom)
     fig.tight_layout(rect=[0, 0, 1, 0.86])
@@ -713,7 +714,7 @@ def plot_cross_term_vs_noise(coeff,
             fancybox=True,
             borderaxespad=0.6,
             title=None,
-            fontsize=12,
+            fontsize=18,
             handlelength=2.0,
             handletextpad=0.6,
             columnspacing=1.2,
@@ -816,11 +817,11 @@ def plot_cross_term_vs_sample(coeff,
                 legend_handles.append(h_sum[0])
 
         if idx == 0:
-            ax.set_ylabel(r'semi-log scale error', fontsize=11)
-        ax.set_xlabel('Sample size', fontsize=11)
-        ax.set_title(panel_labels[idx], fontsize=11)
+            ax.set_ylabel(r'semi-log scale error', fontsize=18)
+        ax.set_xlabel('Sample size', fontsize=18)
+        ax.set_title(panel_labels[idx], fontsize=18)
         ax.grid(True, which='both', alpha=0.3)
-        ax.tick_params(labelleft=True)
+        ax.tick_params(axis='both', labelsize=18)
 
     fig.tight_layout(rect=[0, 0, 1, 0.86])
     if legend_handles:
@@ -833,7 +834,7 @@ def plot_cross_term_vs_sample(coeff,
             frameon=True,
             fancybox=True,
             borderaxespad=0.6,
-            fontsize=12,
+            fontsize=18,
             handlelength=2.0,
             handletextpad=0.6,
             columnspacing=1.2,
@@ -1014,6 +1015,297 @@ def plot_covariance_comparison(cov_state_record, cov_state_pred, Time_record, sa
         plt.savefig(os.path.join(save_path, 'covariance_comparison.pdf'), dpi=300, bbox_inches='tight')
     plt.show()
     
+    return fig
+
+
+def plot_mean_covariance_grid_ind_dep(Time_ind,
+                                       mean_gt_ind,
+                                       cov_gt_ind,
+                                       mean_pred_ind,
+                                       cov_pred_ind,
+                                       Time_dep,
+                                       mean_pred_dep,
+                                       cov_pred_dep,
+                                       t_ind_max: float = 20.0,
+                                       t_dep_max: float = 10.0,
+                                       save_path: str = None,
+                                       legend_title: str = None,
+                                       independent_label: str = "ASD-FEX-TFDM-independent",
+                                       dependent_label: str = "ASD-FEX-TFDM-dependent",
+                                       ground_truth_label: str = "Ground Truth",
+                                       show_legend: bool = True,
+                                       font_size: int = 18):
+    """
+    Plot a 3x4 grid:
+      rows: u1, u2, u3
+      col0: mean(u_i)
+      col1..3: cov(u_i, u_j) with j = 1..3
+
+    Shows:
+      - ground truth (black) on independent time grid (Time_ind)
+      - independent prediction (orange dashed) on Time_ind
+      - dependent prediction (blue dash-dot) on Time_dep, plotted only up to t_dep_max
+    """
+    title_fs = label_fs = legend_fs = font_size
+
+    mask_ind = Time_ind <= (t_ind_max + 1e-9)
+    mask_dep = Time_dep <= (t_dep_max + 1e-9)
+    Time_ind_plot = Time_ind[mask_ind]
+    Time_dep_plot = Time_dep[mask_dep]
+
+    fig, axs = plt.subplots(3, 4, figsize=(22, 12), sharex=True)
+
+    row_names = ["u1", "u2", "u3"]
+    col_titles = ["Mean", "Cov(·, u1)", "Cov(·, u2)", "Cov(·, u3)"]
+    for c in range(4):
+        axs[0, c].set_title(col_titles[c], fontsize=title_fs)
+
+    colors = {"gt": "black", "ind": "#ff7f0e", "dep": "#1f77b4"}
+    # Use a solid line for the independent prediction (dashed rendering can look
+    # like "gaps" even when all points exist). Add markers every few points.
+    linestyles = {"ind": "-", "dep": "-."}
+    ind_marker = "o"
+    # Roughly ~10-15 markers across the time axis (avoid heavy clutter).
+    ind_markevery = max(1, len(Time_ind_plot) // 12)
+
+    handles = []
+    labels = []
+
+    for i in range(3):
+        # Mean
+        ax = axs[i, 0]
+        h_gt = ax.plot(Time_ind_plot, mean_gt_ind[i, mask_ind], color=colors["gt"], lw=2.0, label=ground_truth_label)[0]
+        h_ind = ax.plot(
+            Time_ind_plot,
+            mean_pred_ind[i, mask_ind],
+            color=colors["ind"],
+            lw=2.0,
+            ls=linestyles["ind"],
+            marker=ind_marker,
+            markersize=3.5,
+            markevery=ind_markevery,
+            label=independent_label,
+        )[0]
+        h_dep = ax.plot(
+            Time_dep_plot,
+            mean_pred_dep[i, mask_dep],
+            color=colors["dep"],
+            lw=2.0,
+            ls=linestyles["dep"],
+            label=dependent_label,
+        )[0]
+        ax.set_ylabel(row_names[i], fontsize=label_fs)
+        ax.grid(True, alpha=0.25)
+        if i == 0:
+            handles = [h_gt, h_ind, h_dep]
+            labels = [ground_truth_label, independent_label, dependent_label]
+
+        # Covariance matrix elements
+        for j in range(3):
+            k = j  # cov(u_i, u_{k+1})
+            ax = axs[i, j + 1]
+            ax.plot(Time_ind_plot, cov_gt_ind[i, k, mask_ind], color=colors["gt"], lw=1.8, label=None)
+            ax.plot(
+                Time_ind_plot,
+                cov_pred_ind[i, k, mask_ind],
+                color=colors["ind"],
+                lw=1.8,
+                ls=linestyles["ind"],
+                marker=ind_marker,
+                markersize=2.8,
+                markevery=ind_markevery,
+                label=None,
+            )
+            ax.plot(Time_dep_plot, cov_pred_dep[i, k, mask_dep], color=colors["dep"], lw=1.8, ls=linestyles["dep"], label=None)
+            ax.grid(True, alpha=0.25)
+
+    for ax in axs.flatten():
+        ax.tick_params(axis="both", labelsize=font_size)
+
+    axs[2, 0].set_xlabel("Time (s)", fontsize=label_fs)
+    for c in range(1, 4):
+        axs[2, c].set_xlabel("Time (s)", fontsize=label_fs)
+
+    # Leave a bit of headroom for a shared legend at the top (optional).
+    fig.tight_layout(rect=[0, 0, 1, 0.9])
+    if show_legend and handles:
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 0.97),
+            ncol=len(handles),
+            frameon=False,
+            fancybox=True,
+            title=legend_title,
+            title_fontsize=legend_fs,
+            fontsize=legend_fs,
+            handlelength=2.2,
+            columnspacing=1.4,
+        )
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"[INFO] Saved figure to: {save_path}")
+    plt.show()
+    return fig
+
+
+def plot_log10_error_mean_covariance_grid_ind_dep(
+    Time_ind,
+    mean_gt_ind,
+    cov_gt_ind,
+    mean_pred_ind,
+    cov_pred_ind,
+    Time_dep,
+    mean_pred_dep,
+    cov_pred_dep,
+    t_ind_max: float = 20.0,
+    t_dep_max: float = 10.0,
+    save_path: str = None,
+    independent_label: str = "ASD-FEX-TFDM-independent (error)",
+    dependent_label: str = "ASD-FEX-TFDM-dependent (error)",
+    legend_title: str = None,
+    eps: float = 1e-16,
+):
+    """
+    Plot a 3x4 grid of log10 absolute errors:
+      rows: u1, u2, u3
+      col0: |mean_pred - mean_gt|
+      col1..3: |cov_pred - cov_gt|
+
+    Only two curves are shown: independent (orange) and dependent (blue).
+    """
+    # Discussion figures: force a single fixed fontsize everywhere.
+    font_size = 18
+    title_fs = 18
+    label_fs = 18
+    legend_fs = 18
+
+    mask_ind = Time_ind <= (t_ind_max + 1e-9)
+    mask_dep = Time_dep <= (t_dep_max + 1e-9)
+    # Drop the first point (t=0) for nicer visualization (often large transients)
+    Time_ind_masked = Time_ind[mask_ind]
+    Time_dep_masked = Time_dep[mask_dep]
+    Time_ind_plot = Time_ind_masked[1:]
+    Time_dep_plot = Time_dep_masked[1:]
+    n_dep_plot = len(Time_dep_plot)  # equals (Nt_dep + 1) - 1
+
+    fig, axs = plt.subplots(3, 4, figsize=(22, 12), sharex=True)
+
+    row_names = ["u1", "u2", "u3"]
+    col_titles = ["log10|mean error|", "log10|cov(·, u1) error|", "log10|cov(·, u2) error|", "log10|cov(·, u3) error|"]
+    for c in range(4):
+        axs[0, c].set_title(col_titles[c], fontsize=title_fs)
+
+    colors = {"ind": "#ff7f0e", "dep": "#1f77b4"}
+    linestyles = {"ind": "-", "dep": "-."}
+    ind_marker = "o"
+    ind_markevery = max(1, len(Time_ind_plot) // 12)
+
+    handles = []
+    labels = []
+
+    # Dependent ground truth slice should match `mean_pred_dep[..., mask_dep]` BEFORE dropping t=0.
+    dep_len = np.sum(mask_dep)
+    mean_gt_dep = mean_gt_ind[:, :dep_len]  # includes t=0
+    cov_gt_dep = cov_gt_ind[:, :, :dep_len]  # includes t=0
+
+    for i in range(3):
+        ax = axs[i, 0]
+
+        err_ind = np.abs(mean_pred_ind[i, mask_ind][1:] - mean_gt_ind[i, mask_ind][1:])
+        y_ind = np.log10(np.maximum(err_ind, eps))
+        h_ind = ax.plot(
+            Time_ind_plot,
+            y_ind,
+            color=colors["ind"],
+            lw=2.0,
+            ls=linestyles["ind"],
+            marker=ind_marker,
+            markersize=3.5,
+            markevery=ind_markevery,
+            label=independent_label,
+        )[0]
+
+        err_dep = np.abs(mean_pred_dep[i, mask_dep][1:] - mean_gt_dep[i, 1:])
+        y_dep = np.log10(np.maximum(err_dep, eps))
+        h_dep = ax.plot(
+            Time_dep_plot,
+            y_dep,
+            color=colors["dep"],
+            lw=2.0,
+            ls=linestyles["dep"],
+            label=dependent_label,
+        )[0]
+
+        ax.set_ylabel(row_names[i], fontsize=label_fs)
+        ax.grid(True, alpha=0.25)
+
+        if i == 0:
+            handles = [h_ind, h_dep]
+            labels = [independent_label, dependent_label]
+
+        # Covariance elements errors
+        for j in range(3):
+            k = j
+            ax = axs[i, j + 1]
+
+            err_ind_cov = np.abs(
+                cov_pred_ind[i, k, mask_ind][1:] - cov_gt_ind[i, k, mask_ind][1:]
+            )
+            y_ind_cov = np.log10(np.maximum(err_ind_cov, eps))
+            ax.plot(
+                Time_ind_plot,
+                y_ind_cov,
+                color=colors["ind"],
+                lw=1.8,
+                ls=linestyles["ind"],
+                marker=ind_marker,
+                markersize=2.8,
+                markevery=ind_markevery,
+                label=None,
+            )
+
+            err_dep_cov = np.abs(cov_pred_dep[i, k, mask_dep][1:] - cov_gt_dep[i, k, 1:])
+            y_dep_cov = np.log10(np.maximum(err_dep_cov, eps))
+            ax.plot(
+                Time_dep_plot,
+                y_dep_cov,
+                color=colors["dep"],
+                lw=1.8,
+                ls=linestyles["dep"],
+                label=None,
+            )
+            ax.grid(True, alpha=0.25)
+
+    for ax in axs.flatten():
+        ax.tick_params(axis="both", labelsize=font_size)
+
+    axs[2, 0].set_xlabel("Time (s)", fontsize=label_fs)
+    for c in range(1, 4):
+        axs[2, c].set_xlabel("Time (s)", fontsize=label_fs)
+
+    fig.tight_layout(rect=[0, 0, 1, 0.9])
+    if handles:
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 0.97),
+            ncol=len(handles),
+            frameon=False,
+            fancybox=True,
+            title=legend_title,
+            title_fontsize=18,
+            fontsize=legend_fs,
+            handlelength=2.2,
+            columnspacing=1.4,
+        )
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"[INFO] Saved figure to: {save_path}")
+    plt.show()
     return fig
     
 def plot_mean_comparison(mean_state_record, mean_state_pred, Time_record, save_path=None, 
@@ -1275,8 +1567,412 @@ def plot_third_order_moments(moment3_state_record, moment3_state_pred, Time_reco
     plt.show()
     
     return fig
-    
-    
+
+
+def plot_third_order_moments_2x2(
+    moment3_state_record,
+    moment3_state_pred,
+    Time_record,
+    save_path=None,
+    title_suffix="FEX-framework",
+):
+    """
+    Plot selected 3rd-order moments in a 2x2 grid.
+    Uses the same moment indices as `plot_third_order_moments`.
+    """
+    # Discussion figures: force a single fixed fontsize everywhere.
+    font_size = 18
+    label_fs = 18
+    title_fs = 18
+    legend_fs = 18
+
+    fig, axs = plt.subplots(2, 2, figsize=(14, 10), sharex=True)
+    axs = axs.flatten()
+
+    moment_indices = [(0, 1, 2), (0, 1, 1), (0, 2, 2), (1, 1, 2)]
+    moment_labels = [
+        r'$\langle M_{123} \rangle$',
+        r'$\langle M_{122} \rangle$',
+        r'$\langle M_{133} \rangle$',
+        r'$\langle M_{223} \rangle$',
+    ]
+
+    colors = {"Ground-Truth": "black", "Prediction": "orange"}
+    linestyles = {"Ground-Truth": ":", "Prediction": "-"}
+    markers = {"Prediction": "o"}
+
+    for idx_plot, (i, j, k) in enumerate(moment_indices):
+        ax = axs[idx_plot]
+
+        mask_true = moment3_state_record[i, j, k, :] != 0
+        ax.plot(
+            Time_record[mask_true],
+            moment3_state_record[i, j, k, mask_true],
+            linestyle=linestyles["Ground-Truth"],
+            color=colors["Ground-Truth"],
+            linewidth=2.5,
+            label=f"Ground Truth {moment_labels[idx_plot]}",
+        )
+
+        mask_pred = moment3_state_pred[i, j, k, :] != 0
+        ax.plot(
+            Time_record[mask_pred],
+            moment3_state_pred[i, j, k, mask_pred],
+            linestyle=linestyles["Prediction"],
+            color=colors["Prediction"],
+            linewidth=2.5,
+            marker=markers["Prediction"],
+            markersize=4.5,
+            alpha=0.8,
+            label=f"{title_suffix} {moment_labels[idx_plot]}",
+        )
+
+        ax.set_title(moment_labels[idx_plot], fontsize=title_fs)
+        ax.set_ylabel("3rd Moment", fontsize=label_fs)
+        ax.grid(True, alpha=0.25)
+        ax.tick_params(axis="both", labelsize=font_size)
+        ax.legend(frameon=False, fontsize=font_size, loc="best")
+
+    axs[2].set_xlabel("Time", fontsize=label_fs)
+    axs[3].set_xlabel("Time", fontsize=label_fs)
+
+    plt.tight_layout()
+    plt.suptitle(
+        f"Third-Order Moments Over Time (2x2) {title_suffix}",
+        fontsize=font_size,
+        y=1.02,
+    )
+    plt.subplots_adjust(top=0.88)
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"[INFO] Saved figure to: {save_path}")
+    plt.show()
+    return fig
+
+
+def plot_third_order_moments_ind_dep_2x2(
+    moment3_state_record_ind,
+    moment3_state_pred_ind,
+    moment3_state_pred_dep,
+    Time_ind,
+    Time_dep,
+    save_path=None,
+    title_suffix="FEX-framework",
+    legend_title=None,
+    ground_truth_label="Ground Truth",
+    independent_label="Independent",
+    dependent_label="Dependent (t<=10)",
+    show_legend: bool = True,
+):
+    """
+    2x2 grid of selected third-order moments, showing:
+      - ground truth (black) on Time_ind
+      - independent prediction (orange) on Time_ind
+      - dependent prediction (blue dash-dot) on Time_dep
+    """
+    # Discussion figures: force a single fixed fontsize everywhere.
+    font_size = 18
+    label_fs = 18
+    title_fs = 18
+    legend_fs = 18
+
+    fig, axs = plt.subplots(2, 2, figsize=(14, 10), sharex=True)
+    axs = axs.flatten()
+    for ax in axs:
+        ax.tick_params(axis="both", labelsize=font_size)
+
+    moment_indices = [(0, 1, 2), (0, 1, 1), (0, 2, 2), (1, 1, 2)]
+    moment_labels = [
+        r'$\langle M_{123} \rangle$',
+        r'$\langle M_{122} \rangle$',
+        r'$\langle M_{133} \rangle$',
+        r'$\langle M_{223} \rangle$',
+    ]
+
+    colors = {"gt": "black", "ind": "#ff7f0e", "dep": "#1f77b4"}
+    # Make ground-truth a solid straight line (matches user expectation).
+    linestyles = {"gt": "-", "ind": "-", "dep": "-."}
+    marker_ind = "o"
+    markevery = max(1, len(Time_ind) // 12)
+
+    handles = []
+    labels = []
+
+    for idx_plot, (i, j, k) in enumerate(moment_indices):
+        ax = axs[idx_plot]
+
+        # Ground truth
+        mask_gt = moment3_state_record_ind[i, j, k, :] != 0
+        h_gt = ax.plot(
+            Time_ind[mask_gt],
+            moment3_state_record_ind[i, j, k, mask_gt],
+            linestyle=linestyles["gt"],
+            color=colors["gt"],
+            linewidth=2.5,
+        )[0]
+
+        # Independent prediction
+        mask_ind = moment3_state_pred_ind[i, j, k, :] != 0
+        h_ind = ax.plot(
+            Time_ind[mask_ind],
+            moment3_state_pred_ind[i, j, k, mask_ind],
+            linestyle=linestyles["ind"],
+            color=colors["ind"],
+            linewidth=2.5,
+            marker=marker_ind,
+            markersize=3.5,
+            markevery=markevery,
+        )[0]
+
+        # Dependent prediction (only first Nt_dep+1 samples)
+        mask_dep = moment3_state_pred_dep[i, j, k, :] != 0
+        h_dep = ax.plot(
+            Time_dep[mask_dep],
+            moment3_state_pred_dep[i, j, k, mask_dep],
+            linestyle=linestyles["dep"],
+            color=colors["dep"],
+            linewidth=2.5,
+        )[0]
+
+        ax.set_title(moment_labels[idx_plot], fontsize=title_fs)
+        ax.set_ylabel("3rd Moment", fontsize=label_fs)
+        ax.grid(True, alpha=0.25)
+
+        if idx_plot == 0:
+            handles = [h_gt, h_ind, h_dep]
+            labels = [ground_truth_label, independent_label, dependent_label]
+
+    axs[2].set_xlabel("Time (s)", fontsize=label_fs)
+    axs[3].set_xlabel("Time (s)", fontsize=label_fs)
+
+    fig.tight_layout(rect=[0, 0, 1, 0.9])
+    if show_legend and handles:
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 0.97),
+            ncol=len(handles),
+            frameon=False,
+            fancybox=True,
+            title=legend_title,
+            fontsize=font_size,
+            title_fontsize=font_size if legend_title else None,
+            handlelength=2.2,
+            columnspacing=1.4,
+        )
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"[INFO] Saved figure to: {save_path}")
+    plt.show()
+    return fig
+
+
+def plot_discussion_choice3_composite(
+    save_path: str,
+    u_all: np.ndarray,
+    u_pred_all: np.ndarray,
+    u_pred_dependent: np.ndarray | None,
+    dt: float,
+    Time_record: np.ndarray,
+    Time_dep: np.ndarray,
+    mean_state_record_independent: np.ndarray,
+    cov_state_record_independent: np.ndarray,
+    mean_state_pred_independent: np.ndarray,
+    cov_state_pred_independent: np.ndarray,
+    mean_state_pred_dependent: np.ndarray,
+    cov_state_pred_dependent: np.ndarray,
+    moment3_state_record: np.ndarray,
+    moment3_state_pred: np.ndarray,
+    moment3_state_pred_dependent: np.ndarray,
+    TIME_AMOUNT: float = 20.0,
+    TIME_DEP_AMOUNT: float = 10.0,
+    params_name: str = "Equipart",
+    font_size: int = 20,
+):
+    """
+    Build one composite figure from the four panels (order: t0_20, t0_10_dep, mean_cov, third_order).
+    Layout: left column = dep (1x3) top, t0_20 (2x3) bottom; right column = mean_cov top, third_order 2x2 bottom.
+    Orange box + 'independent' on t0_20; blue box + 'dependent' on t0_10_dep.
+    Legend centered in header; 'Equipart' (or params_name) centered in footer. All font 20.
+    """
+    import tempfile
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt_comp
+    import matplotlib.image as mpimg
+    from matplotlib.gridspec import GridSpec
+
+    os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        dep_png = os.path.join(tmpdir, "t0_10_dep.png")
+        ind_png = os.path.join(tmpdir, "t0_20.png")
+        mean_cov_png = os.path.join(tmpdir, "mean_cov.png")
+        third_png = os.path.join(tmpdir, "third.png")
+
+        # 1) Dependent 1x3 (t=0,4,8)
+        plot_triad_3d_time_grid_matplotlib_cloud_3x3_times(
+            u_gt=u_all,
+            u_ind=u_pred_all,
+            u_dep=u_pred_dependent,
+            dt=dt,
+            time_points=[0, 4, 8],
+            save_path=dep_png,
+            grid_rows=1,
+            grid_cols=3,
+            elev=20,
+            azim=-60,
+            sample_size=15000,
+            point_size=6.0,
+            opacity=0.55,
+            cmap="turbo",
+        )
+        # 2) Independent 2x3 (t=0,4,8,12,16,20)
+        plot_triad_3d_time_grid_matplotlib_cloud_3x3_times(
+            u_gt=u_all,
+            u_ind=u_pred_all,
+            u_dep=u_pred_dependent,
+            dt=dt,
+            time_points=[0, 4, 8, 12, 16, 20],
+            save_path=ind_png,
+            grid_rows=2,
+            grid_cols=3,
+            elev=20,
+            azim=-60,
+            sample_size=15000,
+            point_size=6.0,
+            opacity=0.55,
+            cmap="turbo",
+        )
+        plt.close("all")
+
+        # 3) Mean/covariance 3x4 (no internal legend; composite has one in header)
+        # Use larger font so labels stay readable when embedded in the composite.
+        plot_mean_covariance_grid_ind_dep(
+            Time_ind=Time_record,
+            mean_gt_ind=mean_state_record_independent,
+            cov_gt_ind=cov_state_record_independent,
+            mean_pred_ind=mean_state_pred_independent,
+            cov_pred_ind=cov_state_pred_independent,
+            Time_dep=Time_dep,
+            mean_pred_dep=mean_state_pred_dependent,
+            cov_pred_dep=cov_state_pred_dependent,
+            t_ind_max=TIME_AMOUNT,
+            t_dep_max=TIME_DEP_AMOUNT,
+            save_path=mean_cov_png,
+            legend_title=None,
+            ground_truth_label="Ground Truth",
+            independent_label="ASD-FEX-TFDM-independent",
+            dependent_label="ASD-FEX-TFDM-dependent",
+            show_legend=False,
+            font_size=26,
+        )
+        plt.close("all")
+
+        # 4) Third-order 2x2 (no internal legend)
+        plot_third_order_moments_ind_dep_2x2(
+            moment3_state_record_ind=moment3_state_record,
+            moment3_state_pred_ind=moment3_state_pred,
+            moment3_state_pred_dep=moment3_state_pred_dependent,
+            Time_ind=Time_record,
+            Time_dep=Time_dep,
+            save_path=third_png,
+            title_suffix=params_name,
+            legend_title=None,
+            ground_truth_label="Ground Truth",
+            independent_label="ASD-FEX-TFDM-independent",
+            dependent_label="ASD-FEX-TFDM-dependent",
+            show_legend=False,
+        )
+        plt.close("all")
+
+        # Load images
+        img_dep = mpimg.imread(dep_png)
+        img_ind = mpimg.imread(ind_png)
+        img_mean_cov = mpimg.imread(mean_cov_png)
+        img_third = mpimg.imread(third_png)
+
+    # Composite figure: header legend + 2x2 content + footer (Equipart)
+    fig = plt_comp.figure(figsize=(20, 14))
+    gs = GridSpec(4, 2, figure=fig, height_ratios=[0.12, 1, 1, 0.08], hspace=0.25, wspace=0.12)
+
+    ax_legend = fig.add_subplot(gs[0, :])
+    ax_legend.axis("off")
+    # Centered legend in header.
+    from matplotlib.lines import Line2D
+    leg_handles = [
+        Line2D([0], [0], color="black", lw=3, label="Ground Truth"),
+        Line2D([0], [0], color="#ff7f0e", lw=3, label="ASD-FEX-TFDM-independent"),
+        Line2D([0], [0], color="#1f77b4", lw=3, label="ASD-FEX-TFDM-dependent"),
+    ]
+    ax_legend.legend(
+        handles=leg_handles,
+        loc="center",
+        ncol=3,
+        fontsize=font_size,
+        frameon=False,
+        handlelength=2.0,
+        columnspacing=1.4,
+    )
+
+    ax_dep = fig.add_subplot(gs[1, 0])
+    ax_dep.imshow(img_dep)
+    ax_dep.axis("off")
+    # Blue box around dependent panel
+    for spine in ax_dep.spines.values():
+        spine.set_visible(True)
+    ax_dep.spines["top"].set_color("blue")
+    ax_dep.spines["top"].set_linewidth(4)
+    ax_dep.spines["bottom"].set_color("blue")
+    ax_dep.spines["bottom"].set_linewidth(4)
+    ax_dep.spines["left"].set_color("blue")
+    ax_dep.spines["left"].set_linewidth(4)
+    ax_dep.spines["right"].set_color("blue")
+    ax_dep.spines["right"].set_linewidth(4)
+    ax_dep.text(0.5, 1.08, "dependent", transform=ax_dep.transAxes, ha="center", fontsize=font_size, color="blue")
+
+    ax_ind = fig.add_subplot(gs[2, 0])
+    ax_ind.imshow(img_ind)
+    ax_ind.axis("off")
+    # Orange box around independent panel
+    for spine in ax_ind.spines.values():
+        spine.set_visible(True)
+    ax_ind.spines["top"].set_color("#ff7f0e")
+    ax_ind.spines["top"].set_linewidth(4)
+    ax_ind.spines["bottom"].set_color("#ff7f0e")
+    ax_ind.spines["bottom"].set_linewidth(4)
+    ax_ind.spines["left"].set_color("#ff7f0e")
+    ax_ind.spines["left"].set_linewidth(4)
+    ax_ind.spines["right"].set_color("#ff7f0e")
+    ax_ind.spines["right"].set_linewidth(4)
+    ax_ind.text(0.5, 1.08, "independent", transform=ax_ind.transAxes, ha="center", fontsize=font_size, color="#ff7f0e")
+
+    ax_mc = fig.add_subplot(gs[1, 1])
+    ax_mc.imshow(img_mean_cov)
+    ax_mc.axis("off")
+    ax_mc.set_title("Mean & Covariance", fontsize=font_size)
+
+    ax_third = fig.add_subplot(gs[2, 1])
+    ax_third.imshow(img_third)
+    ax_third.axis("off")
+    ax_third.set_title("Third-order moments", fontsize=font_size)
+
+    ax_footer = fig.add_subplot(gs[3, :])
+    ax_footer.axis("off")
+    ax_footer.text(0.5, 0.5, params_name, transform=ax_footer.transAxes, ha="center", va="center", fontsize=font_size)
+
+    plt_comp.savefig(save_path, dpi=300, bbox_inches="tight")
+    if save_path.lower().endswith(".pdf"):
+        png_path = save_path[:-4] + ".png"
+        plt_comp.savefig(png_path, dpi=300, bbox_inches="tight")
+        print(f"[INFO] Saved composite to: {png_path}")
+    print(f"[INFO] Saved composite to: {save_path}")
+    plt_comp.close(fig)
+    return None
+
+
 def plot_probability_distributions(u_all, u_pred, Time_record, save_path=None, title_suffix="FEX-framework"):
     """
     Plot probability distributions and joint distributions comparing ground truth and prediction.
@@ -1683,6 +2379,139 @@ def plot_triad_3d_snapshot(u,
         print(f"[INFO] Saved 3D snapshot to {save_path}")
 
     return fig
+
+
+def plot_triad_3d_time_grid_matplotlib_cloud_3x3_times(
+    u_gt: np.ndarray,
+    u_ind: np.ndarray,
+    u_dep=None,
+    dt: float = 0.01,
+    time_points: list | None = None,
+    save_path: str | None = None,
+    grid_rows: int = 2,
+    grid_cols: int = 3,
+    elev: float = 20,
+    azim: float = -60,
+    opacity: float = 0.55,
+    point_size: float = 6.0,
+    cmap: str = "turbo",
+    sample_size: int = 15000,
+):
+    """
+    Matplotlib-based 3D scatter "cloud" renderer (no mesh, no 3D grid/panes).
+
+    Layout: grid_rows x grid_cols (e.g. 2x3 for 6 panels, 1x3 for 3 panels).
+    Default time_points: [0, 4, 8, 12, 16, 20].
+
+    u_* shape: (NPATH, 3, Nt+1)
+    """
+    if time_points is None:
+        time_points = [0, 4, 8, 12, 16, 20]
+
+    # Ensure Matplotlib is only imported if we actually call this function.
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+
+    # Use consistent samples across all panels/datasets.
+    NPATH = u_gt.shape[0]
+    sample_size = min(sample_size, NPATH)
+    np.random.seed(0)
+    sample_idx = np.random.choice(NPATH, sample_size, replace=False)
+
+    Nt_gt = u_gt.shape[2]
+    max_idx_gt = Nt_gt - 1
+    time_indices = [min(int(round(t / dt)), max_idx_gt) for t in time_points]
+    time_values = [idx * dt for idx in time_indices]
+
+    # Global bounds computed from GT at requested times (consistent look).
+    states = []
+    for tidx in time_indices:
+        snap = u_gt[sample_idx, :, tidx]  # (sample, 3)
+        states.append(snap)
+    all_states = np.concatenate(states, axis=0)
+    u1_min, u1_max = np.percentile(all_states[:, 0], [1, 99])
+    u2_min, u2_max = np.percentile(all_states[:, 1], [1, 99])
+    u3_min, u3_max = np.percentile(all_states[:, 2], [1, 99])
+
+    n_rows, n_cols = int(grid_rows), int(grid_cols)
+    fig = plt.figure(figsize=(4.0 * n_cols, 3.7 * n_rows))
+
+    n_panels = min(len(time_indices), n_rows * n_cols)
+    for panel_idx in range(n_panels):
+        ax = fig.add_subplot(n_rows, n_cols, panel_idx + 1, projection="3d")
+        ax.set_facecolor("white")
+        ax.grid(False)
+
+        tidx = time_indices[panel_idx]
+        t_val = time_values[panel_idx]
+
+        points_list = [u_gt[sample_idx, :, tidx], u_ind[sample_idx, :, tidx]]
+        if u_dep is not None and tidx < u_dep.shape[2]:
+            points_list.append(u_dep[sample_idx, :, tidx])
+
+        points_xyz = np.concatenate(points_list, axis=0)  # (k*sample, 3)
+        x = points_xyz[:, 0]
+        y = points_xyz[:, 1]
+        z = points_xyz[:, 2]
+        r = np.sqrt(x**2 + y**2 + z**2)
+
+        ax.scatter(
+            x,
+            y,
+            z,
+            c=r,
+            cmap=cmap,
+            s=point_size,
+            alpha=opacity,
+            linewidths=0,
+            marker="o",
+        )
+
+        ax.set_xlim([u1_min, u1_max])
+        ax.set_ylim([u2_min, u2_max])
+        ax.set_zlim([u3_min, u3_max])
+
+        ax.view_init(elev=elev, azim=azim)
+
+        # Remove any 3D "grid/box" look.
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_zticks([])
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        ax.set_zlabel("")
+        ax.set_title(f"t={t_val:g}", fontsize=18, pad=6)
+
+        # Hide panes/borders if available in this Matplotlib version.
+        try:
+            ax.xaxis.pane.set_visible(False)
+            ax.yaxis.pane.set_visible(False)
+            ax.zaxis.pane.set_visible(False)
+        except Exception:
+            pass
+        ax.xaxis.line.set_alpha(0)
+        ax.yaxis.line.set_alpha(0)
+        ax.zaxis.line.set_alpha(0)
+
+    # If time_points < 6, hide remaining axes in the 2x3 grid.
+    for panel_idx in range(n_panels, n_rows * n_cols):
+        ax = fig.add_subplot(n_rows, n_cols, panel_idx + 1, projection="3d")
+        ax.set_axis_off()
+
+    if save_path:
+        # If the user wants a "image then pdf" workflow, write both PNG and PDF.
+        # Matplotlib can render directly to either, but we explicitly produce a PNG too.
+        save_kwargs = dict(dpi=300, bbox_inches="tight")
+        if save_path.lower().endswith(".pdf"):
+            png_path = save_path[:-4] + ".png"
+            fig.savefig(png_path, **save_kwargs)
+            print(f"[INFO] Saved Matplotlib 3x3 3D cloud grid to: {png_path}")
+
+        fig.savefig(save_path, **save_kwargs)
+        print(f"[INFO] Saved Matplotlib 3x3 3D cloud grid to: {save_path}")
+
+    plt.close(fig)
+    return None
 
 
 def plot_triad_3d_grid(u_all, u_pred_single, u_pred_ensemble,
