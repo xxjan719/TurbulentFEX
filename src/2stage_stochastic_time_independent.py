@@ -637,11 +637,13 @@ elif choice == '4':
 
     moment3_state_record = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     moment3_state_pred = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    moment3_state_single = np.zeros((3, 3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     moment3_state_tfdm = np.zeros((3, 3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     moment3_state_vae = np.zeros((3, 3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     moment3_first,_ = compute_third_order_moments(initial_state)
     moment3_state_record[:,:,:,0] = moment3_first
     moment3_state_pred[:,:,:,0] = moment3_first
+    moment3_state_single[:,:,:,0] = moment3_first
     moment3_state_tfdm[:,:,:,0] = moment3_first
     moment3_state_vae[:,:,:,0] = moment3_first
 
@@ -1027,6 +1029,8 @@ elif choice == '4':
         # Calculate third-order moments for prediction
         moment3_pred, _ = compute_third_order_moments(next_pred_state)
         moment3_state_pred[:, :, :, idx] = moment3_pred
+        moment3_single, _ = compute_third_order_moments(next_pred_single)
+        moment3_state_single[:, :, :, idx] = moment3_single
         moment3_tfdm, _ = compute_third_order_moments(next_pred_tfdm)
         moment3_vae, _ = compute_third_order_moments(next_pred_vae)
         moment3_state_tfdm[:, :, :, idx] = moment3_tfdm
@@ -1073,7 +1077,7 @@ elif choice == '4':
     # Plot third-order moments
     plot_third_order_moments_tfdm_vae_nn(
         moment3_state_record,
-        moment3_state_pred,
+        moment3_state_single,
         moment3_state_tfdm,
         moment3_state_vae,
         Time_record,
