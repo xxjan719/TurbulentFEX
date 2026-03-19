@@ -697,14 +697,19 @@ elif choice == '4':
     ensemble_models = {}
     ensemble_norms = {}
 
-    # Use args.NOISE_LEVEL so CPU and GPU use same paths and same FEX expressions
+    # Keep exactly the same absolute directory convention as training options.
+    # Using relative ../src paths here can silently load mismatched/stale assets.
     noise_str = f'noise_{args.NOISE_LEVEL}'
-    if str(device) == 'cuda:0':
-        save_dir = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/{noise_str}/second_stage_10000_constant'
-        independent_save_dir = f'../src/Example/MC_triad/Results/Results1/Results/{args.params_name}/{noise_str}/second_stage_10000_independent'
-    else:
-        save_dir = f'../src/Example/MC_triad/Results/{args.params_name}/{noise_str}/second_stage_10000_constant'
-        independent_save_dir = f'../src/Example/MC_triad/Results/{args.params_name}/{noise_str}/second_stage_10000_independent'
+    save_dir = os.path.join(
+        model_PATH,
+        noise_str,
+        f'second_stage_{args.RESIDUAL_SAMPLES}_constant',
+    )
+    independent_save_dir = os.path.join(
+        model_PATH,
+        noise_str,
+        f'second_stage_{args.RESIDUAL_SAMPLES}_independent',
+    )
 
     dataname = os.path.join(independent_save_dir, 'data_inference.pt')
     vae_stats_path = os.path.join(independent_save_dir, 'data_inference_vae.pt')
@@ -871,7 +876,7 @@ elif choice == '4':
             stoch_update_vae = None
 
             if has_residual_nn:
-                state_tensor_res = torch.tensor(current_pred_state_tfdm, dtype=torch.float32, device=device)
+                state_tensor_res = torch.tensor(current_pred_state_nn, dtype=torch.float32, device=device)
                 u_norm = (state_tensor_res - U_mean_res) / U_std_res
                 pred_res = Residual_Network(u_norm) * RES_std_res + RES_mean_res
                 stoch_update_nn = (pred_res / diff_scale_res).cpu().detach().numpy()
@@ -888,28 +893,37 @@ elif choice == '4':
 
             if use_vae and stoch_update_vae is not None:
                 stoch_update = stoch_update_vae
-            elif stoch_update_nn is not None:
-                stoch_update = stoch_update_nn
+            elif stoch_update_nn_legacy is not None:
+                stoch_update = stoch_update_nn_legacy
             else:
                 stoch_update = None
     
         # Simple noise for comparison (and optional rescaling reference)
         simple_noise = np.sqrt(dt) * (Winc @ SS)
+        if stoch_update_nn is not None and not np.isfinite(stoch_update_nn).all():
+            print("[WARN] Non-finite values in FEX+NN stochastic update; fallback to simple noise for this step.")
+            stoch_update_nn = simple_noise.copy()
+        if stoch_update_nn_legacy is not None and not np.isfinite(stoch_update_nn_legacy).all():
+            print("[WARN] Non-finite values in FEX+TFDM stochastic update; fallback to simple noise for this step.")
+            stoch_update_nn_legacy = simple_noise.copy()
+        if stoch_update_vae is not None and not np.isfinite(stoch_update_vae).all():
+            print("[WARN] Non-finite values in FEX+VAE stochastic update; fallback to simple noise for this step.")
+            stoch_update_vae = simple_noise.copy()
         # Match NN/VAE stochastic increments to simple-noise first/second moments.
         # This mirrors discussion_test.py and avoids mean bias in trajectories.
         std_simple = np.std(simple_noise, axis=0)
         std_simple = np.maximum(std_simple, 1e-12)
         mean_simple = np.mean(simple_noise, axis=0)
         if stoch_update_nn is not None:
-            std_tfdm = np.std(stoch_update_nn, axis=0)
-            mean_tfdm = np.mean(stoch_update_nn, axis=0)
-            scale_tfdm = np.where(std_tfdm > 1e-12, std_simple / std_tfdm, 1.0)
-            stoch_update_nn = (stoch_update_nn - mean_tfdm) * scale_tfdm + mean_simple
-        if stoch_update_nn_legacy is not None:
-            std_nn = np.std(stoch_update_nn_legacy, axis=0)
-            mean_nn = np.mean(stoch_update_nn_legacy, axis=0)
+            std_nn = np.std(stoch_update_nn, axis=0)
+            mean_nn = np.mean(stoch_update_nn, axis=0)
             scale_nn = np.where(std_nn > 1e-12, std_simple / std_nn, 1.0)
-            stoch_update_nn_legacy = (stoch_update_nn_legacy - mean_nn) * scale_nn + mean_simple
+            stoch_update_nn = (stoch_update_nn - mean_nn) * scale_nn + mean_simple
+        if stoch_update_nn_legacy is not None:
+            std_tfdm = np.std(stoch_update_nn_legacy, axis=0)
+            mean_tfdm = np.mean(stoch_update_nn_legacy, axis=0)
+            scale_tfdm = np.where(std_tfdm > 1e-12, std_simple / std_tfdm, 1.0)
+            stoch_update_nn_legacy = (stoch_update_nn_legacy - mean_tfdm) * scale_tfdm + mean_simple
         if stoch_update_vae is not None:
             std_vae = np.std(stoch_update_vae, axis=0)
             mean_vae = np.mean(stoch_update_vae, axis=0)
@@ -926,15 +940,15 @@ elif choice == '4':
             print(f"\nStep {idx}: Model Comparison")
             print("=" * 50)
         
-            if stoch_update_nn is not None:
-                print(f"FEX+TFDM - Mean: {np.mean(stoch_update_nn, axis=0)}")
-                print(f"FEX+TFDM - Std:  {np.std(stoch_update_nn, axis=0)}")
+            if stoch_update_nn_legacy is not None:
+                print(f"FEX+TFDM - Mean: {np.mean(stoch_update_nn_legacy, axis=0)}")
+                print(f"FEX+TFDM - Std:  {np.std(stoch_update_nn_legacy, axis=0)}")
             else:
                 print("FEX+TFDM - Not available")
 
-            if stoch_update_nn_legacy is not None:
-                print(f"FEX+NN   - Mean: {np.mean(stoch_update_nn_legacy, axis=0)}")
-                print(f"FEX+NN   - Std:  {np.std(stoch_update_nn_legacy, axis=0)}")
+            if stoch_update_nn is not None:
+                print(f"FEX+NN   - Mean: {np.mean(stoch_update_nn, axis=0)}")
+                print(f"FEX+NN   - Std:  {np.std(stoch_update_nn, axis=0)}")
             else:
                 print("FEX+NN   - Not available")
 
@@ -952,13 +966,13 @@ elif choice == '4':
     
         # Build each prediction trajectory explicitly
         next_pred_nn = (
-            current_pred_state_nn + det_update_nn + stoch_update_nn_legacy
-            if stoch_update_nn_legacy is not None
-            else current_pred_state_nn + det_update_nn + (stoch_update_nn if stoch_update_nn is not None else simple_noise)
+            current_pred_state_nn + det_update_nn + stoch_update_nn
+            if stoch_update_nn is not None
+            else current_pred_state_nn + det_update_nn + (stoch_update_nn_legacy if stoch_update_nn_legacy is not None else simple_noise)
         )
         next_pred_tfdm = (
-            current_pred_state_tfdm + det_update_tfdm + stoch_update_nn
-            if stoch_update_nn is not None
+            current_pred_state_tfdm + det_update_tfdm + stoch_update_nn_legacy
+            if stoch_update_nn_legacy is not None
             else current_pred_state_tfdm + det_update_tfdm + simple_noise
         )
         next_pred_vae = (
