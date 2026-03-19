@@ -57,7 +57,7 @@ print("SECOND STAGE: STOCHASTIC OPTIONS")
 print("="*60)
 print("1. Train to learn stochastic part in time independent case")
 print("2. Train ResidualVAE (Gaussian z -> residual increments)")
-print("3. Train Residual NN (u1,u2,u3 -> residual), with identity-moment regularization")
+print("3. Train Residual NN (Gaussian z(3) -> residual), with identity-moment regularization")
 print("4. Skip Training and generate the prediction results")
 print("="*60)
 
@@ -421,7 +421,7 @@ elif choice == '2':
     )
     print(f'[VAE] Saved stats to: {vae_stats_path}')
 elif choice == '3':
-    print("\n[INFO] Training Residual NN (u1,u2,u3 -> residual)...")
+    print("\n[INFO] Training Residual NN (Gaussian z(3) -> residual)...")
     independent_save_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}_independent')
     os.makedirs(independent_save_dir, exist_ok=True)
     print(f'[INFO] Using independent save directory: {independent_save_dir}')
@@ -441,19 +441,11 @@ elif choice == '3':
             device=device
         )
 
-    residuals, u_current, _ = generate_euler_residue(learned_model_wrapper, data, dt)
+    residuals, _, _ = generate_euler_residue(learned_model_wrapper, data, dt)
 
-    # Build paired dataset: input state u(t), target residual increment r(t).
-    # Accept either (MC,3,T) or (MC,T,3) layouts robustly.
-    if u_current.ndim != 3 or residuals.ndim != 3:
-        raise RuntimeError(f"[ERROR] Unexpected shapes: u_current={u_current.shape}, residuals={residuals.shape}")
-
-    if u_current.shape[1] == 3:
-        u_flat = u_current.transpose(0, 2, 1).reshape(-1, 3)
-    elif u_current.shape[2] == 3:
-        u_flat = u_current.reshape(-1, 3)
-    else:
-        raise RuntimeError(f"[ERROR] u_current must contain 3 components, got shape {u_current.shape}")
+    # Build paired dataset: input Gaussian z ~ N(0, I), target residual increment r(t).
+    if residuals.ndim != 3:
+        raise RuntimeError(f"[ERROR] Unexpected residuals shape: {residuals.shape}")
 
     if residuals.shape[1] == 3:
         r_flat = residuals.transpose(0, 2, 1).reshape(-1, 3)
@@ -462,9 +454,9 @@ elif choice == '3':
     else:
         raise RuntimeError(f"[ERROR] residuals must contain 3 components, got shape {residuals.shape}")
 
-    n_use = min(100000, u_flat.shape[0], r_flat.shape[0])
-    sel = np.random.permutation(min(u_flat.shape[0], r_flat.shape[0]))[:n_use]
-    U_data = u_flat[sel]
+    n_use = min(100000, r_flat.shape[0])
+    sel = np.random.permutation(r_flat.shape[0])[:n_use]
+    U_data = np.random.randn(n_use, 3).astype(np.float32)
     R_data = r_flat[sel]
 
     # Normalization stats for inference.
@@ -880,9 +872,8 @@ elif choice == '4':
                 pred_nn = Neural_Network(winc_nn) * ODE_std + ODE_mean
                 stoch_update_nn = (pred_nn / diff_scale_nn).cpu().detach().numpy()
             if has_residual_nn:
-                state_tensor_res = torch.tensor(current_pred_state_tfdm, dtype=torch.float32, device=device)
-                u_norm = (state_tensor_res - U_mean_res) / U_std_res
-                pred_res = Residual_Network(u_norm) * RES_std_res + RES_mean_res
+                z_norm = (Winc_tensor - U_mean_res) / U_std_res
+                pred_res = Residual_Network(z_norm) * RES_std_res + RES_mean_res
                 stoch_update_nn_legacy = (pred_res / diff_scale_res).cpu().detach().numpy()
 
             if has_vae:
