@@ -256,7 +256,7 @@ if choice == '1':
         optimizer = torch.optim.Adam(Neural_Network.parameters(),lr=learning_rate, weight_decay = 1e-5)
         criterion = torch.nn.MSELoss()
         best_valid_err = 5.0
-        n_iter = 2000
+        n_iter = 200000
         for j in range(n_iter):
             optimizer.zero_grad()
             pred = Neural_Network(ZT_train_normal)
