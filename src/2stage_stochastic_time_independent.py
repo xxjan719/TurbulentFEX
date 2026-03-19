@@ -540,25 +540,39 @@ else:
 
     dataname = os.path.join(independent_save_dir, 'data_inference.pt')
     vae_stats_path = os.path.join(independent_save_dir, 'data_inference_vae.pt')
-
-    data_inference = None
-    if os.path.exists(dataname):
-        data_inference = torch.load(dataname, map_location=device)
-
-    # Defaults (will be overridden if VAE stats exist).
-    ZT_mean = data_inference['ZT_mean'].to(device) if data_inference is not None else None
-    ZT_std = data_inference['ZT_std'].to(device) if data_inference is not None else None
-    ODE_mean = data_inference['ODE_mean'].to(device) if data_inference is not None else None
-    ODE_std = data_inference['ODE_std'].to(device) if data_inference is not None else None
-    diff_scale = data_inference['diff_scale'] if data_inference is not None else args.DIFF_SCALE
-    if torch.is_tensor(diff_scale):
-        diff_scale = diff_scale.item()
-    # Load stochastic increment model (prefer VAE if present)
+    nn_path = os.path.join(save_dir, 'Neural_Network.pth')
     vae_path = os.path.join(save_dir, 'ResidualVAE.pth')
-    use_vae = os.path.exists(vae_path)
-    RES_mean = None
-    RES_std = None
-    if use_vae:
+
+    # NN assets
+    has_nn = os.path.exists(nn_path) and os.path.exists(dataname)
+    Neural_Network = None
+    ZT_mean_nn = ZT_std_nn = ODE_mean = ODE_std = None
+    diff_scale_nn = args.DIFF_SCALE
+
+    if has_nn:
+        print(f"[INFO] Loading Neural_Network from: {nn_path}")
+        data_inference = torch.load(dataname, map_location=device)
+        ZT_mean_nn = data_inference['ZT_mean'].to(device)
+        ZT_std_nn = data_inference['ZT_std'].to(device)
+        ODE_mean = data_inference['ODE_mean'].to(device)
+        ODE_std = data_inference['ODE_std'].to(device)
+        diff_scale_nn = data_inference.get('diff_scale', args.DIFF_SCALE)
+        if torch.is_tensor(diff_scale_nn):
+            diff_scale_nn = diff_scale_nn.item()
+
+        Neural_Network = FN_Net(3, 3, 50).to(device)
+        Neural_Network.load_state_dict(torch.load(nn_path, map_location=device))
+        Neural_Network.eval()
+    else:
+        print("[INFO] Neural_Network assets not found; NN comparison disabled.")
+
+    # VAE assets
+    has_vae = os.path.exists(vae_path) and os.path.exists(vae_stats_path)
+    Residual_VAE = None
+    ZT_mean_vae = ZT_std_vae = RES_mean = RES_std = None
+    diff_scale_vae = args.DIFF_SCALE
+
+    if has_vae:
         print(f"[INFO] Loading ResidualVAE from: {vae_path}")
         latent_dim = 8
         hid_dim = 64
@@ -566,35 +580,25 @@ else:
         Residual_VAE.load_state_dict(torch.load(vae_path, map_location=device))
         Residual_VAE.eval()
 
-        if os.path.exists(vae_stats_path):
-            vae_stats = torch.load(vae_stats_path, map_location=device)
-            ZT_mean = vae_stats['ZT_mean'].to(device)
-            ZT_std = vae_stats['ZT_std'].to(device)
-            RES_mean = vae_stats['RES_mean'].to(device)
-            RES_std = vae_stats['RES_std'].to(device)
-            diff_scale = vae_stats.get('diff_scale', diff_scale)
-            if torch.is_tensor(diff_scale):
-                diff_scale = diff_scale.item()
-        else:
-            # Fallback: if VAE stats are missing, try to reuse NN stats.
-            RES_mean = ODE_mean
-            RES_std = ODE_std
+        vae_stats = torch.load(vae_stats_path, map_location=device)
+        ZT_mean_vae = vae_stats['ZT_mean'].to(device)
+        ZT_std_vae = vae_stats['ZT_std'].to(device)
+        RES_mean = vae_stats['RES_mean'].to(device)
+        RES_std = vae_stats['RES_std'].to(device)
+        diff_scale_vae = vae_stats.get('diff_scale', args.DIFF_SCALE)
+        if torch.is_tensor(diff_scale_vae):
+            diff_scale_vae = diff_scale_vae.item()
     else:
-        print("[INFO] Loading Neural_Network (FN_Net) for stochastic increment...")
-        Residual_VAE = None
-        if data_inference is None or ODE_mean is None or ODE_std is None:
-            raise RuntimeError(
-                "[ERROR] data_inference.pt not found and VAE model not found. "
-                "Run option 1 (NN) or option 2 (VAE) first."
-            )
-        Neural_Network = FN_Net(3, 3, 50).to(device)
-        Neural_Network.load_state_dict(torch.load(os.path.join(save_dir, 'Neural_Network.pth'), map_location=device))
-        Neural_Network.eval()
+        print("[INFO] ResidualVAE assets not found; VAE comparison disabled.")
 
-    if use_vae and (ZT_mean is None or ZT_std is None):
-        raise RuntimeError("[ERROR] VAE inference requires ZT_mean/ZT_std; run option 2 to generate data_inference_vae.pt.")
-    if use_vae and (RES_mean is None or RES_std is None):
-        raise RuntimeError("[ERROR] VAE inference requires RES_mean/RES_std; run option 2 to generate data_inference_vae.pt.")
+    if not has_nn and not has_vae:
+        raise RuntimeError(
+            "[ERROR] No stochastic model available. "
+            "Run option 1 (NN) and/or option 2 (VAE) first."
+        )
+
+    # Primary model for rollout: prefer VAE when available.
+    use_vae = has_vae
     tM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
     for idx in range(1,int(TIME_AMOUNT/dt)+1):
         # RK4 integration
@@ -664,37 +668,56 @@ else:
         Npath = current_pred_state.shape[0]
         dim = current_pred_state.shape[1]
         Winc_tensor = torch.Tensor(Winc).to(device, dtype=torch.float32)
-        Winc_tensor = (Winc_tensor - ZT_mean) / ZT_std
         with torch.no_grad():
-            if use_vae:
-                y_hat, _, _ = Residual_VAE(Winc_tensor)
-                pred = y_hat * RES_std + RES_mean
+            stoch_update_nn = None
+            stoch_update_vae = None
+
+            if has_nn:
+                winc_nn = (Winc_tensor - ZT_mean_nn) / ZT_std_nn
+                pred_nn = Neural_Network(winc_nn) * ODE_std + ODE_mean
+                stoch_update_nn = (pred_nn / diff_scale_nn).cpu().detach().numpy()
+
+            if has_vae:
+                winc_vae = (Winc_tensor - ZT_mean_vae) / ZT_std_vae
+                y_hat_vae, _, _ = Residual_VAE(winc_vae)
+                pred_vae = y_hat_vae * RES_std + RES_mean
+                stoch_update_vae = (pred_vae / diff_scale_vae).cpu().detach().numpy()
+
+            if use_vae and stoch_update_vae is not None:
+                stoch_update = stoch_update_vae
+            elif stoch_update_nn is not None:
+                stoch_update = stoch_update_nn
             else:
-                pred = Neural_Network(Winc_tensor) * ODE_std + ODE_mean
-            stoch_update = (pred / diff_scale).cpu().detach().numpy()
+                stoch_update = None
     
         # Simple noise for comparison (and optional rescaling reference)
         simple_noise = np.sqrt(dt) * (Winc @ SS)
         # Rescale NN output to match simple_noise scale so result is similar to simple noise.
         # Training target (ODE_Solution) is from long ODE integration, not one-step increment, so NN std is often smaller.
-        std_nn = np.std(stoch_update, axis=0)
         std_simple = np.std(simple_noise, axis=0)
         std_simple = np.maximum(std_simple, 1e-12)
-        scale_match = np.where(std_nn > 1e-12, std_simple / std_nn, 1.0)
-        stoch_update = stoch_update * scale_match
+        if stoch_update is not None:
+            std_sel = np.std(stoch_update, axis=0)
+            scale_match = np.where(std_sel > 1e-12, std_simple / std_sel, 1.0)
+            stoch_update = stoch_update * scale_match
     
         # Print comparison every 50 steps
         if idx % 50 == 0:
             print(f"\nStep {idx}: Model Comparison")
             print("=" * 50)
         
-            if stoch_update is not None:
-                print(f"Single NN - Mean: {np.mean(stoch_update, axis=0)}")
-                print(f"Single NN - Std:  {np.std(stoch_update, axis=0)}")
+            if stoch_update_nn is not None:
+                print(f"Single NN - Mean: {np.mean(stoch_update_nn, axis=0)}")
+                print(f"Single NN - Std:  {np.std(stoch_update_nn, axis=0)}")
             else:
                 print("Single NN - Not available")
-                 
-            
+
+            if stoch_update_vae is not None:
+                print(f"VAE NN - Mean: {np.mean(stoch_update_vae, axis=0)}")
+                print(f"VAE NN - Std:  {np.std(stoch_update_vae, axis=0)}")
+            else:
+                print("VAE NN - Not available")
+
             print(f"Simple Noise - Mean: {np.mean(simple_noise, axis=0)}")
             print(f"Simple Noise - Std:  {np.std(simple_noise, axis=0)}")
             print("=" * 50)
