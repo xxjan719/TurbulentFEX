@@ -875,15 +875,15 @@ elif choice == '4':
             stoch_update_nn_legacy = None
             stoch_update_vae = None
 
-            if has_residual_nn:
-                state_tensor_res = torch.tensor(current_pred_state_nn, dtype=torch.float32, device=device)
-                u_norm = (state_tensor_res - U_mean_res) / U_std_res
-                pred_res = Residual_Network(u_norm) * RES_std_res + RES_mean_res
-                stoch_update_nn = (pred_res / diff_scale_res).cpu().detach().numpy()
             if has_nn_legacy:
                 winc_nn = (Winc_tensor - ZT_mean_nn) / ZT_std_nn
                 pred_nn = Neural_Network(winc_nn) * ODE_std + ODE_mean
-                stoch_update_nn_legacy = (pred_nn / diff_scale_nn).cpu().detach().numpy()
+                stoch_update_nn = (pred_nn / diff_scale_nn).cpu().detach().numpy()
+            if has_residual_nn:
+                state_tensor_res = torch.tensor(current_pred_state_tfdm, dtype=torch.float32, device=device)
+                u_norm = (state_tensor_res - U_mean_res) / U_std_res
+                pred_res = Residual_Network(u_norm) * RES_std_res + RES_mean_res
+                stoch_update_nn_legacy = (pred_res / diff_scale_res).cpu().detach().numpy()
 
             if has_vae:
                 winc_vae = (Winc_tensor - ZT_mean_vae) / ZT_std_vae
