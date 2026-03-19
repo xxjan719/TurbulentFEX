@@ -11,11 +11,11 @@ import torch.nn as nn
 from utils import *
 from utils.helper import ResidualVAE
 from utils.plot import (
-    plot_mean_comparison_tfdm_vae,
-    plot_covariance_comparison_tfdm_vae,
-    plot_energy_comparison_tfdm_vae,
-    plot_third_order_moments_tfdm_vae,
-    plot_probability_distributions_tfdm_vae,
+    plot_mean_comparison_tfdm_vae_nn,
+    plot_covariance_comparison_tfdm_vae_nn,
+    plot_energy_comparison_tfdm_vae_nn,
+    plot_third_order_moments_tfdm_vae_nn,
+    plot_probability_distributions_tfdm_vae_nn,
 )
 
 from Example.MC_triad.MC_triad import params_init, MC_triad_initial_value
@@ -57,16 +57,17 @@ print("SECOND STAGE: STOCHASTIC OPTIONS")
 print("="*60)
 print("1. Train to learn stochastic part in time independent case")
 print("2. Train ResidualVAE (Gaussian z -> residual increments)")
-print("3. Skip Training and generate the prediction results")
+print("3. Train Residual NN (u1,u2,u3 -> residual), with identity-moment regularization")
+print("4. Skip Training and generate the prediction results")
 print("="*60)
 
 while True:
 # choice = '1' #
-    choice = input("\nChoose option (1, 2, or 3 ):").strip()
-    if choice in ['1', '2', '3']:
+    choice = input("\nChoose option (1, 2, 3, or 4 ):").strip()
+    if choice in ['1', '2', '3', '4']:
         break
     else:
-        print("Please enter '1', '2', or '3'.")
+        print("Please enter '1', '2', '3', or '4'.")
 
 if choice == '1':
     print("\n[INFO] Training everything in second stage...")
@@ -281,7 +282,7 @@ if choice == '1':
         print("[SUCCESS] the Neural_Network has been loaded successfully")
         
     print("[SUCCESS] the Neural_Network has been trained successfully")
-    print("[SUCESS] you may run choice 3 to generate the prediction results.")
+    print("[SUCESS] you may run choice 4 to generate the prediction results.")
 elif choice == '2':
     print("\n[INFO] Training ResidualVAE (Gaussian z -> residual increments)...")
     # Add comprehensive training section for VAE only
@@ -419,7 +420,142 @@ elif choice == '2':
         vae_stats_path,
     )
     print(f'[VAE] Saved stats to: {vae_stats_path}')
-else:
+elif choice == '3':
+    print("\n[INFO] Training Residual NN (u1,u2,u3 -> residual)...")
+    independent_save_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}_independent')
+    os.makedirs(independent_save_dir, exist_ok=True)
+    print(f'[INFO] Using independent save directory: {independent_save_dir}')
+
+    data_path = os.path.join(independent_save_dir, '..', f'simulation_results_noise_{args.NOISE_LEVEL}.npz')
+    if not os.path.exists(data_path):
+        raise RuntimeError('[ERROR] data has not been generated, you should run the first_stage_deterministic.py first')
+    data = np.load(data_path)
+    dt = 0.01
+
+    def learned_model_wrapper(x):
+        return FEX_model_learned(
+            x,
+            model_name=args.Model,
+            params_name=args.params_name,
+            noise_level=args.NOISE_LEVEL,
+            device=device
+        )
+
+    residuals, u_current, _ = generate_euler_residue(learned_model_wrapper, data, dt)
+
+    # Build paired dataset: input state u(t), target residual increment r(t).
+    # Accept either (MC,3,T) or (MC,T,3) layouts robustly.
+    if u_current.ndim != 3 or residuals.ndim != 3:
+        raise RuntimeError(f"[ERROR] Unexpected shapes: u_current={u_current.shape}, residuals={residuals.shape}")
+
+    if u_current.shape[1] == 3:
+        u_flat = u_current.transpose(0, 2, 1).reshape(-1, 3)
+    elif u_current.shape[2] == 3:
+        u_flat = u_current.reshape(-1, 3)
+    else:
+        raise RuntimeError(f"[ERROR] u_current must contain 3 components, got shape {u_current.shape}")
+
+    if residuals.shape[1] == 3:
+        r_flat = residuals.transpose(0, 2, 1).reshape(-1, 3)
+    elif residuals.shape[2] == 3:
+        r_flat = residuals.reshape(-1, 3)
+    else:
+        raise RuntimeError(f"[ERROR] residuals must contain 3 components, got shape {residuals.shape}")
+
+    n_use = min(100000, u_flat.shape[0], r_flat.shape[0])
+    sel = np.random.permutation(min(u_flat.shape[0], r_flat.shape[0]))[:n_use]
+    U_data = u_flat[sel]
+    R_data = r_flat[sel]
+
+    # Normalization stats for inference.
+    U_mean = np.mean(U_data, axis=0, keepdims=True)
+    U_std = np.std(U_data, axis=0, keepdims=True)
+    R_mean = np.mean(R_data, axis=0, keepdims=True)
+    R_std = np.std(R_data, axis=0, keepdims=True)
+    U_std = np.maximum(U_std, 1e-12)
+    R_std = np.maximum(R_std, 1e-12)
+
+    perm = np.random.permutation(n_use)
+    U_data = U_data[perm]
+    R_data = R_data[perm]
+    n_train = int(0.8 * n_use)
+    U_train = U_data[:n_train]
+    R_train = R_data[:n_train]
+    U_test = U_data[n_train:]
+    R_test = R_data[n_train:]
+
+    U_train_n = torch.tensor((U_train - U_mean) / U_std, dtype=torch.float32, device=device)
+    R_train_n = torch.tensor((R_train - R_mean) / R_std, dtype=torch.float32, device=device)
+    U_test_n = torch.tensor((U_test - U_mean) / U_std, dtype=torch.float32, device=device)
+    R_test_n = torch.tensor((R_test - R_mean) / R_std, dtype=torch.float32, device=device)
+    R_mean_t = torch.tensor(R_mean, dtype=torch.float32, device=device)
+    R_std_t = torch.tensor(R_std, dtype=torch.float32, device=device)
+
+    residual_nn_path = os.path.join(save_dir, 'Residual_Network.pth')
+    residual_stats_path = os.path.join(independent_save_dir, 'data_inference_residual.pt')
+
+    if not os.path.exists(residual_nn_path):
+        model = FN_Net(3, 3, 50).to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=1e-5)
+        mse = nn.MSELoss()
+        lambda_id = 0.1
+        n_iter = 2000
+        best_valid = float('inf')
+        best_state = None
+        eye3 = torch.eye(3, device=device)
+
+        for ep in range(n_iter):
+            optimizer.zero_grad()
+            pred_n = model(U_train_n)
+            pred_phys = pred_n * R_std_t + R_mean_t
+
+            # Supervised residual fit + identity-moment regularization:
+            # E[r^T r] / dt ~ I.
+            fit_loss = mse(pred_n, R_train_n)
+            gram = (pred_phys.T @ pred_phys) / (pred_phys.shape[0] * dt)
+            id_loss = mse(gram, eye3)
+            loss = fit_loss + lambda_id * id_loss
+
+            loss.backward()
+            optimizer.step()
+
+            with torch.no_grad():
+                pred_n_val = model(U_test_n)
+                pred_phys_val = pred_n_val * R_std_t + R_mean_t
+                fit_val = mse(pred_n_val, R_test_n)
+                gram_val = (pred_phys_val.T @ pred_phys_val) / (pred_phys_val.shape[0] * dt)
+                id_val = mse(gram_val, eye3)
+                valid_loss = fit_val + lambda_id * id_val
+
+            if valid_loss.item() < best_valid:
+                best_valid = valid_loss.item()
+                best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+
+            if ep % 100 == 0:
+                print(
+                    f"[ResidualNN] epoch {ep+1}; fit={fit_loss.item():.6f}; "
+                    f"id={id_loss.item():.6f}; valid={valid_loss.item():.6f}"
+                )
+
+        if best_state is not None:
+            model.load_state_dict(best_state)
+        torch.save(model.state_dict(), residual_nn_path)
+        print(f"[ResidualNN] Saved model to: {residual_nn_path}")
+    else:
+        print('[INFO] Residual_Network already exists, skip training.')
+
+    torch.save(
+        {
+            'U_mean': torch.tensor(U_mean, dtype=torch.float32),
+            'U_std': torch.tensor(U_std, dtype=torch.float32),
+            'RES_mean': torch.tensor(R_mean, dtype=torch.float32),
+            'RES_std': torch.tensor(R_std, dtype=torch.float32),
+            'diff_scale': 1.0,
+        },
+        residual_stats_path,
+    )
+    print(f"[ResidualNN] Saved stats to: {residual_stats_path}")
+elif choice == '4':
     print("\n[INFO] Skipping training and generating prediction results...")
      # Add comprehensive testing section
     print("\n" + "="*60)
@@ -519,11 +655,13 @@ else:
 
     Energy_MC_all = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     Energy_MC_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_MC_single = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     Energy_MC_tfdm = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     Energy_MC_vae = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
 
     current_state = initial_state
     current_pred_state = initial_state
+    current_pred_state_nn = initial_state.copy()
     current_pred_state_tfdm = initial_state.copy()
     current_pred_state_vae = initial_state.copy()
 
@@ -540,6 +678,7 @@ else:
         0.5 * (mean_state_pred[2, 0] ** 2 + cov_state_pred[2, 2, 0]),
     ]
     Energy_dyn_pred[:, 0] = Energy_update_pred
+    Energy_MC_single[:, 0] = Energy_update_pred
     Energy_MC_tfdm[:, 0] = Energy_update_pred
     Energy_MC_vae[:, 0] = Energy_update_pred
 
@@ -569,16 +708,18 @@ else:
 
     dataname = os.path.join(independent_save_dir, 'data_inference.pt')
     vae_stats_path = os.path.join(independent_save_dir, 'data_inference_vae.pt')
+    residual_stats_path = os.path.join(independent_save_dir, 'data_inference_residual.pt')
     nn_path = os.path.join(save_dir, 'Neural_Network.pth')
     vae_path = os.path.join(save_dir, 'ResidualVAE.pth')
+    residual_nn_path = os.path.join(save_dir, 'Residual_Network.pth')
 
-    # NN assets
-    has_nn = os.path.exists(nn_path) and os.path.exists(dataname)
+    # NN assets (legacy: Gaussian z -> ODE residual)
+    has_nn_legacy = os.path.exists(nn_path) and os.path.exists(dataname)
     Neural_Network = None
     ZT_mean_nn = ZT_std_nn = ODE_mean = ODE_std = None
     diff_scale_nn = args.DIFF_SCALE
 
-    if has_nn:
+    if has_nn_legacy:
         print(f"[INFO] Loading Neural_Network from: {nn_path}")
         data_inference = torch.load(dataname, map_location=device)
         ZT_mean_nn = data_inference['ZT_mean'].to(device)
@@ -593,7 +734,32 @@ else:
         Neural_Network.load_state_dict(torch.load(nn_path, map_location=device))
         Neural_Network.eval()
     else:
-        print("[INFO] Neural_Network assets not found; NN comparison disabled.")
+        print("[INFO] Legacy Neural_Network assets not found.")
+
+    # Residual NN assets (new: state u -> residual)
+    has_residual_nn = os.path.exists(residual_nn_path) and os.path.exists(residual_stats_path)
+    Residual_Network = None
+    U_mean_res = U_std_res = RES_mean_res = RES_std_res = None
+    diff_scale_res = 1.0
+    if has_residual_nn:
+        print(f"[INFO] Loading Residual_Network from: {residual_nn_path}")
+        residual_stats = torch.load(residual_stats_path, map_location=device)
+        U_mean_res = residual_stats['U_mean'].to(device)
+        U_std_res = residual_stats['U_std'].to(device)
+        RES_mean_res = residual_stats['RES_mean'].to(device)
+        RES_std_res = residual_stats['RES_std'].to(device)
+        diff_scale_res = residual_stats.get('diff_scale', 1.0)
+        if torch.is_tensor(diff_scale_res):
+            diff_scale_res = diff_scale_res.item()
+
+        Residual_Network = FN_Net(3, 3, 50).to(device)
+        Residual_Network.load_state_dict(torch.load(residual_nn_path, map_location=device))
+        Residual_Network.eval()
+    else:
+        print("[INFO] Residual_Network assets not found.")
+
+    # TFDM path prefers the new Residual_Network when available.
+    has_nn = has_residual_nn or has_nn_legacy
 
     # VAE assets
     has_vae = os.path.exists(vae_path) and os.path.exists(vae_stats_path)
@@ -623,7 +789,7 @@ else:
     if not has_nn and not has_vae:
         raise RuntimeError(
             "[ERROR] No stochastic model available. "
-            "Run option 1 (NN) and/or option 2 (VAE) first."
+            "Run option 1/2/3 first to train at least one model."
         )
 
     # Primary model for rollout: prefer VAE when available.
@@ -689,6 +855,7 @@ else:
             ) * dt
             return ((k1_det + k2_det) / 2).cpu().detach().numpy()
 
+        det_update_nn = det_update_from_state(current_pred_state_nn)
         det_update_tfdm = det_update_from_state(current_pred_state_tfdm)
         det_update_vae = det_update_from_state(current_pred_state_vae)
     
@@ -700,12 +867,18 @@ else:
         Winc_tensor = torch.Tensor(Winc).to(device, dtype=torch.float32)
         with torch.no_grad():
             stoch_update_nn = None
+            stoch_update_nn_legacy = None
             stoch_update_vae = None
 
-            if has_nn:
+            if has_residual_nn:
+                state_tensor_res = torch.tensor(current_pred_state_tfdm, dtype=torch.float32, device=device)
+                u_norm = (state_tensor_res - U_mean_res) / U_std_res
+                pred_res = Residual_Network(u_norm) * RES_std_res + RES_mean_res
+                stoch_update_nn = (pred_res / diff_scale_res).cpu().detach().numpy()
+            if has_nn_legacy:
                 winc_nn = (Winc_tensor - ZT_mean_nn) / ZT_std_nn
                 pred_nn = Neural_Network(winc_nn) * ODE_std + ODE_mean
-                stoch_update_nn = (pred_nn / diff_scale_nn).cpu().detach().numpy()
+                stoch_update_nn_legacy = (pred_nn / diff_scale_nn).cpu().detach().numpy()
 
             if has_vae:
                 winc_vae = (Winc_tensor - ZT_mean_vae) / ZT_std_vae
@@ -732,6 +905,11 @@ else:
             mean_tfdm = np.mean(stoch_update_nn, axis=0)
             scale_tfdm = np.where(std_tfdm > 1e-12, std_simple / std_tfdm, 1.0)
             stoch_update_nn = (stoch_update_nn - mean_tfdm) * scale_tfdm + mean_simple
+        if stoch_update_nn_legacy is not None:
+            std_nn = np.std(stoch_update_nn_legacy, axis=0)
+            mean_nn = np.mean(stoch_update_nn_legacy, axis=0)
+            scale_nn = np.where(std_nn > 1e-12, std_simple / std_nn, 1.0)
+            stoch_update_nn_legacy = (stoch_update_nn_legacy - mean_nn) * scale_nn + mean_simple
         if stoch_update_vae is not None:
             std_vae = np.std(stoch_update_vae, axis=0)
             mean_vae = np.mean(stoch_update_vae, axis=0)
@@ -754,6 +932,12 @@ else:
             else:
                 print("FEX+TFDM - Not available")
 
+            if stoch_update_nn_legacy is not None:
+                print(f"FEX+NN   - Mean: {np.mean(stoch_update_nn_legacy, axis=0)}")
+                print(f"FEX+NN   - Std:  {np.std(stoch_update_nn_legacy, axis=0)}")
+            else:
+                print("FEX+NN   - Not available")
+
             if stoch_update_vae is not None:
                 print(f"FEX+VAE - Mean: {np.mean(stoch_update_vae, axis=0)}")
                 print(f"FEX+VAE - Std:  {np.std(stoch_update_vae, axis=0)}")
@@ -767,6 +951,11 @@ else:
         
     
         # Build each prediction trajectory explicitly
+        next_pred_nn = (
+            current_pred_state_nn + det_update_nn + stoch_update_nn_legacy
+            if stoch_update_nn_legacy is not None
+            else current_pred_state_nn + det_update_nn + (stoch_update_nn if stoch_update_nn is not None else simple_noise)
+        )
         next_pred_tfdm = (
             current_pred_state_tfdm + det_update_tfdm + stoch_update_nn
             if stoch_update_nn is not None
@@ -780,7 +969,7 @@ else:
 
         # Use selected model for legacy outputs
         next_pred_state = next_pred_vae if use_vae else next_pred_tfdm
-        next_pred_single = next_pred_tfdm
+        next_pred_single = next_pred_nn
     
         # Store results for all three predictions
         u_pred_all[:,:,idx] = next_pred_state
@@ -817,6 +1006,10 @@ else:
         Energy_MC_pred[1, idx] = 0.5 * (mean_state_pred[0, idx] ** 2 + cov_state_pred[0, 0, idx])
         Energy_MC_pred[2, idx] = 0.5 * (mean_state_pred[1, idx] ** 2 + cov_state_pred[1, 1, idx])
         Energy_MC_pred[3, idx] = 0.5 * (mean_state_pred[2, idx] ** 2 + cov_state_pred[2, 2, idx])
+        Energy_MC_single[0, idx] = 0.5 * np.sum(mean_state_single[:, idx] ** 2) + 0.5 * np.trace(cov_state_single[:, :, idx])
+        Energy_MC_single[1, idx] = 0.5 * (mean_state_single[0, idx] ** 2 + cov_state_single[0, 0, idx])
+        Energy_MC_single[2, idx] = 0.5 * (mean_state_single[1, idx] ** 2 + cov_state_single[1, 1, idx])
+        Energy_MC_single[3, idx] = 0.5 * (mean_state_single[2, idx] ** 2 + cov_state_single[2, 2, idx])
         Energy_MC_tfdm[0, idx] = 0.5 * np.sum(mean_state_tfdm[:, idx] ** 2) + 0.5 * np.trace(cov_state_tfdm[:, :, idx])
         Energy_MC_tfdm[1, idx] = 0.5 * (mean_state_tfdm[0, idx] ** 2 + cov_state_tfdm[0, 0, idx])
         Energy_MC_tfdm[2, idx] = 0.5 * (mean_state_tfdm[1, idx] ** 2 + cov_state_tfdm[1, 1, idx])
@@ -836,6 +1029,7 @@ else:
     
         # Update current state
         current_pred_state = next_pred_state
+        current_pred_state_nn = next_pred_nn
         current_pred_state_tfdm = next_pred_tfdm
         current_pred_state_vae = next_pred_vae
     
@@ -844,15 +1038,17 @@ else:
     Time_record = np.arange(int(TIME_AMOUNT/dt)+1) * dt
     # Mean comparison with both stochastic models:
     # orange: FEX+TFDM, green: FEX+VAE
-    plot_mean_comparison_tfdm_vae(
+    plot_mean_comparison_tfdm_vae_nn(
         mean_state_record,
+        mean_state_single,
         mean_state_tfdm,
         mean_state_vae,
         Time_record,
         save_path=save_dir,
     )
-    plot_covariance_comparison_tfdm_vae(
+    plot_covariance_comparison_tfdm_vae_nn(
         cov_state_record,
+        cov_state_single,
         cov_state_tfdm,
         cov_state_vae,
         Time_record,
@@ -860,8 +1056,9 @@ else:
     )
 
     # Plot energy comparison
-    plot_energy_comparison_tfdm_vae(
+    plot_energy_comparison_tfdm_vae_nn(
         Energy_MC_all,
+        Energy_MC_single,
         Energy_MC_tfdm,
         Energy_MC_vae,
         Time_record,
@@ -869,8 +1066,9 @@ else:
     )
 
     # Plot third-order moments
-    plot_third_order_moments_tfdm_vae(
+    plot_third_order_moments_tfdm_vae_nn(
         moment3_state_record,
+        moment3_state_pred,
         moment3_state_tfdm,
         moment3_state_vae,
         Time_record,
@@ -878,8 +1076,9 @@ else:
     )
 
     # Plot probability distributions
-    plot_probability_distributions_tfdm_vae(
+    plot_probability_distributions_tfdm_vae_nn(
         u_all,
+        u_pred_single,
         u_pred_tfdm,
         u_pred_vae,
         Time_record,

@@ -2068,12 +2068,14 @@ def plot_probability_distributions(u_all, u_pred, Time_record, save_path=None, t
     return fig
 
 
-def plot_mean_comparison_tfdm_vae(mean_state_record, mean_state_tfdm, mean_state_vae, Time_record, save_path=None):
-    """Plot mean components with Ground Truth / FEX+TFDM / FEX+VAE."""
+def plot_mean_comparison_tfdm_vae_nn(mean_state_record, mean_state_nn, mean_state_tfdm, mean_state_vae, Time_record, save_path=None):
+    """Plot mean components with Ground Truth / FEX+NN / FEX+TFDM / FEX+VAE."""
     fig, axs = plt.subplots(3, 1, figsize=(12, 15), sharex=True)
     for i in range(3):
         axs[i].plot(Time_record, mean_state_record[i], linestyle=':', color='black', linewidth=3,
                     label=fr'Ground Truth $\langle u_{i+1} \rangle$')
+        axs[i].plot(Time_record, mean_state_nn[i], linestyle='-', color='pink', linewidth=2.5,
+                    label=fr'Prediction - FEX+NN $\langle u_{i+1} \rangle$')
         axs[i].plot(Time_record, mean_state_tfdm[i], linestyle='-', color='orange', linewidth=2.5,
                     label=fr'Prediction - FEX+TFDM $\langle u_{i+1} \rangle$')
         axs[i].plot(Time_record, mean_state_vae[i], linestyle='-', color='green', linewidth=2.5,
@@ -2084,7 +2086,7 @@ def plot_mean_comparison_tfdm_vae(mean_state_record, mean_state_tfdm, mean_state
         axs[i].tick_params(axis='both', labelsize=12)
     axs[2].set_xlabel('Time', fontsize=15)
     plt.tight_layout()
-    plt.suptitle('Mean Values of Components Over Time - FEX+TFDM vs FEX+VAE', fontsize=20, y=1.02)
+    plt.suptitle('Mean Values: FEX+NN / FEX+TFDM / FEX+VAE', fontsize=20, y=1.02)
     plt.subplots_adjust(top=0.9)
     if save_path:
         plt.savefig(os.path.join(save_path, 'mean_components_over_time.pdf'), dpi=300, bbox_inches='tight')
@@ -2092,11 +2094,12 @@ def plot_mean_comparison_tfdm_vae(mean_state_record, mean_state_tfdm, mean_state
     return fig
 
 
-def plot_covariance_comparison_tfdm_vae(cov_state_record, cov_state_tfdm, cov_state_vae, Time_record, save_path=None):
+def plot_covariance_comparison_tfdm_vae_nn(cov_state_record, cov_state_nn, cov_state_tfdm, cov_state_vae, Time_record, save_path=None):
     fig, axs = plt.subplots(3, 3, figsize=(15, 15))
     for i in range(3):
         for j in range(3):
             axs[i, j].plot(Time_record, cov_state_record[i, j], linestyle=':', color='black', linewidth=2, label='Ground Truth')
+            axs[i, j].plot(Time_record, cov_state_nn[i, j], linestyle='-', color='pink', linewidth=2, label='FEX+NN')
             axs[i, j].plot(Time_record, cov_state_tfdm[i, j], linestyle='-', color='orange', linewidth=2, label='FEX+TFDM')
             axs[i, j].plot(Time_record, cov_state_vae[i, j], linestyle='-', color='green', linewidth=2, label='FEX+VAE')
             axs[i, j].set_title(f'Cov(u{i+1}, u{j+1})', fontsize=12)
@@ -2104,7 +2107,7 @@ def plot_covariance_comparison_tfdm_vae(cov_state_record, cov_state_tfdm, cov_st
             axs[i, j].set_ylabel('Covariance', fontsize=10)
             axs[i, j].legend(frameon=False, fontsize=8)
     plt.tight_layout()
-    plt.suptitle('Covariance Comparison - FEX+TFDM vs FEX+VAE', fontsize=16, y=1.02)
+    plt.suptitle('Covariance Comparison: FEX+NN / FEX+TFDM / FEX+VAE', fontsize=16, y=1.02)
     plt.subplots_adjust(top=0.9)
     if save_path:
         plt.savefig(os.path.join(save_path, 'covariance_comparison.pdf'), dpi=300, bbox_inches='tight')
@@ -2112,12 +2115,13 @@ def plot_covariance_comparison_tfdm_vae(cov_state_record, cov_state_tfdm, cov_st
     return fig
 
 
-def plot_energy_comparison_tfdm_vae(Energy_MC_all, Energy_MC_tfdm, Energy_MC_vae, Time_record, save_path=None):
+def plot_energy_comparison_tfdm_vae_nn(Energy_MC_all, Energy_MC_nn, Energy_MC_tfdm, Energy_MC_vae, Time_record, save_path=None):
     fig, axs = plt.subplots(2, 2, figsize=(14, 10), sharex=True)
     energy_labels = ['Total', 'Mode 1', 'Mode 2', 'Mode 3']
     for idx, label in enumerate(energy_labels):
         ax = axs[idx // 2, idx % 2]
         ax.plot(Time_record, Energy_MC_all[idx], color='black', linestyle=':', linewidth=2, label=f'{label} (Truth)')
+        ax.plot(Time_record, Energy_MC_nn[idx], color='pink', linewidth=2, label=f'{label} (FEX+NN)')
         ax.plot(Time_record, Energy_MC_tfdm[idx], color='orange', linewidth=2, label=f'{label} (FEX+TFDM)')
         ax.plot(Time_record, Energy_MC_vae[idx], color='green', linewidth=2, label=f'{label} (FEX+VAE)')
         ax.set_title(label)
@@ -2125,7 +2129,7 @@ def plot_energy_comparison_tfdm_vae(Energy_MC_all, Energy_MC_tfdm, Energy_MC_vae
         ax.set_ylabel('Energy')
         ax.legend(frameon=False)
     plt.tight_layout()
-    plt.suptitle('Energy Comparison - FEX+TFDM vs FEX+VAE', fontsize=16, y=1.02)
+    plt.suptitle('Energy Comparison: FEX+NN / FEX+TFDM / FEX+VAE', fontsize=16, y=1.02)
     plt.subplots_adjust(top=0.9)
     if save_path:
         plt.savefig(os.path.join(save_path, 'energy_comparison.pdf'), dpi=300, bbox_inches='tight')
@@ -2133,12 +2137,13 @@ def plot_energy_comparison_tfdm_vae(Energy_MC_all, Energy_MC_tfdm, Energy_MC_vae
     return fig
 
 
-def plot_third_order_moments_tfdm_vae(moment3_state_record, moment3_state_tfdm, moment3_state_vae, Time_record, save_path=None):
+def plot_third_order_moments_tfdm_vae_nn(moment3_state_record, moment3_state_nn, moment3_state_tfdm, moment3_state_vae, Time_record, save_path=None):
     fig, axs = plt.subplots(4, 1, figsize=(12, 20), sharex=True)
     moment_indices = [(0, 1, 2), (0, 1, 1), (0, 2, 2), (1, 1, 2)]
     moment_labels = [r'$\langle M_{123} \rangle$', r'$\langle M_{122} \rangle$', r'$\langle M_{133} \rangle$', r'$\langle M_{223} \rangle$']
     for idx, (i, j, k) in enumerate(moment_indices):
         axs[idx].plot(Time_record, moment3_state_record[i, j, k, :], linestyle=':', color='black', linewidth=3, label=f'Ground Truth {moment_labels[idx]}')
+        axs[idx].plot(Time_record, moment3_state_nn[i, j, k, :], linestyle='-', color='pink', linewidth=2.5, label=f'FEX+NN {moment_labels[idx]}')
         axs[idx].plot(Time_record, moment3_state_tfdm[i, j, k, :], linestyle='-', color='orange', linewidth=2.5, label=f'FEX+TFDM {moment_labels[idx]}')
         axs[idx].plot(Time_record, moment3_state_vae[i, j, k, :], linestyle='-', color='green', linewidth=2.5, label=f'FEX+VAE {moment_labels[idx]}')
         axs[idx].set_ylabel('3rd Moment', fontsize=15)
@@ -2146,7 +2151,7 @@ def plot_third_order_moments_tfdm_vae(moment3_state_record, moment3_state_tfdm, 
         axs[idx].legend(loc='upper right', frameon=False, fontsize=11)
     axs[3].set_xlabel('Time', fontsize=15)
     plt.tight_layout()
-    plt.suptitle('Third-Order Moments Over Time - FEX+TFDM vs FEX+VAE', fontsize=20, y=1.02)
+    plt.suptitle('Third-Order Moments: FEX+NN / FEX+TFDM / FEX+VAE', fontsize=20, y=1.02)
     plt.subplots_adjust(top=0.95)
     if save_path:
         plt.savefig(os.path.join(save_path, 'third_order_moments_over_time.pdf'), dpi=300, bbox_inches='tight')
@@ -2154,25 +2159,28 @@ def plot_third_order_moments_tfdm_vae(moment3_state_record, moment3_state_tfdm, 
     return fig
 
 
-def plot_probability_distributions_tfdm_vae(u_all, u_pred_tfdm, u_pred_vae, Time_record, save_path=None):
+def plot_probability_distributions_tfdm_vae_nn(u_all, u_pred_nn, u_pred_tfdm, u_pred_vae, Time_record, save_path=None):
     fig, axs = plt.subplots(2, 3, figsize=(18, 12))
     time_idx = len(Time_record) // 2
     print(f"Plotting distributions at time step {time_idx} (t = {Time_record[time_idx]:.2f})")
 
     truth = [u_all[:, 0, time_idx], u_all[:, 1, time_idx], u_all[:, 2, time_idx]]
+    nnv = [u_pred_nn[:, 0, time_idx], u_pred_nn[:, 1, time_idx], u_pred_nn[:, 2, time_idx]]
     tfdm = [u_pred_tfdm[:, 0, time_idx], u_pred_tfdm[:, 1, time_idx], u_pred_tfdm[:, 2, time_idx]]
     vae = [u_pred_vae[:, 0, time_idx], u_pred_vae[:, 1, time_idx], u_pred_vae[:, 2, time_idx]]
     names = ['u1', 'u2', 'u3']
     for idx in range(3):
         ax = axs[0, idx]
-        all_data = np.concatenate([truth[idx], tfdm[idx], vae[idx]])
+        all_data = np.concatenate([truth[idx], nnv[idx], tfdm[idx], vae[idx]])
         bins = np.linspace(np.min(all_data), np.max(all_data), 50)
         hc_t, be = np.histogram(truth[idx], bins=bins, density=True)
-        hc_n, _ = np.histogram(tfdm[idx], bins=bins, density=True)
+        hc_n, _ = np.histogram(nnv[idx], bins=bins, density=True)
+        hc_f, _ = np.histogram(tfdm[idx], bins=bins, density=True)
         hc_v, _ = np.histogram(vae[idx], bins=bins, density=True)
         centers = (be[:-1] + be[1:]) / 2
         ax.semilogy(centers, hc_t, 'k:', linewidth=2, label=f'Ground Truth {names[idx]}')
-        ax.semilogy(centers, hc_n, color='orange', linewidth=2, label=f'FEX+TFDM {names[idx]}')
+        ax.semilogy(centers, hc_n, color='pink', linewidth=2, label=f'FEX+NN {names[idx]}')
+        ax.semilogy(centers, hc_f, color='orange', linewidth=2, label=f'FEX+TFDM {names[idx]}')
         ax.semilogy(centers, hc_v, color='green', linewidth=2, label=f'FEX+VAE {names[idx]}')
         ax.legend(frameon=False)
         ax.set_ylabel('Probability Density')
@@ -2181,6 +2189,7 @@ def plot_probability_distributions_tfdm_vae(u_all, u_pred_tfdm, u_pred_vae, Time
     for idx, (a, b) in enumerate(pairs):
         ax = axs[1, idx]
         ax.scatter(truth[a], truth[b], c='blue', s=1, alpha=0.3, label='Ground Truth')
+        ax.scatter(nnv[a], nnv[b], c='pink', s=1, alpha=0.2, label='FEX+NN')
         ax.scatter(tfdm[a], tfdm[b], c='orange', s=1, alpha=0.2, label='FEX+TFDM')
         ax.scatter(vae[a], vae[b], c='green', s=1, alpha=0.2, label='FEX+VAE')
         ax.legend(frameon=False, fontsize=8)
