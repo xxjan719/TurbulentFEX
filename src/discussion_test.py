@@ -176,8 +176,25 @@ elif choice == '3':
     x_pred_initial = torch.ones(NPATH, 3).to(device,dtype=torch.float32) * torch.tensor(m0).to(device,dtype=torch.float32)
     scaler = args.DIFF_SCALE
     
-    tmM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
-    tmS = np.zeros(int(TIME_AMOUNT/dt), dtype=np.float32)
+    Nt_eval = int(TIME_AMOUNT / dt)
+    # Deterministic forcing/noise scaling must match `params_init()`.
+    # Previously these were hard-coded to zero, which can bias mean_state.
+    tmM = np.zeros((Nt_eval, 3), dtype=np.float32)
+    tmS = np.zeros(Nt_eval, dtype=np.float32)
+    if 'tmM' in params and params['tmM'] is not None:
+        tmM_src = np.asarray(params['tmM'], dtype=np.float32)
+        if tmM_src.shape[0] >= Nt_eval:
+            tmM = tmM_src[:Nt_eval, :]
+        else:
+            reps = int(np.ceil(Nt_eval / tmM_src.shape[0]))
+            tmM = np.tile(tmM_src, (reps, 1))[:Nt_eval, :]
+    if 'tmS' in params and params['tmS'] is not None:
+        tmS_src = np.asarray(params['tmS'], dtype=np.float32)
+        if tmS_src.shape[0] >= Nt_eval:
+            tmS = tmS_src[:Nt_eval]
+        else:
+            reps = int(np.ceil(Nt_eval / tmS_src.shape[0]))
+            tmS = np.tile(tmS_src, reps)[:Nt_eval]
     mean_state_pred = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     mean_state_record = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     mean_state_record[:, 0] = np.mean(initial_state, axis=0)

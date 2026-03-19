@@ -806,38 +806,49 @@ elif choice == '2':
     NPATH = 5000
     
     Nt = int(TIME_AMOUNT / dt)
-    
+
+    # Deterministic forcing/noise scaling must match `params_init()`.
+    # This avoids constant mean drift when evaluation horizon differs
+    # from the default params horizon.
     tmM = np.zeros((Nt, 3), dtype=np.float32)
     tmS = np.zeros(Nt, dtype=np.float32)
-    if args.params_name == 'dual_cascade':
-         tmM[:] = np.array([0.0, -1.0, 1.0], dtype=np.float32)  
-    elif args.params_name == 'periodic_cascade':
-         # Load forcing from params
-        tmM = params['tmM'].astype(np.float32)
-        tmS = params['tmS'].astype(np.float32)  
-    elif args.params_name == 'random_cascade_deterministic':
-        # NOTE: tmM is ONLY used for ground truth simulation, NOT for prediction
-        # The prediction uses FEX_with_force model which has learned the forcing term internally
-        # We use tmM from params to ensure ground truth matches training data for fair comparison
-        if 'tmM' in params and params['tmM'].shape[0] >= Nt:
-            tmM = params['tmM'][:Nt, :].astype(np.float32)
+
+    if 'tmM' in params and params['tmM'] is not None:
+        tmM_src = np.asarray(params['tmM'], dtype=np.float32)
+        if tmM_src.shape[0] >= Nt:
+            tmM = tmM_src[:Nt, :]
         else:
-            # Regenerate OU process with same parameters as MC_triad.py (only for ground truth)
-            # OU process parameters (matching MC_triad.py exactly)
+            reps = int(np.ceil(Nt / tmM_src.shape[0]))
+            tmM = np.tile(tmM_src, (reps, 1))[:Nt, :]
+
+    if 'tmS' in params and params['tmS'] is not None:
+        tmS_src = np.asarray(params['tmS'], dtype=np.float32)
+        if tmS_src.shape[0] >= Nt:
+            tmS = tmS_src[:Nt]
+        else:
+            reps = int(np.ceil(Nt / tmS_src.shape[0]))
+            tmS = np.tile(tmS_src, reps)[:Nt]
+
+    if args.params_name == 'random_cascade_deterministic':
+        # NOTE: tmM is ONLY used for ground truth simulation, NOT for prediction.
+        # The prediction uses `FEX_with_force_model_learned` which has learned the
+        # forcing term internally.
+        tmM_src_ok = (
+            'tmM' in params
+            and params['tmM'] is not None
+            and np.asarray(params['tmM']).shape[0] >= Nt
+        )
+        if not tmM_src_ok:
             theta = 5.0
             sigma = 0.2
             tmt = 1.5  # Initial condition
-            
-            # Use same dt as params to ensure consistency
-            ou_dt = params.get('Dt', dt)  # Use params['Dt'] if available, otherwise use dt
-            
-            # Generate OU process forcing for ground truth simulation
+            ou_dt = params.get('Dt', dt)
             for j in range(Nt):
                 dW = np.sqrt(ou_dt) * np.random.randn()
                 tmt = tmt - theta * tmt * ou_dt + sigma * dW
-                tmM[j, :] = tmt * np.array([1, 1, 1])
-        
-        tmS = np.zeros(Nt, dtype=np.float32)  # No tmS needed for random_cascade_deterministic  
+                tmM[j, :] = tmt * np.array([1, 1, 1], dtype=np.float32)
+        # No tmS needed for random_cascade_deterministic
+        tmS = np.zeros(Nt, dtype=np.float32)
     
     initial_state = np.random.normal(loc=m0, scale=np.sqrt(var0), size=(NPATH, 3))    
     x_pred_initial = torch.ones(NPATH, 3).to(device,dtype=torch.float32) * torch.tensor(m0).to(device,dtype=torch.float32)

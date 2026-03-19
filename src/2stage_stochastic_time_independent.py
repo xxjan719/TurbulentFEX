@@ -293,8 +293,26 @@ else:
     x_pred_initial = torch.ones(NPATH, 3).to(device,dtype=torch.float32) * torch.tensor(m0).to(device,dtype=torch.float32)
     scaler = args.DIFF_SCALE
     
-    tmM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
-    tmS = np.zeros(int(TIME_AMOUNT/dt), dtype=np.float32)
+    Nt_eval = int(TIME_AMOUNT / dt)
+    # Use the forcing/noise scaling defined by `params_init`.
+    # For example, `dual_cascade` has a *constant* forcing tmM = [0, -1, 1],
+    # so hard-coding tmM=0 breaks the deterministic mean balance.
+    tmM = np.zeros((Nt_eval, 3), dtype=np.float32)
+    tmS = np.zeros(Nt_eval, dtype=np.float32)
+    if 'tmM' in params and params['tmM'] is not None:
+        tmM_src = np.asarray(params['tmM'], dtype=np.float32)
+        if tmM_src.shape[0] == Nt_eval:
+            tmM = tmM_src
+        else:
+            reps = int(np.ceil(Nt_eval / tmM_src.shape[0]))
+            tmM = np.tile(tmM_src, (reps, 1))[:Nt_eval]
+    if 'tmS' in params and params['tmS'] is not None:
+        tmS_src = np.asarray(params['tmS'], dtype=np.float32)
+        if tmS_src.shape[0] == Nt_eval:
+            tmS = tmS_src
+        else:
+            reps = int(np.ceil(Nt_eval / tmS_src.shape[0]))
+            tmS = np.tile(tmS_src, reps)[:Nt_eval]
     mean_state_pred = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     mean_state_record = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     mean_state_record[:, 0] = np.mean(initial_state, axis=0)
@@ -512,6 +530,18 @@ else:
         # Update statistics for all three predictions
         mean_state_pred[:,idx] = np.mean(next_pred_state, axis=0)
         mean_state_single[:,idx] = np.mean(next_pred_single, axis=0)
+        
+        # Debug: check whether state means match in dual_cascade.
+        # This helps isolate whether the constant offset you observe is coming from
+        # the deterministic (FEX) update vs the stochastic increment.
+        if args.params_name == 'dual_cascade' and idx % 50 == 0:
+            gt_mean = mean_state_record[:, idx]
+            pred_mean = mean_state_pred[:, idx]  # same as mean_state_single here
+            diff = pred_mean - gt_mean
+            print(
+                f"[dual_cascade][mean_state @ step {idx}] "
+                f"gt_mean={gt_mean} pred_mean={pred_mean} diff={diff}"
+            )
        
     
         cov_state_pred[:,:,idx] = np.cov(next_pred_state, rowvar=False)
