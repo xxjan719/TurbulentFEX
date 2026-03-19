@@ -7,7 +7,9 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 sys.path.append("../src/Example/MC_triad")
 import torch
+import torch.nn as nn
 from utils import *
+from utils.helper import ResidualVAE
 
 from Example.MC_triad.MC_triad import params_init, MC_triad_initial_value
 import config
@@ -18,6 +20,8 @@ torch.manual_seed(args.SEED)
 np.random.seed(args.SEED)
 print("\n"+ "="*60)
 print("\n[INFO] Setting up the device andpath...")
+
+
 # Set device
 #===========================Path part==============================================
 if torch.cuda.is_available() and args.DEVICE.startswith('cuda'):
@@ -45,16 +49,17 @@ print("\n"+ "="*60)
 print("SECOND STAGE: STOCHASTIC OPTIONS")
 print("="*60)
 print("1. Train to learn stochastic part in time independent case")
-print("2. Skip Training and generate the prediction results")
+print("2. Train ResidualVAE (Gaussian z -> residual increments)")
+print("3. Skip Training and generate the prediction results")
 print("="*60)
 
 while True:
 # choice = '1' #
-    choice = input("\nChoose option (1 or 2 ):").strip()
-    if choice in ['1','2']:
+    choice = input("\nChoose option (1, 2, or 3 ):").strip()
+    if choice in ['1', '2', '3']:
         break
     else:
-        print("Please enter '1' or '2'.")
+        print("Please enter '1', '2', or '3'.")
 
 if choice == '1':
     print("\n[INFO] Training everything in second stage...")
@@ -269,7 +274,144 @@ if choice == '1':
         print("[SUCCESS] the Neural_Network has been loaded successfully")
         
     print("[SUCCESS] the Neural_Network has been trained successfully")
-    print("[SUCESS] you may run the choice 2 to generate the prediction results.")
+    print("[SUCESS] you may run choice 3 to generate the prediction results.")
+elif choice == '2':
+    print("\n[INFO] Training ResidualVAE (Gaussian z -> residual increments)...")
+    # Add comprehensive training section for VAE only
+    independent_save_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}_independent')
+    os.makedirs(independent_save_dir, exist_ok=True)
+    print(f'[INFO] Using independent save directory for VAE: {independent_save_dir}')
+
+    data_path = os.path.join(independent_save_dir, '..', f'simulation_results_noise_{args.NOISE_LEVEL}.npz')
+    if not os.path.exists(data_path):
+        raise RuntimeError('[ERROR] data has not been generated, you should run the first_stage_deterministic.py first')
+    data = np.load(data_path)
+    dt = 0.01
+
+    def learned_model_wrapper(x):
+        return FEX_model_learned(x,
+                                 model_name=args.Model,
+                                 params_name=args.params_name,
+                                 noise_level=args.NOISE_LEVEL,
+                                 device=device)
+
+    residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_wrapper, data, dt)
+
+    # Use first 300 trajectories for building a residual "density" dataset.
+    residuals_current_train = residuals[:300, :, :]  # (MC_samples, 3, time_steps)
+    residuals_train_flat = residuals_current_train.reshape(-1, residuals_current_train.shape[1])  # (MC_samples*time_steps, 3)
+    scaler = np.ones(3) * args.DIFF_SCALE
+    residuals_train_flat = residuals_train_flat * scaler
+
+    train_size = 100000
+    select_row_indices = np.random.permutation(residuals_train_flat.shape[0])[:train_size]
+    residuals_train = residuals_train_flat[select_row_indices]  # (train_size, 3)
+
+    # VAE input z: Gaussian samples; we learn a generative map z -> residual increments.
+    ZT_Solution = np.random.randn(train_size, 3).astype(np.float32)
+
+    # Shuffle pairs so training doesn't depend on any ordering.
+    perm = np.random.permutation(train_size)
+    ZT_shuffled = ZT_Solution[perm]
+    RES_shuffled = residuals_train[perm]
+
+    NTrain = int(train_size * 0.8)
+    ZT_train = ZT_shuffled[:NTrain, :]
+    RES_train = RES_shuffled[:NTrain, :]
+    ZT_test = ZT_shuffled[NTrain:, :]
+    RES_test = RES_shuffled[NTrain:, :]
+
+    # Normalization stats saved for inference.
+    ZT_mean = np.mean(ZT_shuffled, axis=0, keepdims=True)
+    ZT_std = np.std(ZT_shuffled, axis=0, keepdims=True)
+    RES_mean = np.mean(RES_shuffled, axis=0, keepdims=True)
+    RES_std = np.std(RES_shuffled, axis=0, keepdims=True)
+    ZT_std = np.maximum(ZT_std, 1e-12)
+    RES_std = np.maximum(RES_std, 1e-12)
+
+    ZT_train_normal = torch.tensor((ZT_train - ZT_mean) / ZT_std, dtype=torch.float32, device=device)
+    RES_train_normal = torch.tensor((RES_train - RES_mean) / RES_std, dtype=torch.float32, device=device)
+    ZT_test_normal = torch.tensor((ZT_test - ZT_mean) / ZT_std, dtype=torch.float32, device=device)
+    RES_test_normal = torch.tensor((RES_test - RES_mean) / RES_std, dtype=torch.float32, device=device)
+
+    vae_path = os.path.join(save_dir, 'ResidualVAE.pth')
+    latent_dim = 8
+    hid_dim = 64
+    beta_kl = 1e-3
+    alpha_mean = 0.1
+    alpha_var = 1.0
+    n_iter = 2000
+
+    vae = ResidualVAE(3, 3, latent_dim=latent_dim, hid_dim=hid_dim).to(device)
+    optimizer = torch.optim.Adam(vae.parameters(), lr=0.01, weight_decay=1e-5)
+
+    best_valid_err = float('inf')
+    best_state = None
+
+    for j in range(n_iter):
+        vae.train()
+        optimizer.zero_grad()
+
+        y_hat, mu, logvar = vae(ZT_train_normal)
+        kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+
+        # Match empirical mean and diagonal second moments.
+        pred_mean = torch.mean(y_hat, dim=0)
+        targ_mean = torch.mean(RES_train_normal, dim=0)
+        mean_loss = torch.mean((pred_mean - targ_mean) ** 2)
+
+        pred_var = torch.var(y_hat, dim=0, unbiased=False)
+        targ_var = torch.var(RES_train_normal, dim=0, unbiased=False)
+        var_loss = torch.mean((pred_var - targ_var) ** 2)
+
+        loss = alpha_mean * mean_loss + alpha_var * var_loss + beta_kl * kl_loss
+        loss.backward()
+        optimizer.step()
+
+        vae.eval()
+        with torch.no_grad():
+            y_hat1, _, _ = vae(ZT_test_normal)
+            pred_mean_1 = torch.mean(y_hat1, dim=0)
+            targ_mean_1 = torch.mean(RES_test_normal, dim=0)
+            mean_loss_1 = torch.mean((pred_mean_1 - targ_mean_1) ** 2)
+
+            pred_var_1 = torch.var(y_hat1, dim=0, unbiased=False)
+            targ_var_1 = torch.var(RES_test_normal, dim=0, unbiased=False)
+            var_loss_1 = torch.mean((pred_var_1 - targ_var_1) ** 2)
+
+            valid_moment = alpha_mean * mean_loss_1 + alpha_var * var_loss_1
+
+        if valid_moment < best_valid_err:
+            best_valid_err = valid_moment.item()
+            best_state = {k: v.detach().cpu().clone() for k, v in vae.state_dict().items()}
+
+        if j % 100 == 0:
+            print(
+                f'[VAE-moment] epoch {j+1}; mean_loss={mean_loss.item():.6f}; '
+                f'var_loss={var_loss.item():.6f}; kl_loss={kl_loss.item():.6f}; '
+                f'valid_moment={valid_moment.item():.6f}'
+            )
+
+    if best_state is not None:
+        vae.load_state_dict(best_state)
+
+    os.makedirs(save_dir, exist_ok=True)
+    torch.save(vae.state_dict(), vae_path)
+    print(f'[VAE] Saved to: {vae_path}')
+
+    # Save inference normalization stats for VAE-driven stochastic updates.
+    vae_stats_path = os.path.join(independent_save_dir, 'data_inference_vae.pt')
+    torch.save(
+        {
+            'ZT_mean': torch.tensor(ZT_mean, dtype=torch.float32),
+            'ZT_std': torch.tensor(ZT_std, dtype=torch.float32),
+            'RES_mean': torch.tensor(RES_mean, dtype=torch.float32),
+            'RES_std': torch.tensor(RES_std, dtype=torch.float32),
+            'diff_scale': args.DIFF_SCALE,
+        },
+        vae_stats_path,
+    )
+    print(f'[VAE] Saved stats to: {vae_stats_path}')
 else:
     print("\n[INFO] Skipping training and generating prediction results...")
      # Add comprehensive testing section
@@ -396,20 +538,63 @@ else:
         save_dir = f'../src/Example/MC_triad/Results/{args.params_name}/{noise_str}/second_stage_10000_constant'
         independent_save_dir = f'../src/Example/MC_triad/Results/{args.params_name}/{noise_str}/second_stage_10000_independent'
 
-    dataname = os.path.join(independent_save_dir,'data_inference.pt')
-    data_inference = torch.load(dataname, map_location=device)
-    ZT_mean = data_inference['ZT_mean'].to(device)
-    ZT_std = data_inference['ZT_std'].to(device)
-    ODE_mean = data_inference['ODE_mean'].to(device)
-    ODE_std = data_inference['ODE_std'].to(device)
-    # Use scale from training (diff_scale) for stoch_update, not current args.DIFF_SCALE
-    diff_scale = data_inference['diff_scale']
+    dataname = os.path.join(independent_save_dir, 'data_inference.pt')
+    vae_stats_path = os.path.join(independent_save_dir, 'data_inference_vae.pt')
+
+    data_inference = None
+    if os.path.exists(dataname):
+        data_inference = torch.load(dataname, map_location=device)
+
+    # Defaults (will be overridden if VAE stats exist).
+    ZT_mean = data_inference['ZT_mean'].to(device) if data_inference is not None else None
+    ZT_std = data_inference['ZT_std'].to(device) if data_inference is not None else None
+    ODE_mean = data_inference['ODE_mean'].to(device) if data_inference is not None else None
+    ODE_std = data_inference['ODE_std'].to(device) if data_inference is not None else None
+    diff_scale = data_inference['diff_scale'] if data_inference is not None else args.DIFF_SCALE
     if torch.is_tensor(diff_scale):
         diff_scale = diff_scale.item()
-    # Load NN once (same as time_dependent loads models per step from disk; here we have a single model)
-    Neural_Network = FN_Net(3, 3, 50).to(device)
-    Neural_Network.load_state_dict(torch.load(os.path.join(save_dir, 'Neural_Network.pth'), map_location=device))
-    Neural_Network.eval()
+    # Load stochastic increment model (prefer VAE if present)
+    vae_path = os.path.join(save_dir, 'ResidualVAE.pth')
+    use_vae = os.path.exists(vae_path)
+    RES_mean = None
+    RES_std = None
+    if use_vae:
+        print(f"[INFO] Loading ResidualVAE from: {vae_path}")
+        latent_dim = 8
+        hid_dim = 64
+        Residual_VAE = ResidualVAE(3, 3, latent_dim=latent_dim, hid_dim=hid_dim).to(device)
+        Residual_VAE.load_state_dict(torch.load(vae_path, map_location=device))
+        Residual_VAE.eval()
+
+        if os.path.exists(vae_stats_path):
+            vae_stats = torch.load(vae_stats_path, map_location=device)
+            ZT_mean = vae_stats['ZT_mean'].to(device)
+            ZT_std = vae_stats['ZT_std'].to(device)
+            RES_mean = vae_stats['RES_mean'].to(device)
+            RES_std = vae_stats['RES_std'].to(device)
+            diff_scale = vae_stats.get('diff_scale', diff_scale)
+            if torch.is_tensor(diff_scale):
+                diff_scale = diff_scale.item()
+        else:
+            # Fallback: if VAE stats are missing, try to reuse NN stats.
+            RES_mean = ODE_mean
+            RES_std = ODE_std
+    else:
+        print("[INFO] Loading Neural_Network (FN_Net) for stochastic increment...")
+        Residual_VAE = None
+        if data_inference is None or ODE_mean is None or ODE_std is None:
+            raise RuntimeError(
+                "[ERROR] data_inference.pt not found and VAE model not found. "
+                "Run option 1 (NN) or option 2 (VAE) first."
+            )
+        Neural_Network = FN_Net(3, 3, 50).to(device)
+        Neural_Network.load_state_dict(torch.load(os.path.join(save_dir, 'Neural_Network.pth'), map_location=device))
+        Neural_Network.eval()
+
+    if use_vae and (ZT_mean is None or ZT_std is None):
+        raise RuntimeError("[ERROR] VAE inference requires ZT_mean/ZT_std; run option 2 to generate data_inference_vae.pt.")
+    if use_vae and (RES_mean is None or RES_std is None):
+        raise RuntimeError("[ERROR] VAE inference requires RES_mean/RES_std; run option 2 to generate data_inference_vae.pt.")
     tM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
     for idx in range(1,int(TIME_AMOUNT/dt)+1):
         # RK4 integration
@@ -481,7 +666,11 @@ else:
         Winc_tensor = torch.Tensor(Winc).to(device, dtype=torch.float32)
         Winc_tensor = (Winc_tensor - ZT_mean) / ZT_std
         with torch.no_grad():
-            pred = Neural_Network(Winc_tensor) * ODE_std + ODE_mean
+            if use_vae:
+                y_hat, _, _ = Residual_VAE(Winc_tensor)
+                pred = y_hat * RES_std + RES_mean
+            else:
+                pred = Neural_Network(Winc_tensor) * ODE_std + ODE_mean
             stoch_update = (pred / diff_scale).cpu().detach().numpy()
     
         # Simple noise for comparison (and optional rescaling reference)

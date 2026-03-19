@@ -3,6 +3,7 @@ import logging
 import math
 import matplotlib.pyplot as plt
 import torch
+import torch.nn as nn
 from sklearn.neighbors import KDTree
 from scipy.spatial.distance import cdist
 import numba
@@ -187,6 +188,59 @@ def weights_init(m):
         torch.nn.init.kaiming_normal_(m.weight)
         if m.bias is not None:
             torch.nn.init.zeros_(m.bias)
+
+
+class ResidualVAE(nn.Module):
+    """
+    Simple VAE for residual increments.
+
+    Encoder: q(z | zt)
+    Decoder: p(y | z) where y is the residual increment (in normalized ODE space).
+    """
+
+    def __init__(self, zt_dim: int = 3, y_dim: int = 3, latent_dim: int = 8, hid_dim: int = 64):
+        super().__init__()
+        self.zt_dim = zt_dim
+        self.y_dim = y_dim
+        self.latent_dim = latent_dim
+
+        self.encoder = nn.Sequential(
+            nn.Linear(zt_dim, hid_dim),
+            nn.Tanh(),
+            nn.Linear(hid_dim, hid_dim),
+            nn.Tanh(),
+        )
+        self.enc_mu = nn.Linear(hid_dim, latent_dim)
+        self.enc_logvar = nn.Linear(hid_dim, latent_dim)
+
+        self.decoder = nn.Sequential(
+            nn.Linear(latent_dim, hid_dim),
+            nn.Tanh(),
+            nn.Linear(hid_dim, hid_dim),
+            nn.Tanh(),
+            nn.Linear(hid_dim, y_dim),
+        )
+
+    def encode(self, zt: torch.Tensor):
+        h = self.encoder(zt)
+        mu = self.enc_mu(h)
+        logvar = self.enc_logvar(h)
+        return mu, logvar
+
+    @staticmethod
+    def reparameterize(mu: torch.Tensor, logvar: torch.Tensor):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def decode(self, z: torch.Tensor):
+        return self.decoder(z)
+
+    def forward(self, zt: torch.Tensor):
+        mu, logvar = self.encode(zt)
+        z = self.reparameterize(mu, logvar)
+        y_hat = self.decode(z)
+        return y_hat, mu, logvar
 
 @jit(nopython=True, parallel=True)
 def compute_distances_parallel(x0_train_chunk, x_sample):
