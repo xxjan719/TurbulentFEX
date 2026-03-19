@@ -8,6 +8,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 sys.path.append("../src/Example/MC_triad")
 import torch
 import torch.nn as nn
+import matplotlib.pyplot as plt
 from utils import *
 from utils.helper import ResidualVAE
 
@@ -20,6 +21,51 @@ torch.manual_seed(args.SEED)
 np.random.seed(args.SEED)
 print("\n"+ "="*60)
 print("\n[INFO] Setting up the device andpath...")
+
+
+def plot_mean_comparison_tfdm_vae(mean_state_record, mean_state_tfdm, mean_state_vae, Time_record, save_path=None):
+    """Plot mean components with Ground Truth / FEX+TFDM / FEX+VAE."""
+    fig, axs = plt.subplots(3, 1, figsize=(12, 15), sharex=True)
+
+    for i in range(3):
+        axs[i].plot(
+            Time_record,
+            mean_state_record[i],
+            linestyle=':',
+            color='black',
+            linewidth=3,
+            label=fr'Ground Truth $\langle u_{i+1} \rangle$',
+        )
+        axs[i].plot(
+            Time_record,
+            mean_state_tfdm[i],
+            linestyle='-',
+            color='orange',
+            linewidth=2.5,
+            label=fr'Prediction - FEX+TFDM $\langle u_{i+1} \rangle$',
+        )
+        axs[i].plot(
+            Time_record,
+            mean_state_vae[i],
+            linestyle='-',
+            color='green',
+            linewidth=2.5,
+            label=fr'Prediction - FEX+VAE $\langle u_{i+1} \rangle$',
+        )
+
+        axs[i].set_ylabel(fr'Mean $u_{i+1}$', fontsize=15)
+        axs[i].set_title(f'Component {i+1}', fontsize=18)
+        axs[i].legend(loc='upper right', frameon=False, fontsize=11)
+        axs[i].tick_params(axis='both', labelsize=12)
+
+    axs[2].set_xlabel('Time', fontsize=15)
+    plt.tight_layout()
+    plt.suptitle('Mean Values of Components Over Time - FEX+TFDM vs FEX+VAE', fontsize=20, y=1.02)
+    plt.subplots_adjust(top=0.9)
+    if save_path:
+        plt.savefig(os.path.join(save_path, 'mean_components_over_time.pdf'), dpi=300, bbox_inches='tight')
+    plt.show()
+    return fig
 
 
 # Set device
@@ -465,6 +511,10 @@ else:
     mean_state_single[:, 0] = np.mean(initial_state, axis=0)
     mean_state_ensemble = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     mean_state_ensemble[:, 0] = np.mean(initial_state, axis=0)
+    mean_state_tfdm = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    mean_state_vae = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    mean_state_tfdm[:, 0] = np.mean(initial_state, axis=0)
+    mean_state_vae[:, 0] = np.mean(initial_state, axis=0)
 
     cov_state_pred = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     cov_state_record = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
@@ -499,6 +549,8 @@ else:
 
     current_state = initial_state
     current_pred_state = initial_state
+    current_pred_state_tfdm = initial_state.copy()
+    current_pred_state_vae = initial_state.copy()
 
     Energy_update_record = np.zeros(4, dtype=np.float32)
     Energy_update_pred = np.zeros(4, dtype=np.float32)
@@ -640,27 +692,28 @@ else:
         # u_pred_all[:,:,idx] = current_pred_state
         current_state = next_state
 
-        current_tensor = torch.tensor(current_pred_state, dtype=torch.float32).to(device)
-    
-        # RK4 for the deterministic part (FEX model)
-        # Step 1
-        # Step 1
-        k1_det = FEX_model_check(current_tensor, model_name=args.Model, params_name=args.params_name, noise_level=args.NOISE_LEVEL, device=device) * dt
-        k1_det_np = k1_det.cpu().detach().numpy()
-        u1 = current_tensor +  k1_det
+        # Deterministic RK2 update helper (used for each model trajectory)
+        def det_update_from_state(state_np):
+            state_tensor = torch.tensor(state_np, dtype=torch.float32).to(device)
+            k1_det = FEX_model_check(
+                state_tensor,
+                model_name=args.Model,
+                params_name=args.params_name,
+                noise_level=args.NOISE_LEVEL,
+                device=device,
+            ) * dt
+            u1_det = state_tensor + k1_det
+            k2_det = FEX_model_check(
+                u1_det,
+                model_name=args.Model,
+                params_name=args.params_name,
+                noise_level=args.NOISE_LEVEL,
+                device=device,
+            ) * dt
+            return ((k1_det + k2_det) / 2).cpu().detach().numpy()
 
-      
-
-         # Step 2
-        k2_det = FEX_model_check(u1, model_name=args.Model, params_name=args.params_name, noise_level=args.NOISE_LEVEL, device=device) * dt
-        k2_det_np = k2_det.cpu().detach().numpy()
-        u2 = current_tensor +  k2_det
-    
-        # Final RK4 update
-    
-    
-        # RK4 update for deterministic part
-        det_update = (k1_det_np+k2_det_np)/2
+        det_update_tfdm = det_update_from_state(current_pred_state_tfdm)
+        det_update_vae = det_update_from_state(current_pred_state_vae)
     
         # Generate stochastic component (just once per step)
         # NN outputs normalized ODE; denormalize (pred = NN*ODE_std + ODE_mean) then divide by diff_scale
@@ -696,6 +749,14 @@ else:
         # Training target (ODE_Solution) is from long ODE integration, not one-step increment, so NN std is often smaller.
         std_simple = np.std(simple_noise, axis=0)
         std_simple = np.maximum(std_simple, 1e-12)
+        if stoch_update_nn is not None:
+            std_tfdm = np.std(stoch_update_nn, axis=0)
+            scale_tfdm = np.where(std_tfdm > 1e-12, std_simple / std_tfdm, 1.0)
+            stoch_update_nn = stoch_update_nn * scale_tfdm
+        if stoch_update_vae is not None:
+            std_vae = np.std(stoch_update_vae, axis=0)
+            scale_vae = np.where(std_vae > 1e-12, std_simple / std_vae, 1.0)
+            stoch_update_vae = stoch_update_vae * scale_vae
         if stoch_update is not None:
             std_sel = np.std(stoch_update, axis=0)
             scale_match = np.where(std_sel > 1e-12, std_simple / std_sel, 1.0)
@@ -707,16 +768,16 @@ else:
             print("=" * 50)
         
             if stoch_update_nn is not None:
-                print(f"Single NN - Mean: {np.mean(stoch_update_nn, axis=0)}")
-                print(f"Single NN - Std:  {np.std(stoch_update_nn, axis=0)}")
+                print(f"FEX+TFDM - Mean: {np.mean(stoch_update_nn, axis=0)}")
+                print(f"FEX+TFDM - Std:  {np.std(stoch_update_nn, axis=0)}")
             else:
-                print("Single NN - Not available")
+                print("FEX+TFDM - Not available")
 
             if stoch_update_vae is not None:
-                print(f"VAE NN - Mean: {np.mean(stoch_update_vae, axis=0)}")
-                print(f"VAE NN - Std:  {np.std(stoch_update_vae, axis=0)}")
+                print(f"FEX+VAE - Mean: {np.mean(stoch_update_vae, axis=0)}")
+                print(f"FEX+VAE - Std:  {np.std(stoch_update_vae, axis=0)}")
             else:
-                print("VAE NN - Not available")
+                print("FEX+VAE - Not available")
 
             print(f"Simple Noise - Mean: {np.mean(simple_noise, axis=0)}")
             print(f"Simple Noise - Std:  {np.std(simple_noise, axis=0)}")
@@ -724,16 +785,21 @@ else:
     
         
     
-        # Compute both single and ensemble predictions
-        if stoch_update is not None:
-            next_pred_single = current_pred_state + det_update + stoch_update
-        else:
-            next_pred_single = current_pred_state + det_update + simple_noise
-        
-        
-    
-        # Use the selected model for the main prediction (for backward compatibility)
-        next_pred_state = current_pred_state + det_update + stoch_update
+        # Build each prediction trajectory explicitly
+        next_pred_tfdm = (
+            current_pred_state_tfdm + det_update_tfdm + stoch_update_nn
+            if stoch_update_nn is not None
+            else current_pred_state_tfdm + det_update_tfdm + simple_noise
+        )
+        next_pred_vae = (
+            current_pred_state_vae + det_update_vae + stoch_update_vae
+            if stoch_update_vae is not None
+            else current_pred_state_vae + det_update_vae + simple_noise
+        )
+
+        # Use selected model for legacy outputs
+        next_pred_state = next_pred_vae if use_vae else next_pred_tfdm
+        next_pred_single = next_pred_tfdm
     
         # Store results for all three predictions
         u_pred_all[:,:,idx] = next_pred_state
@@ -742,6 +808,8 @@ else:
         # Update statistics for all three predictions
         mean_state_pred[:,idx] = np.mean(next_pred_state, axis=0)
         mean_state_single[:,idx] = np.mean(next_pred_single, axis=0)
+        mean_state_tfdm[:, idx] = np.mean(next_pred_tfdm, axis=0)
+        mean_state_vae[:, idx] = np.mean(next_pred_vae, axis=0)
         
         # Debug: check whether state means match in dual_cascade.
         # This helps isolate whether the constant offset you observe is coming from
@@ -771,13 +839,21 @@ else:
     
         # Update current state
         current_pred_state = next_pred_state
+        current_pred_state_tfdm = next_pred_tfdm
+        current_pred_state_vae = next_pred_vae
     
     np.random.seed(0)
     # Physical time 0 to TIME_AMOUNT (e.g. 0 to 50)
     Time_record = np.arange(int(TIME_AMOUNT/dt)+1) * dt
-    # Title reflects that prediction is FEX (deterministic) + NN (stochastic), not FEX only
-    plot_mean_comparison(mean_state_record, mean_state_single, Time_record,
-                    save_path=save_dir, title_suffix=" - FEX + NN")
+    # Mean comparison with both stochastic models:
+    # orange: FEX+TFDM, green: FEX+VAE
+    plot_mean_comparison_tfdm_vae(
+        mean_state_record,
+        mean_state_tfdm,
+        mean_state_vae,
+        Time_record,
+        save_path=save_dir,
+    )
     plot_covariance_comparison(cov_state_record, cov_state_single, Time_record,
                           save_path=save_dir, title_suffix=" - FEX + NN")
 
