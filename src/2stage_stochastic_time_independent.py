@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from utils import *
 from utils.helper import ResidualVAE
+from utils.FEX_with_force import FEX_with_force_model_learned
 from utils.plot import (
     plot_mean_comparison_tfdm_vae_nn,
     plot_covariance_comparison_tfdm_vae_nn,
@@ -88,14 +89,31 @@ if choice == '1':
         pass
     data = np.load(os.path.join(independent_save_dir,'..',f'simulation_results_noise_{args.NOISE_LEVEL}.npz'))
     dt = 0.01
+
     def learned_model_wrapper(x):
-        return FEX_model_learned(x, 
-                                 model_name = args.Model,
-                                 params_name = args.params_name,
-                                 noise_level = args.NOISE_LEVEL,
-                                 device=device)
-    
-    residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_wrapper, data, dt)
+        return FEX_model_learned(
+            x,
+            model_name=args.Model,
+            params_name=args.params_name,
+            noise_level=args.NOISE_LEVEL,
+            device=device,
+        )
+
+    def learned_model_with_force_wrapper(x):
+        return FEX_with_force_model_learned(
+            x,
+            model_name=args.Model,
+            params_name=args.params_name,
+            noise_level=args.NOISE_LEVEL,
+            device=device,
+        )
+
+    if args.params_name in ['equipart', 'cascade', 'dual_cascade', 'random_cascade']:
+        residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_wrapper, data, dt)
+    elif args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+        residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_with_force_wrapper, data, dt)
+    else:
+        raise ValueError(f"Unsupported params_name for residue generation: {args.params_name}")
     print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
     np.save(os.path.join(independent_save_dir,'residual_cov_truth.npy'), residual_cov_truth)
     print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
@@ -297,13 +315,29 @@ elif choice == '2':
     dt = 0.01
 
     def learned_model_wrapper(x):
-        return FEX_model_learned(x,
-                                 model_name=args.Model,
-                                 params_name=args.params_name,
-                                 noise_level=args.NOISE_LEVEL,
-                                 device=device)
+        return FEX_model_learned(
+            x,
+            model_name=args.Model,
+            params_name=args.params_name,
+            noise_level=args.NOISE_LEVEL,
+            device=device,
+        )
 
-    residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_wrapper, data, dt)
+    def learned_model_with_force_wrapper(x):
+        return FEX_with_force_model_learned(
+            x,
+            model_name=args.Model,
+            params_name=args.params_name,
+            noise_level=args.NOISE_LEVEL,
+            device=device,
+        )
+
+    if args.params_name in ['equipart', 'cascade', 'dual_cascade', 'random_cascade']:
+        residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_wrapper, data, dt)
+    elif args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+        residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_with_force_wrapper, data, dt)
+    else:
+        raise ValueError(f"Unsupported params_name for residue generation: {args.params_name}")
 
     # Use first 300 trajectories for building a residual "density" dataset.
     residuals_current_train = residuals[:300, :, :]  # (MC_samples, 3, time_steps)
@@ -438,10 +472,24 @@ elif choice == '3':
             model_name=args.Model,
             params_name=args.params_name,
             noise_level=args.NOISE_LEVEL,
-            device=device
+            device=device,
         )
 
-    residuals, _, _ = generate_euler_residue(learned_model_wrapper, data, dt)
+    def learned_model_with_force_wrapper(x):
+        return FEX_with_force_model_learned(
+            x,
+            model_name=args.Model,
+            params_name=args.params_name,
+            noise_level=args.NOISE_LEVEL,
+            device=device,
+        )
+
+    if args.params_name in ['equipart', 'cascade', 'dual_cascade', 'random_cascade']:
+        residuals, _, _ = generate_euler_residue(learned_model_wrapper, data, dt)
+    elif args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+        residuals, _, _ = generate_euler_residue(learned_model_with_force_wrapper, data, dt)
+    else:
+        raise ValueError(f"Unsupported params_name for residue generation: {args.params_name}")
 
     # Build paired dataset: input Gaussian z ~ N(0, I), target residual increment r(t).
     if residuals.ndim != 3:
@@ -557,7 +605,10 @@ elif choice == '4':
     print("\n[INFO] Running comprehensive trajectory testing...")
     m0,var0 = MC_triad_initial_value()
     params = params_init(args.params_name)
-    FEX_model_check = FEX_model_learned
+    if args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+        FEX_model_check = FEX_with_force_model_learned
+    else:
+        FEX_model_check = FEX_model_learned
 
     L = params['L']
     G = params['G']
@@ -580,6 +631,16 @@ elif choice == '4':
         tmM_src = np.asarray(params['tmM'], dtype=np.float32)
         if tmM_src.shape[0] == Nt_eval:
             tmM = tmM_src
+        elif args.params_name == 'periodic_cascade' and 'fr' in params:
+            # `params_init` only fills tmM for j in 0..Nt-1 with T=10. Tiling repeats that block, so at t=10
+            # forcing jumps back to sin(0) instead of sin(fr*10). Ground truth then looks "wrong" or frozen
+            # vs the learned FEX (continuous sin in t). Match MC_triad: tmM[k] = sin(fr * k * dt) for k = idx-1.
+            fr = float(params['fr'])
+            k = np.arange(Nt_eval, dtype=np.float32)
+            s = np.sin(fr * dt * k).astype(np.float32)
+            tmM[:, 0] = s
+            tmM[:, 1] = s
+            tmM[:, 2] = s
         else:
             reps = int(np.ceil(Nt_eval / tmM_src.shape[0]))
             tmM = np.tile(tmM_src, (reps, 1))[:Nt_eval]
@@ -795,14 +856,18 @@ elif choice == '4':
     use_vae = has_vae
     tM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
     for idx in range(1,int(TIME_AMOUNT/dt)+1):
-        # RK4 integration
-        k1 = (L @ current_state.T).T - current_state @ G + Buu(B, current_state, current_state) + np.ones((NPATH, 1)) * tmM[idx - 1, :]
-        u1 = current_state + dt * k1
-        k2 = (L @ u1.T).T - u1 @ G + Buu(B, u1, u1) + np.ones((NPATH, 1)) * tmM[idx - 1, :]
-        next_state = current_state + dt * (k1 + k2) / 2
+        # Ground truth must match `MC_triad_direct(..., method='Euler', noise_level=...)`
+        # used in `1stage_deterministic.py` when building simulation_results_*.npz.
+        # (Previously this loop used RK2 drift and omitted noise_level, biasing means vs training data.)
         SS = params['SS'] + tmS[idx - 1] ** 2 * (params['SSt'] - params['SS'])
         Winc = np.random.randn(NPATH, 3)  # shape (MC, 3)
-        next_state = next_state + np.sqrt(dt) * (Winc @ SS)  # (MC,3) @ (3,3) → (MC,3)
+        drift = (
+            (L @ current_state.T).T
+            - current_state @ G
+            + Buu(B, current_state, current_state)
+            + np.ones((NPATH, 1)) * tmM[idx - 1, :]
+        )
+        next_state = current_state + dt * drift + np.sqrt(dt) * args.NOISE_LEVEL * (Winc @ SS)
         u_all[:, :, idx] = next_state
 
     
@@ -837,21 +902,44 @@ elif choice == '4':
         # Deterministic RK2 update helper (used for each model trajectory)
         def det_update_from_state(state_np):
             state_tensor = torch.tensor(state_np, dtype=torch.float32).to(device)
-            k1_det = FEX_model_check(
-                state_tensor,
-                model_name=args.Model,
-                params_name=args.params_name,
-                noise_level=args.NOISE_LEVEL,
-                device=device,
-            ) * dt
+            if args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+                # Same convention as `2stage_stochastic_time_dependent.py` (choice-4 rollout).
+                current_time = idx * dt
+                time_column = torch.full((state_tensor.shape[0], 1), current_time, dtype=torch.float32, device=device)
+                state_with_time = torch.cat([state_tensor, time_column], dim=1)
+                k1_det = FEX_model_check(
+                    state_with_time,
+                    model_name=args.Model,
+                    params_name=args.params_name,
+                    noise_level=args.NOISE_LEVEL,
+                    device=device,
+                ) * dt
+            else:
+                k1_det = FEX_model_check(
+                    state_tensor,
+                    model_name=args.Model,
+                    params_name=args.params_name,
+                    noise_level=args.NOISE_LEVEL,
+                    device=device,
+                ) * dt
             u1_det = state_tensor + k1_det
-            k2_det = FEX_model_check(
-                u1_det,
-                model_name=args.Model,
-                params_name=args.params_name,
-                noise_level=args.NOISE_LEVEL,
-                device=device,
-            ) * dt
+            if args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+                u1_with_time = torch.cat([u1_det, time_column], dim=1)
+                k2_det = FEX_model_check(
+                    u1_with_time,
+                    model_name=args.Model,
+                    params_name=args.params_name,
+                    noise_level=args.NOISE_LEVEL,
+                    device=device,
+                ) * dt
+            else:
+                k2_det = FEX_model_check(
+                    u1_det,
+                    model_name=args.Model,
+                    params_name=args.params_name,
+                    noise_level=args.NOISE_LEVEL,
+                    device=device,
+                ) * dt
             return ((k1_det + k2_det) / 2).cpu().detach().numpy()
 
         det_update_nn = det_update_from_state(current_pred_state_nn)
@@ -891,8 +979,8 @@ elif choice == '4':
             else:
                 stoch_update = None
     
-        # Simple noise for comparison (and optional rescaling reference)
-        simple_noise = np.sqrt(dt) * (Winc @ SS)
+        # Simple noise for comparison (same diffusion scale as ground truth MC)
+        simple_noise = np.sqrt(dt) * args.NOISE_LEVEL * (Winc @ SS)
         if stoch_update_nn is not None and not np.isfinite(stoch_update_nn).all():
             print("[WARN] Non-finite values in FEX+NN stochastic update; fallback to simple noise for this step.")
             stoch_update_nn = simple_noise.copy()
