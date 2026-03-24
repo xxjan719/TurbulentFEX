@@ -1977,16 +1977,17 @@ def plot_discussion_choice4_triad_grid(
     packs,
     save_path,
     row_labels=("Equipart", "Cascade", "Dual cascade"),
-    fs=18,
+    fs=22,
 ):
     """
     3×7 panel figure: rows = regimes, columns = cov(u_i,u_i) for i=1,2,3 and
-    ⟨M123⟩, ⟨M122⟩, ⟨M133⟩, ⟨M223⟩. Each panel: ground truth (solid black),
-    independent (orange), dependent (blue, up to Time_dep).
+    ⟨M123⟩, ⟨M122⟩, ⟨M133⟩, ⟨M223⟩. Each panel: ground truth (black), ASD-FEX-TFDM
+    (orange), ASD-FEX-SRAN (pink), ASD-FEX-VAE (green), all over t∈[0,20].
 
-    `packs` is a length-3 list of dicts from `_discussion_choice5_worker(..., plot_composite=False)`:
-    Time_ind, Time_dep, cov_gt, moment3_gt, cov_pred_ind, moment3_pred_ind,
-    cov_pred_dep, moment3_pred_dep.
+    `packs` is a length-3 list of dicts from ``discussion_choice5_rollout(..., plot_composite=False)``:
+    Time_ind, cov_gt, moment3_gt, cov_pred_tfdm, moment3_pred_tfdm,
+    cov_pred_sran, moment3_pred_sran, cov_pred_vae, moment3_pred_vae.
+    Falls back to ``cov_pred_ind`` / ``moment3_pred_ind`` if *_tfdm keys are absent.
     """
     from matplotlib.lines import Line2D
 
@@ -2007,33 +2008,36 @@ def plot_discussion_choice4_triad_grid(
     fig, axes = plt.subplots(3, 7, figsize=(28, 10), sharex=False)
 
     gt_color = "black"
-    ind_color = "#ff7f0e"
-    dep_color = "#1f77b4"
+    tfdm_color = "#ff7f0e"
+    sran_color = "#e377c2"
+    vae_color = "#2ca02c"
 
     for row, (axrow, pack, rlabel) in enumerate(zip(axes, packs, row_labels)):
         Time_ind = np.asarray(pack["Time_ind"], dtype=float).ravel()
-        Time_dep = np.asarray(pack["Time_dep"], dtype=float).ravel()
         cov_gt = pack["cov_gt"]
-        cov_pi = pack["cov_pred_ind"]
-        cov_pd = pack["cov_pred_dep"]
+        cov_tfdm = pack.get("cov_pred_tfdm", pack["cov_pred_ind"])
+        cov_sran = pack.get("cov_pred_sran", cov_tfdm)
+        cov_vae = pack.get("cov_pred_vae", cov_tfdm)
         m_gt = pack["moment3_gt"]
-        m_pi = pack["moment3_pred_ind"]
-        m_pd = pack["moment3_pred_dep"]
+        m_tfdm = pack.get("moment3_pred_tfdm", pack["moment3_pred_ind"])
+        m_sran = pack.get("moment3_pred_sran", m_tfdm)
+        m_vae = pack.get("moment3_pred_vae", m_tfdm)
 
         for col in range(7):
             ax = axrow[col]
             if col < 3:
                 i = col
                 y_gt = cov_gt[i, i, :]
-                y_ind = cov_pi[i, i, :]
-                y_dep = cov_pd[i, i, :]
+                y_tfdm = cov_tfdm[i, i, :]
+                y_sran = cov_sran[i, i, :]
+                y_vae = cov_vae[i, i, :]
             else:
                 mi, mj, mk = moment_idx[col - 3]
                 y_gt = m_gt[mi, mj, mk, :]
-                y_ind = m_pi[mi, mj, mk, :]
-                y_dep = m_pd[mi, mj, mk, :]
+                y_tfdm = m_tfdm[mi, mj, mk, :]
+                y_sran = m_sran[mi, mj, mk, :]
+                y_vae = m_vae[mi, mj, mk, :]
 
-            n_dep = min(Time_dep.size, np.asarray(y_dep).shape[-1])
             ax.plot(
                 Time_ind,
                 y_gt,
@@ -2044,19 +2048,27 @@ def plot_discussion_choice4_triad_grid(
             )
             ax.plot(
                 Time_ind,
-                y_ind,
+                y_tfdm,
                 "-",
-                color=ind_color,
+                color=tfdm_color,
                 linewidth=1.6,
-                label="ASD-FEX-TFDM-independent",
+                label="ASD-FEX-TFDM",
             )
             ax.plot(
-                Time_dep[:n_dep],
-                np.asarray(y_dep).reshape(-1)[:n_dep],
+                Time_ind,
+                y_sran,
                 "-",
-                color=dep_color,
+                color=sran_color,
                 linewidth=1.6,
-                label="ASD-FEX-TFDM-dependent",
+                label="ASD-FEX-SRAN",
+            )
+            ax.plot(
+                Time_ind,
+                y_vae,
+                "-",
+                color=vae_color,
+                linewidth=1.6,
+                label="ASD-FEX-VAE",
             )
 
             if row == 0:
@@ -2068,21 +2080,21 @@ def plot_discussion_choice4_triad_grid(
             ax.tick_params(axis="both", labelsize=fs)
             ax.grid(False)
 
-    # Legend in figure header (one row, centered)
     handles = [
         Line2D([0], [0], color=gt_color, lw=2.5, linestyle="-", label="Ground Truth"),
-        Line2D([0], [0], color=ind_color, lw=2.5, linestyle="-", label="ASD-FEX-TFDM-independent"),
-        Line2D([0], [0], color=dep_color, lw=2.5, linestyle="-", label="ASD-FEX-TFDM-dependent"),
+        Line2D([0], [0], color=tfdm_color, lw=2.5, linestyle="-", label="ASD-FEX-TFDM"),
+        Line2D([0], [0], color=sran_color, lw=2.5, linestyle="-", label="ASD-FEX-SRAN"),
+        Line2D([0], [0], color=vae_color, lw=2.5, linestyle="-", label="ASD-FEX-VAE"),
     ]
     fig.legend(
         handles=handles,
         loc="upper center",
-        ncol=3,
+        ncol=4,
         fontsize=fs,
         frameon=False,
         bbox_to_anchor=(0.5, 1.02),
     )
-    plt.tight_layout(rect=[0, 0.02, 1, 0.94])
+    plt.tight_layout(rect=[0, 0.02, 1, 0.92])
     os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
@@ -2096,7 +2108,7 @@ def run_discussion_choice4_triad_grid(
     model_name: str,
     rollout_worker,
     regimes=("equipart", "cascade", "dual_cascade"),
-    fs=18,
+    fs=22,
 ):
     """
     Run `rollout_worker(plot_composite=False)` per regime (mutates and restores
@@ -2104,8 +2116,7 @@ def run_discussion_choice4_triad_grid(
     :func:`plot_discussion_choice4_triad_grid`.
 
     ``rollout_worker`` must return the pack dict expected by
-    :func:`plot_discussion_choice4_triad_grid` (e.g. discussion test's
-    ``_discussion_choice5_worker``).
+    :func:`plot_discussion_choice4_triad_grid` (e.g. ``discussion_choice5_rollout``).
     """
     _saved_pn = args.params_name
     _saved_log = args.LOG_SAVE_PATH

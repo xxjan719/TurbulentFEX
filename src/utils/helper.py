@@ -1520,6 +1520,14 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
         "Time_dep": Time_dep,
         "cov_gt": cov_state_record,
         "moment3_gt": moment3_state_record,
+        # Discussion 4 grid: TFDM (Residual NN), SRAN (legacy z→residual NN), VAE
+        "cov_pred_tfdm": cov_state_tfdm,
+        "moment3_pred_tfdm": moment3_state_tfdm,
+        "cov_pred_sran": cov_state_nn,
+        "moment3_pred_sran": moment3_state_nn,
+        "cov_pred_vae": cov_state_vae,
+        "moment3_pred_vae": moment3_state_vae,
+        # Aliases: independent orange curve in older plots = TFDM track
         "cov_pred_ind": cov_state_pred,
         "moment3_pred_ind": moment3_state_pred,
         "cov_pred_dep": cov_state_pred_dependent,
