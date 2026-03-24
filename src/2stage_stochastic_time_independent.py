@@ -57,7 +57,7 @@ print("\n"+ "="*60)
 print("SECOND STAGE: STOCHASTIC OPTIONS")
 print("="*60)
 print("1. Train to learn stochastic part in time independent case")
-print("2. Train ResidualVAE (Gaussian z -> residual increments)")
+print("2. Train ResidualVAE (encoder q(z|R), sample z, decoder; rollout: z~N(0,I) -> R_hat)")
 print("3. Train Residual NN (Gaussian z(3) -> residual), with identity-moment regularization")
 print("4. Skip Training and generate the prediction results")
 print("="*60)
@@ -271,7 +271,7 @@ if choice == '1':
         learning_rate = 0.01
         Neural_Network = FN_Net(3,3,50).to(device)
         Neural_Network.zero_grad()
-        optimizer = torch.optim.Adam(Neural_Network.parameters(),lr=learning_rate, weight_decay = 1e-5)
+        optimizer = torch.optim.Adam(Neural_Network.parameters(), lr=learning_rate, weight_decay=1e-6)
         criterion = torch.nn.MSELoss()
         best_valid_err = 5.0
         n_iter = 200000
@@ -302,8 +302,7 @@ if choice == '1':
     print("[SUCCESS] the Neural_Network has been trained successfully")
     print("[SUCESS] you may run choice 4 to generate the prediction results.")
 elif choice == '2':
-    print("\n[INFO] Training ResidualVAE (Gaussian z -> residual increments)...")
-    # Add comprehensive training section for VAE only
+    print("\n[INFO] Training ResidualVAE (encoder q(z|R), reparam sample, decoder p(R|z))...")
     independent_save_dir = os.path.join(model_PATH, f'noise_{args.NOISE_LEVEL}', f'second_stage_{args.RESIDUAL_SAMPLES}_independent')
     os.makedirs(independent_save_dir, exist_ok=True)
     print(f'[INFO] Using independent save directory for VAE: {independent_save_dir}')
@@ -339,7 +338,7 @@ elif choice == '2':
     else:
         raise ValueError(f"Unsupported params_name for residue generation: {args.params_name}")
 
-    # Use first 300 trajectories for building a residual "density" dataset.
+    # Use first 300 trajectories for building a residual dataset.
     residuals_current_train = residuals[:300, :, :]  # (MC_samples, 3, time_steps)
     residuals_train_flat = residuals_current_train.reshape(-1, residuals_current_train.shape[1])  # (MC_samples*time_steps, 3)
     scaler = np.ones(3) * args.DIFF_SCALE
@@ -349,43 +348,34 @@ elif choice == '2':
     select_row_indices = np.random.permutation(residuals_train_flat.shape[0])[:train_size]
     residuals_train = residuals_train_flat[select_row_indices]  # (train_size, 3)
 
-    # VAE input z: Gaussian samples; we learn a generative map z -> residual increments.
-    ZT_Solution = np.random.randn(train_size, 3).astype(np.float32)
-
-    # Shuffle pairs so training doesn't depend on any ordering.
     perm = np.random.permutation(train_size)
-    ZT_shuffled = ZT_Solution[perm]
     RES_shuffled = residuals_train[perm]
 
     NTrain = int(train_size * 0.8)
-    ZT_train = ZT_shuffled[:NTrain, :]
     RES_train = RES_shuffled[:NTrain, :]
-    ZT_test = ZT_shuffled[NTrain:, :]
     RES_test = RES_shuffled[NTrain:, :]
 
-    # Normalization stats saved for inference.
-    ZT_mean = np.mean(ZT_shuffled, axis=0, keepdims=True)
-    ZT_std = np.std(ZT_shuffled, axis=0, keepdims=True)
     RES_mean = np.mean(RES_shuffled, axis=0, keepdims=True)
     RES_std = np.std(RES_shuffled, axis=0, keepdims=True)
-    ZT_std = np.maximum(ZT_std, 1e-12)
     RES_std = np.maximum(RES_std, 1e-12)
 
-    ZT_train_normal = torch.tensor((ZT_train - ZT_mean) / ZT_std, dtype=torch.float32, device=device)
     RES_train_normal = torch.tensor((RES_train - RES_mean) / RES_std, dtype=torch.float32, device=device)
-    ZT_test_normal = torch.tensor((ZT_test - ZT_mean) / ZT_std, dtype=torch.float32, device=device)
     RES_test_normal = torch.tensor((RES_test - RES_mean) / RES_std, dtype=torch.float32, device=device)
+    RES_mean_t = torch.tensor(RES_mean, dtype=torch.float32, device=device)
+    RES_std_t = torch.tensor(RES_std, dtype=torch.float32, device=device)
 
     vae_path = os.path.join(save_dir, 'ResidualVAE.pth')
     latent_dim = 8
-    hid_dim = 64
+    hid_dim = 50
     beta_kl = 1e-3
-    alpha_mean = 0.1
-    alpha_var = 1.0
+    alpha_mean = 1.0  # reconstruction (normalized R)
+    alpha_var = 0.1  # Gram term: sample second moment / dt ~ I (same as Residual NN)
     n_iter = 2000
 
     vae = ResidualVAE(3, 3, latent_dim=latent_dim, hid_dim=hid_dim).to(device)
-    optimizer = torch.optim.Adam(vae.parameters(), lr=0.01, weight_decay=1e-5)
+    optimizer = torch.optim.Adam(vae.parameters(), lr=0.01, weight_decay=1e-6)
+    mse = nn.MSELoss()
+    eye3 = torch.eye(3, device=device)
 
     best_valid_err = float('inf')
     best_state = None
@@ -394,44 +384,36 @@ elif choice == '2':
         vae.train()
         optimizer.zero_grad()
 
-        y_hat, mu, logvar = vae(ZT_train_normal)
+        r_hat, mu, logvar = vae(RES_train_normal)
+        recon_loss = mse(r_hat, RES_train_normal)
         kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
-        # Match empirical mean and diagonal second moments.
-        pred_mean = torch.mean(y_hat, dim=0)
-        targ_mean = torch.mean(RES_train_normal, dim=0)
-        mean_loss = torch.mean((pred_mean - targ_mean) ** 2)
+        pred_phys = r_hat * RES_std_t + RES_mean_t
+        gram = (pred_phys.T @ pred_phys) / (pred_phys.shape[0] * dt)
+        gram_loss = mse(gram, eye3)
 
-        pred_var = torch.var(y_hat, dim=0, unbiased=False)
-        targ_var = torch.var(RES_train_normal, dim=0, unbiased=False)
-        var_loss = torch.mean((pred_var - targ_var) ** 2)
-
-        loss = alpha_mean * mean_loss + alpha_var * var_loss + beta_kl * kl_loss
+        loss = alpha_mean * recon_loss + alpha_var * gram_loss + beta_kl * kl_loss
         loss.backward()
         optimizer.step()
 
         vae.eval()
         with torch.no_grad():
-            y_hat1, _, _ = vae(ZT_test_normal)
-            pred_mean_1 = torch.mean(y_hat1, dim=0)
-            targ_mean_1 = torch.mean(RES_test_normal, dim=0)
-            mean_loss_1 = torch.mean((pred_mean_1 - targ_mean_1) ** 2)
+            r_hat_val, mu_val, logvar_val = vae(RES_test_normal)
+            recon_val = mse(r_hat_val, RES_test_normal)
+            kl_val = -0.5 * torch.mean(1 + logvar_val - mu_val.pow(2) - logvar_val.exp())
+            pred_phys_val = r_hat_val * RES_std_t + RES_mean_t
+            gram_val = (pred_phys_val.T @ pred_phys_val) / (pred_phys_val.shape[0] * dt)
+            gram_val_loss = mse(gram_val, eye3)
+            valid_loss = alpha_mean * recon_val + alpha_var * gram_val_loss + beta_kl * kl_val
 
-            pred_var_1 = torch.var(y_hat1, dim=0, unbiased=False)
-            targ_var_1 = torch.var(RES_test_normal, dim=0, unbiased=False)
-            var_loss_1 = torch.mean((pred_var_1 - targ_var_1) ** 2)
-
-            valid_moment = alpha_mean * mean_loss_1 + alpha_var * var_loss_1
-
-        if valid_moment < best_valid_err:
-            best_valid_err = valid_moment.item()
+        if valid_loss.item() < best_valid_err:
+            best_valid_err = valid_loss.item()
             best_state = {k: v.detach().cpu().clone() for k, v in vae.state_dict().items()}
 
         if j % 100 == 0:
             print(
-                f'[VAE-moment] epoch {j+1}; mean_loss={mean_loss.item():.6f}; '
-                f'var_loss={var_loss.item():.6f}; kl_loss={kl_loss.item():.6f}; '
-                f'valid_moment={valid_moment.item():.6f}'
+                f'[VAE] epoch {j+1}; recon={recon_loss.item():.6f}; gram={gram_loss.item():.6f}; '
+                f'kl={kl_loss.item():.6f}; valid={valid_loss.item():.6f}'
             )
 
     if best_state is not None:
@@ -441,15 +423,15 @@ elif choice == '2':
     torch.save(vae.state_dict(), vae_path)
     print(f'[VAE] Saved to: {vae_path}')
 
-    # Save inference normalization stats for VAE-driven stochastic updates.
+    # Rollout: z ~ N(0,I), decode, denormalize with RES_* (see choice 4).
     vae_stats_path = os.path.join(independent_save_dir, 'data_inference_vae.pt')
     torch.save(
         {
-            'ZT_mean': torch.tensor(ZT_mean, dtype=torch.float32),
-            'ZT_std': torch.tensor(ZT_std, dtype=torch.float32),
             'RES_mean': torch.tensor(RES_mean, dtype=torch.float32),
             'RES_std': torch.tensor(RES_std, dtype=torch.float32),
             'diff_scale': args.DIFF_SCALE,
+            'latent_dim': latent_dim,
+            'vae_format': 2,
         },
         vae_stats_path,
     )
@@ -505,7 +487,15 @@ elif choice == '3':
     n_use = min(100000, r_flat.shape[0])
     sel = np.random.permutation(r_flat.shape[0])[:n_use]
     U_data = np.random.randn(n_use, 3).astype(np.float32)
-    R_data = r_flat[sel]
+    R_data = r_flat[sel].astype(np.float32)
+
+    # If z and r are drawn independently, minimizing E[||f(z)-r||^2] drives f(z) ≈ E[r]
+    # (constant in z), which hurts rollout statistics. Pair by sorting both sets on ||·||
+    # so each row is a monotone 1D coupling; row multisets (hence marginals) are unchanged.
+    nu = np.linalg.norm(U_data, axis=1)
+    nr = np.linalg.norm(R_data, axis=1)
+    U_data = U_data[np.argsort(nu)]
+    R_data = R_data[np.argsort(nr)]
 
     # Normalization stats for inference.
     U_mean = np.mean(U_data, axis=0, keepdims=True)
@@ -536,7 +526,7 @@ elif choice == '3':
 
     if not os.path.exists(residual_nn_path):
         model = FN_Net(3, 3, 50).to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=1e-5)
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=1e-6)
         mse = nn.MSELoss()
         lambda_id = 0.1
         n_iter = 2000
@@ -826,18 +816,28 @@ elif choice == '4':
     Residual_VAE = None
     ZT_mean_vae = ZT_std_vae = RES_mean = RES_std = None
     diff_scale_vae = args.DIFF_SCALE
+    vae_format = 1
+    vae_latent_dim = 8
 
     if has_vae:
         print(f"[INFO] Loading ResidualVAE from: {vae_path}")
-        latent_dim = 8
-        hid_dim = 64
-        Residual_VAE = ResidualVAE(3, 3, latent_dim=latent_dim, hid_dim=hid_dim).to(device)
+        vae_stats = torch.load(vae_stats_path, map_location=device)
+        vae_format = int(vae_stats.get('vae_format', 1))
+        vae_latent_dim = int(vae_stats.get('latent_dim', 8))
+        hid_dim = 50
+
+        Residual_VAE = ResidualVAE(3, 3, latent_dim=vae_latent_dim, hid_dim=hid_dim).to(device)
         Residual_VAE.load_state_dict(torch.load(vae_path, map_location=device))
         Residual_VAE.eval()
 
-        vae_stats = torch.load(vae_stats_path, map_location=device)
-        ZT_mean_vae = vae_stats['ZT_mean'].to(device)
-        ZT_std_vae = vae_stats['ZT_std'].to(device)
+        ZT_mean_vae = ZT_std_vae = None
+        if vae_format < 2:
+            ZT_mean_vae = vae_stats['ZT_mean'].to(device)
+            ZT_std_vae = vae_stats['ZT_std'].to(device)
+            print("[INFO] VAE stats: legacy format (encoder input = Winc). Retrain choice 2 for encode-R + prior sampling.")
+        else:
+            print("[INFO] VAE stats: encode R in training; rollout uses z ~ N(0,I) and decoder only.")
+
         RES_mean = vae_stats['RES_mean'].to(device)
         RES_std = vae_stats['RES_std'].to(device)
         diff_scale_vae = vae_stats.get('diff_scale', args.DIFF_SCALE)
@@ -967,9 +967,16 @@ elif choice == '4':
                 stoch_update_nn_legacy = (pred_res / diff_scale_res).cpu().detach().numpy()
 
             if has_vae:
-                winc_vae = (Winc_tensor - ZT_mean_vae) / ZT_std_vae
-                y_hat_vae, _, _ = Residual_VAE(winc_vae)
-                pred_vae = y_hat_vae * RES_std + RES_mean
+                if vae_format >= 2:
+                    z_prior = torch.randn(
+                        Npath, vae_latent_dim, device=device, dtype=torch.float32
+                    )
+                    y_hat_vae = Residual_VAE.decode(z_prior)
+                    pred_vae = y_hat_vae * RES_std + RES_mean
+                else:
+                    winc_vae = (Winc_tensor - ZT_mean_vae) / ZT_std_vae
+                    y_hat_vae, _, _ = Residual_VAE(winc_vae)
+                    pred_vae = y_hat_vae * RES_std + RES_mean
                 stoch_update_vae = (pred_vae / diff_scale_vae).cpu().detach().numpy()
 
             if use_vae and stoch_update_vae is not None:

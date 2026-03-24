@@ -192,20 +192,21 @@ def weights_init(m):
 
 class ResidualVAE(nn.Module):
     """
-    Simple VAE for residual increments.
+    Standard VAE for residual increments R in R^{data_dim}.
 
-    Encoder: q(z | zt)
-    Decoder: p(y | z) where y is the residual increment (in normalized ODE space).
+    Encoder: q_phi(z | R). Decoder: p_theta(R_hat | z).
+    Training: pass normalized residuals R; loss = recon + KL + optional second-moment term.
+    Rollout / generation: sample z ~ N(0, I) in latent space and call ``decode(z)``.
     """
 
-    def __init__(self, zt_dim: int = 3, y_dim: int = 3, latent_dim: int = 8, hid_dim: int = 64):
+    def __init__(self, data_dim: int = 3, out_dim: int = 3, latent_dim: int = 8, hid_dim: int = 50):
         super().__init__()
-        self.zt_dim = zt_dim
-        self.y_dim = y_dim
+        self.data_dim = data_dim
+        self.out_dim = out_dim
         self.latent_dim = latent_dim
 
         self.encoder = nn.Sequential(
-            nn.Linear(zt_dim, hid_dim),
+            nn.Linear(data_dim, hid_dim),
             nn.Tanh(),
             nn.Linear(hid_dim, hid_dim),
             nn.Tanh(),
@@ -218,11 +219,11 @@ class ResidualVAE(nn.Module):
             nn.Tanh(),
             nn.Linear(hid_dim, hid_dim),
             nn.Tanh(),
-            nn.Linear(hid_dim, y_dim),
+            nn.Linear(hid_dim, out_dim),
         )
 
-    def encode(self, zt: torch.Tensor):
-        h = self.encoder(zt)
+    def encode(self, r: torch.Tensor):
+        h = self.encoder(r)
         mu = self.enc_mu(h)
         logvar = self.enc_logvar(h)
         return mu, logvar
@@ -236,11 +237,12 @@ class ResidualVAE(nn.Module):
     def decode(self, z: torch.Tensor):
         return self.decoder(z)
 
-    def forward(self, zt: torch.Tensor):
-        mu, logvar = self.encode(zt)
+    def forward(self, r: torch.Tensor):
+        """Encode residual r, sample latent, decode reconstruction."""
+        mu, logvar = self.encode(r)
         z = self.reparameterize(mu, logvar)
-        y_hat = self.decode(z)
-        return y_hat, mu, logvar
+        r_hat = self.decode(z)
+        return r_hat, mu, logvar
 
 @jit(nopython=True, parallel=True)
 def compute_distances_parallel(x0_train_chunk, x_sample):
