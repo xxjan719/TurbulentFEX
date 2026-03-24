@@ -1977,7 +1977,7 @@ def plot_discussion_choice4_triad_grid(
     packs,
     save_path,
     row_labels=("Equipart", "Cascade", "Dual cascade"),
-    fs=22,
+    fs=25,
 ):
     """
     3×7 panel figure: rows = regimes, columns = cov(u_i,u_i) for i=1,2,3 and
@@ -2108,7 +2108,7 @@ def run_discussion_choice4_triad_grid(
     model_name: str,
     rollout_worker,
     regimes=("equipart", "cascade", "dual_cascade"),
-    fs=22,
+    fs=25,
 ):
     """
     Run `rollout_worker(plot_composite=False)` per regime (mutates and restores

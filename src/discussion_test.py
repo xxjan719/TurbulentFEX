@@ -153,7 +153,7 @@ elif choice == '3':
         rollout_worker=lambda plot_composite=False: discussion_choice5_rollout(
             args, device, plot_composite=plot_composite
         ),
-        fs=22,
+        fs=25,
     )
 
 elif choice == '4':
