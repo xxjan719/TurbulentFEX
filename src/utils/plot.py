@@ -2097,7 +2097,7 @@ def plot_discussion_choice4_triad_grid(
                         bbox_transform=ax.transAxes,
                         borderpad=inset_borderpad,
                     )
-                    inset_title_y = 0.72
+                    inset_title_y = 0.88
                 else:
                     # Last 3: move inset left and keep title slightly higher.
                     axins = inset_axes(
@@ -2109,7 +2109,7 @@ def plot_discussion_choice4_triad_grid(
                         bbox_transform=ax.transAxes,
                         borderpad=inset_borderpad,
                     )
-                    inset_title_y = 0.90
+                    inset_title_y = 0.94
                 axins.plot(t_err, err_tfdm, color=tfdm_color, linewidth=1.0)
                 axins.plot(t_err, err_sran, color=sran_color, linewidth=1.0)
                 axins.plot(t_err, err_vae, color=vae_color, linewidth=1.0)
