@@ -855,19 +855,30 @@ elif choice == '4':
     # Primary model for rollout: prefer VAE when available.
     use_vae = has_vae
     tM = np.zeros((int(TIME_AMOUNT/dt),3), dtype=np.float32)
+    ones_mc = np.ones((NPATH, 1), dtype=np.float64)
+    L64 = np.asarray(L, dtype=np.float64)
+    G64 = np.asarray(G, dtype=np.float64)
+    B64 = np.asarray(B, dtype=np.float64)
+    dt64 = float(dt)
+    nl64 = float(args.NOISE_LEVEL)
     for idx in range(1,int(TIME_AMOUNT/dt)+1):
-        # Ground truth must match `MC_triad_direct(..., method='Euler', noise_level=...)`
-        # used in `1stage_deterministic.py` when building simulation_results_*.npz.
-        # (Previously this loop used RK2 drift and omitted noise_level, biasing means vs training data.)
-        SS = params['SS'] + tmS[idx - 1] ** 2 * (params['SSt'] - params['SS'])
-        Winc = np.random.randn(NPATH, 3)  # shape (MC, 3)
-        drift = (
-            (L @ current_state.T).T
-            - current_state @ G
-            + Buu(B, current_state, current_state)
-            + np.ones((NPATH, 1)) * tmM[idx - 1, :]
+        # Ground truth: Heun / RK2 on the drift, then additive diffusion (same pattern as
+        # `discussion_test.py`). More stable than Euler drift for long horizons (e.g. equipart).
+        # Training NPZ from `MC_triad_direct(..., method='Euler')` is only exact match for
+        # Euler–Maruyama; RK2 shifts statistics slightly on [0, T_data].
+        tm_row = np.asarray(tmM[idx - 1, :], dtype=np.float64)
+        cs = np.asarray(current_state, dtype=np.float64)
+        k1 = (L64 @ cs.T).T - cs @ G64 + Buu(B64, cs, cs) + ones_mc * tm_row
+        u1 = cs + dt64 * k1
+        k2 = (L64 @ u1.T).T - u1 @ G64 + Buu(B64, u1, u1) + ones_mc * tm_row
+        next_det = cs + dt64 * (k1 + k2) / 2.0
+        SS = np.asarray(
+            params['SS'] + tmS[idx - 1] ** 2 * (params['SSt'] - params['SS']),
+            dtype=np.float64,
         )
-        next_state = current_state + dt * drift + np.sqrt(dt) * args.NOISE_LEVEL * (Winc @ SS)
+        Winc = np.random.randn(NPATH, 3).astype(np.float64)
+        next_state = next_det + np.sqrt(dt64) * nl64 * (Winc @ SS)
+        next_state = np.asarray(next_state, dtype=np.result_type(current_state, np.float32))
         u_all[:, :, idx] = next_state
 
     

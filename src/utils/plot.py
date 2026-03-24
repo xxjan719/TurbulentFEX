@@ -1973,6 +1973,157 @@ def plot_discussion_choice3_composite(
     return None
 
 
+def plot_discussion_choice4_triad_grid(
+    packs,
+    save_path,
+    row_labels=("Equipart", "Cascade", "Dual cascade"),
+    fs=18,
+):
+    """
+    3×7 panel figure: rows = regimes, columns = cov(u_i,u_i) for i=1,2,3 and
+    ⟨M123⟩, ⟨M122⟩, ⟨M133⟩, ⟨M223⟩. Each panel: ground truth (solid black),
+    independent (orange), dependent (blue, up to Time_dep).
+
+    `packs` is a length-3 list of dicts from `_discussion_choice5_worker(..., plot_composite=False)`:
+    Time_ind, Time_dep, cov_gt, moment3_gt, cov_pred_ind, moment3_pred_ind,
+    cov_pred_dep, moment3_pred_dep.
+    """
+    from matplotlib.lines import Line2D
+
+    assert len(packs) == len(row_labels) == 3
+    moment_idx = [(0, 1, 2), (0, 1, 1), (0, 2, 2), (1, 1, 2)]
+    moment_latex = [
+        r"$\langle M_{123} \rangle$",
+        r"$\langle M_{122} \rangle$",
+        r"$\langle M_{133} \rangle$",
+        r"$\langle M_{223} \rangle$",
+    ]
+    col_labels = [
+        r"$\mathrm{cov}(u_1,u_1)$",
+        r"$\mathrm{cov}(u_2,u_2)$",
+        r"$\mathrm{cov}(u_3,u_3)$",
+    ] + moment_latex
+
+    fig, axes = plt.subplots(3, 7, figsize=(28, 10), sharex=False)
+
+    gt_color = "black"
+    ind_color = "#ff7f0e"
+    dep_color = "#1f77b4"
+
+    for row, (axrow, pack, rlabel) in enumerate(zip(axes, packs, row_labels)):
+        Time_ind = np.asarray(pack["Time_ind"], dtype=float).ravel()
+        Time_dep = np.asarray(pack["Time_dep"], dtype=float).ravel()
+        cov_gt = pack["cov_gt"]
+        cov_pi = pack["cov_pred_ind"]
+        cov_pd = pack["cov_pred_dep"]
+        m_gt = pack["moment3_gt"]
+        m_pi = pack["moment3_pred_ind"]
+        m_pd = pack["moment3_pred_dep"]
+
+        for col in range(7):
+            ax = axrow[col]
+            if col < 3:
+                i = col
+                y_gt = cov_gt[i, i, :]
+                y_ind = cov_pi[i, i, :]
+                y_dep = cov_pd[i, i, :]
+            else:
+                mi, mj, mk = moment_idx[col - 3]
+                y_gt = m_gt[mi, mj, mk, :]
+                y_ind = m_pi[mi, mj, mk, :]
+                y_dep = m_pd[mi, mj, mk, :]
+
+            n_dep = min(Time_dep.size, np.asarray(y_dep).shape[-1])
+            ax.plot(
+                Time_ind,
+                y_gt,
+                "-",
+                color=gt_color,
+                linewidth=2.0,
+                label="Ground Truth",
+            )
+            ax.plot(
+                Time_ind,
+                y_ind,
+                "-",
+                color=ind_color,
+                linewidth=1.6,
+                label="ASD-FEX-TFDM-independent",
+            )
+            ax.plot(
+                Time_dep[:n_dep],
+                np.asarray(y_dep).reshape(-1)[:n_dep],
+                "-",
+                color=dep_color,
+                linewidth=1.6,
+                label="ASD-FEX-TFDM-dependent",
+            )
+
+            if row == 0:
+                ax.set_title(col_labels[col], fontsize=fs)
+            if col == 0:
+                ax.set_ylabel(rlabel, fontsize=fs)
+            if row == 2:
+                ax.set_xlabel("Time", fontsize=fs)
+            ax.tick_params(axis="both", labelsize=fs)
+            ax.grid(False)
+
+    # Legend in figure header (one row, centered)
+    handles = [
+        Line2D([0], [0], color=gt_color, lw=2.5, linestyle="-", label="Ground Truth"),
+        Line2D([0], [0], color=ind_color, lw=2.5, linestyle="-", label="ASD-FEX-TFDM-independent"),
+        Line2D([0], [0], color=dep_color, lw=2.5, linestyle="-", label="ASD-FEX-TFDM-dependent"),
+    ]
+    fig.legend(
+        handles=handles,
+        loc="upper center",
+        ncol=3,
+        fontsize=fs,
+        frameon=False,
+        bbox_to_anchor=(0.5, 1.02),
+    )
+    plt.tight_layout(rect=[0, 0.02, 1, 0.94])
+    os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[INFO] Saved discussion choice 4 grid to: {save_path}")
+
+
+def run_discussion_choice4_triad_grid(
+    args,
+    base_path: str,
+    dir_example: str,
+    model_name: str,
+    rollout_worker,
+    regimes=("equipart", "cascade", "dual_cascade"),
+    fs=18,
+):
+    """
+    Run `rollout_worker(plot_composite=False)` per regime (mutates and restores
+    ``args.params_name`` and ``args.LOG_SAVE_PATH``), then call
+    :func:`plot_discussion_choice4_triad_grid`.
+
+    ``rollout_worker`` must return the pack dict expected by
+    :func:`plot_discussion_choice4_triad_grid` (e.g. discussion test's
+    ``_discussion_choice5_worker``).
+    """
+    _saved_pn = args.params_name
+    _saved_log = args.LOG_SAVE_PATH
+    packs = []
+    try:
+        for regime in regimes:
+            args.params_name = regime
+            args.LOG_SAVE_PATH = f"{base_path}/{regime}"
+            packs.append(rollout_worker(plot_composite=False))
+    finally:
+        args.params_name = _saved_pn
+        args.LOG_SAVE_PATH = _saved_log
+    out_dir = os.path.join(dir_example, model_name, "Results")
+    os.makedirs(out_dir, exist_ok=True)
+    save_pdf = os.path.join(out_dir, "discussion_choice4_cov_moments_grid.pdf")
+    plot_discussion_choice4_triad_grid(packs, save_path=save_pdf, fs=fs)
+
+
 def plot_probability_distributions(u_all, u_pred, Time_record, save_path=None, title_suffix="FEX-framework"):
     """
     Plot probability distributions and joint distributions comparing ground truth and prediction.

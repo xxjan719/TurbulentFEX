@@ -20,7 +20,8 @@ from .helper import (Buu, compute_third_order_moments,
                      get_coefficients, get_score_expression_from_file,
                      check_allowed_terms,get_sequence_from_candidate,extract_coefficients_from_expr,
                      simplify_expression_for_periodic_cascade,
-                     select_operator_sequence, check_allowed_terms_periodic_cascade)
+                     select_operator_sequence, check_allowed_terms_periodic_cascade,
+                     discussion_choice5_rollout)
 from .plot import (plot_NOISE_LEVEL_EFFECT,plot_training_progress_grid,
                    plot_mean_comparison,plot_covariance_comparison,
                    plot_energy_comparison,plot_third_order_moments,plot_energy_conservation,
@@ -41,5 +42,6 @@ __all__ = [
     "generate_euler_residue","generate_second_step","generate_mean_and_std","simple_step_update",
     "plot_energy_comparison","plot_third_order_moments","plot_energy_conservation","plot_probability_distributions",
     "train_FN_multi", "FN_multi_update","FEX_with_force","FEX_with_force_model_learned","FEX_with_force_ground_truth_periodic_cascade",
-    "check_allowed_terms_periodic_cascade",'process_chunk','ODE_solver_chunk'
+    "check_allowed_terms_periodic_cascade",'process_chunk','ODE_solver_chunk',
+    "discussion_choice5_rollout",
 ]

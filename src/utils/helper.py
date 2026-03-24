@@ -768,4 +768,761 @@ def simplify_expression_for_periodic_cascade(expr: str, dim: int) -> str:
     return simplified
 
 
+def discussion_choice5_rollout(args, device, plot_composite=True):
+    """Discussion choice 5: MC rollout (independent t≤20, dependent t≤10) and optional composite PDF."""
+    import config
+    from Example.MC_triad.MC_triad import params_init, MC_triad_initial_value
+    from .FEX import FEX_model_learned
+    from .FEX_with_force import FEX_with_force_model_learned
+    from .ODEParser import FN_Net, simple_step_update, FN_multi_update
+
+    print("=" * 60)
+    print("[INFO] Choice 5 rollout: generate test samples (skip training) and optional composite plot")
+    print("[INFO] Independent: t=0..20 (from independent run). Dependent: t=0..10 (dependent run only).")
+    print("=" * 60)
+
+    m0,var0 = MC_triad_initial_value()
+    params = params_init(args.params_name)
+    # Choose the correct model based on params_name
+    if args.params_name in ['equipart', 'cascade', 'dual_cascade']:
+        FEX_model_check = FEX_model_learned
+    elif args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+        FEX_model_check = FEX_with_force_model_learned
+    L = params['L']
+    G = params['G']
+    B = params['B']
+    
+    TIME_AMOUNT = 20
+    dt = 0.01
+    NPATH = 5000
+    initial_state = np.random.normal(loc=m0, scale=np.sqrt(var0), size=(NPATH, 3))    
+    x_pred_initial = torch.ones(NPATH, 3).to(device,dtype=torch.float32) * torch.tensor(m0).to(device,dtype=torch.float32)
+    scaler = args.DIFF_SCALE
+    
+    Nt_eval = int(TIME_AMOUNT / dt)
+    # Deterministic forcing/noise scaling must match `params_init()`.
+    # Previously these were hard-coded to zero, which can bias mean_state.
+    tmM = np.zeros((Nt_eval, 3), dtype=np.float32)
+    tmS = np.zeros(Nt_eval, dtype=np.float32)
+    if 'tmM' in params and params['tmM'] is not None:
+        tmM_src = np.asarray(params['tmM'], dtype=np.float32)
+        if tmM_src.shape[0] >= Nt_eval:
+            tmM = tmM_src[:Nt_eval, :]
+        else:
+            reps = int(np.ceil(Nt_eval / tmM_src.shape[0]))
+            tmM = np.tile(tmM_src, (reps, 1))[:Nt_eval, :]
+    if 'tmS' in params and params['tmS'] is not None:
+        tmS_src = np.asarray(params['tmS'], dtype=np.float32)
+        if tmS_src.shape[0] >= Nt_eval:
+            tmS = tmS_src[:Nt_eval]
+        else:
+            reps = int(np.ceil(Nt_eval / tmS_src.shape[0]))
+            tmS = np.tile(tmS_src, reps)[:Nt_eval]
+    mean_state_pred = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    mean_state_record = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    mean_state_record[:, 0] = np.mean(initial_state, axis=0)
+    mean_state_pred[:, 0] = np.mean(initial_state, axis=0)
+
+    # Add separate mean arrays for single and ensemble
+    mean_state_single = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    mean_state_single[:, 0] = np.mean(initial_state, axis=0)
+    mean_state_ensemble = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    mean_state_ensemble[:, 0] = np.mean(initial_state, axis=0)
+
+    cov_state_pred = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    cov_state_record = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    cov_state_record[:, :, 0] = np.cov(initial_state, rowvar=False)
+    cov_state_pred[:, :, 0] = np.cov(initial_state, rowvar=False)
+
+    # Add separate covariance arrays for single and ensemble
+    cov_state_single = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    cov_state_single[:, :, 0] = np.cov(initial_state, rowvar=False)
+    cov_state_ensemble = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    cov_state_ensemble[:, :, 0] = np.cov(initial_state, rowvar=False)
+
+    u_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_all[:,:,0] = initial_state
+    u_pred_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_pred_all[:,:,0] = initial_state
+
+    # Add separate arrays for single and ensemble predictions
+    u_pred_single = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_pred_single[:,:,0] = initial_state
+    u_pred_ensemble = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_pred_ensemble[:,:,0] = initial_state
+
+    # Dependent (time-dependent) prediction trajectory samples for t<=10.
+    u_pred_dependent = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_pred_dependent[:, :, 0] = initial_state
+
+    moment3_state_record = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    moment3_state_pred = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    moment3_first,_ = compute_third_order_moments(initial_state)
+    moment3_state_record[:,:,:,0] = moment3_first
+    moment3_state_pred[:,:,:,0] = moment3_first
+
+    moment3_state_nn = np.zeros((3, 3, 3, int(TIME_AMOUNT / dt) + 1), dtype=np.float32)
+    moment3_state_tfdm = np.zeros_like(moment3_state_nn)
+    moment3_state_vae = np.zeros_like(moment3_state_nn)
+    moment3_state_nn[:, :, :, 0] = moment3_first
+    moment3_state_tfdm[:, :, :, 0] = moment3_first
+    moment3_state_vae[:, :, :, 0] = moment3_first
+
+    mean_state_nn = np.zeros((3, int(TIME_AMOUNT / dt) + 1), dtype=np.float32)
+    mean_state_tfdm = np.zeros_like(mean_state_nn)
+    mean_state_vae = np.zeros_like(mean_state_nn)
+    cov_state_nn = np.zeros((3, 3, int(TIME_AMOUNT / dt) + 1), dtype=np.float32)
+    cov_state_tfdm = np.zeros_like(cov_state_nn)
+    cov_state_vae = np.zeros_like(cov_state_nn)
+    mean_state_nn[:, 0] = mean_state_tfdm[:, 0] = mean_state_vae[:, 0] = np.mean(
+        initial_state, axis=0
+    )
+    c0 = np.cov(initial_state, rowvar=False)
+    cov_state_nn[:, :, 0] = cov_state_tfdm[:, :, 0] = cov_state_vae[:, :, 0] = c0
+
+    Energy_MC_all = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_MC_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+
+    current_state = initial_state
+    current_pred_state_nn = initial_state.copy()
+    current_pred_state_tfdm = initial_state.copy()
+    current_pred_state_vae = initial_state.copy()
+
+    Energy_update_record = np.zeros(4, dtype=np.float32)
+    Energy_update_pred = np.zeros(4, dtype=np.float32)
+    Energy_dyn_record = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_dyn_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+
+    # At t=0
+    Energy_update_pred[:] = [
+        0.5 * np.sum(mean_state_pred[:, 0] ** 2) + 0.5 * np.trace(cov_state_pred[:, :, 0]),
+        0.5 * (mean_state_pred[0, 0] ** 2 + cov_state_pred[0, 0, 0]),
+        0.5 * (mean_state_pred[1, 0] ** 2 + cov_state_pred[1, 1, 0]),
+        0.5 * (mean_state_pred[2, 0] ** 2 + cov_state_pred[2, 2, 0]),
+    ]
+    Energy_dyn_pred[:, 0] = Energy_update_pred
+
+    Energy_update_record[:] = [
+        0.5 * np.sum(mean_state_record[:, 0] ** 2) + 0.5 * np.trace(cov_state_record[:, :, 0]),
+        0.5 * (mean_state_record[0, 0] ** 2 + cov_state_record[0, 0, 0]),
+        0.5 * (mean_state_record[1, 0] ** 2 + cov_state_record[1, 1, 0]),
+        0.5 * (mean_state_record[2, 0] ** 2 + cov_state_record[2, 2, 0]),
+    ]
+    Energy_dyn_record[:, 0] = Energy_update_record
+
+    # -----------------------------
+    # Independent/Dependent setup (shared loop over t=0..TIME_AMOUNT)
+    # -----------------------------
+    Nt_ind = int(TIME_AMOUNT / dt)
+    TIME_DEP_AMOUNT = 10.0
+    Nt_dep = int(TIME_DEP_AMOUNT / dt)
+
+    # Make explicit independent aliases (the rest of the existing code uses
+    # the shorter variable names `mean_state_record`, `mean_state_pred`, etc.)
+    mean_state_record_independent = mean_state_record
+    cov_state_record_independent = cov_state_record
+    mean_state_pred_independent = mean_state_pred
+    cov_state_pred_independent = cov_state_pred
+
+    tmM_dep = np.zeros((Nt_dep, 3), dtype=np.float32)
+    tmS_dep = np.zeros(Nt_dep, dtype=np.float32)
+    if 'tmM' in params and params['tmM'] is not None:
+        if params['tmM'].shape[0] >= Nt_dep:
+            tmM_dep[:] = params['tmM'][:Nt_dep, :].astype(np.float32)
+        else:
+            rep = int(np.ceil(Nt_dep / params['tmM'].shape[0]))
+            tmM_dep[:] = np.tile(params['tmM'].astype(np.float32), (rep, 1))[:Nt_dep, :]
+    if 'tmS' in params and params['tmS'] is not None:
+        if params['tmS'].shape[0] >= Nt_dep:
+            tmS_dep[:] = params['tmS'][:Nt_dep].astype(np.float32)
+        else:
+            rep_s = int(np.ceil(Nt_dep / params['tmS'].shape[0]))
+            tmS_dep[:] = np.tile(params['tmS'].astype(np.float32), rep_s)[:Nt_dep]
+
+    # Dependent arrays (only meaningful for t <= TIME_DEP_AMOUNT)
+    mean_state_record_dependent = np.zeros((3, Nt_dep + 1), dtype=np.float32)
+    cov_state_record_dependent = np.zeros((3, 3, Nt_dep + 1), dtype=np.float32)
+    mean_state_pred_dependent = np.zeros((3, Nt_dep + 1), dtype=np.float32)
+    cov_state_pred_dependent = np.zeros((3, 3, Nt_dep + 1), dtype=np.float32)
+
+    moment3_state_pred_dependent = np.zeros((3, 3, 3, Nt_dep + 1), dtype=np.float32)
+    moment3_state_pred_dependent[:, :, :, 0] = moment3_first
+
+    mean_state_record_dependent[:, 0] = np.mean(initial_state, axis=0)
+    cov_state_record_dependent[:, :, 0] = np.cov(initial_state, rowvar=False)
+    mean_state_pred_dependent[:, 0] = np.mean(initial_state, axis=0)
+    cov_state_pred_dependent[:, :, 0] = np.cov(initial_state, rowvar=False)
+
+    current_state_dependent = initial_state.copy()
+    current_pred_state_dependent = initial_state.copy()
+
+    # Energy from (mean, covariance) for dependent prediction (only defined/updated for t <= 10)
+    Energy_MC_pred_dependent = np.zeros((4, Nt_dep + 1), dtype=np.float32)
+    Energy_MC_pred_dependent[:, 0] = [
+        0.5 * np.sum(mean_state_pred_dependent[:, 0] ** 2) + 0.5 * np.trace(cov_state_pred_dependent[:, :, 0]),
+        0.5 * (mean_state_pred_dependent[0, 0] ** 2 + cov_state_pred_dependent[0, 0, 0]),
+        0.5 * (mean_state_pred_dependent[1, 0] ** 2 + cov_state_pred_dependent[1, 1, 0]),
+        0.5 * (mean_state_pred_dependent[2, 0] ** 2 + cov_state_pred_dependent[2, 2, 0]),
+    ]
+
+    # Paths match `2stage_stochastic_time_independent.py` (DIR_TRIAD + RESIDUAL_SAMPLES).
+    print("Loading neural network models...")
+    dev_str = getattr(args, "DEVICE", str(device))
+    if torch.cuda.is_available() and isinstance(dev_str, str) and dev_str.startswith("cuda"):
+        model_PATH = os.path.join(
+            config.DIR_TRIAD, "Results", "Results1", "Results", args.params_name
+        )
+        dep_root = model_PATH
+    else:
+        model_PATH = os.path.join(config.DIR_TRIAD, "Results", args.params_name)
+        dep_root = model_PATH
+
+    residual_samples = int(getattr(args, "RESIDUAL_SAMPLES", 10000))
+    noise_str = f"noise_{args.NOISE_LEVEL}"
+    save_dir = os.path.join(
+        model_PATH, noise_str, f"second_stage_{residual_samples}_constant"
+    )
+    independent_save_dir = os.path.join(
+        model_PATH, noise_str, f"second_stage_{residual_samples}_independent"
+    )
+
+    save_dir_single_dep = os.path.join(
+        dep_root, noise_str, "deter1000", f"second_stage_{args.TRAIN_SIZE}_single"
+    )
+    save_dir_ensemble_dep = os.path.join(
+        dep_root, noise_str, "deter1000", f"second_stage_{args.TRAIN_SIZE}"
+    )
+    alt_ensemble = os.path.join(
+        dep_root, noise_str, "deter1000", f"ssecond_stage_{args.TRAIN_SIZE}"
+    )
+    if not os.path.exists(save_dir_ensemble_dep) and os.path.exists(alt_ensemble):
+        save_dir_ensemble_dep = alt_ensemble
+    if not os.path.exists(save_dir_single_dep):
+        print(f"[WARNING] Dependent model folder not found: {save_dir_single_dep}")
+        print("          Dependent prediction will fall back to simple Gaussian noise.")
+
+    dataname = os.path.join(independent_save_dir, "data_inference.pt")
+    vae_stats_path = os.path.join(independent_save_dir, "data_inference_vae.pt")
+    residual_stats_path = os.path.join(independent_save_dir, "data_inference_residual.pt")
+    nn_path = os.path.join(save_dir, "Neural_Network.pth")
+    vae_path = os.path.join(save_dir, "ResidualVAE.pth")
+    residual_nn_path = os.path.join(save_dir, "Residual_Network.pth")
+
+    has_nn_legacy = os.path.exists(nn_path) and os.path.exists(dataname)
+    Neural_Network = None
+    ZT_mean_nn = ZT_std_nn = ODE_mean = ODE_std = None
+    diff_scale_nn = args.DIFF_SCALE
+    if has_nn_legacy:
+        print(f"[INFO] Loading Neural_Network (FEX+NN) from: {nn_path}")
+        data_inference = torch.load(dataname, map_location=device)
+        ZT_mean_nn = data_inference["ZT_mean"].to(device)
+        ZT_std_nn = data_inference["ZT_std"].to(device)
+        ODE_mean = data_inference["ODE_mean"].to(device)
+        ODE_std = data_inference["ODE_std"].to(device)
+        diff_scale_nn = data_inference.get("diff_scale", args.DIFF_SCALE)
+        if torch.is_tensor(diff_scale_nn):
+            diff_scale_nn = diff_scale_nn.item()
+        Neural_Network = FN_Net(3, 3, 50).to(device)
+        Neural_Network.load_state_dict(torch.load(nn_path, map_location=device))
+        Neural_Network.eval()
+    else:
+        print("[INFO] Legacy Neural_Network.pth + data_inference.pt not found (FEX+NN disabled).")
+
+    has_residual_nn = os.path.exists(residual_nn_path) and os.path.exists(residual_stats_path)
+    Residual_Network = None
+    U_mean_res = U_std_res = RES_mean_res = RES_std_res = None
+    diff_scale_res = 1.0
+    if has_residual_nn:
+        print(f"[INFO] Loading Residual_Network (FEX+TFDM) from: {residual_nn_path}")
+        residual_stats = torch.load(residual_stats_path, map_location=device)
+        U_mean_res = residual_stats["U_mean"].to(device)
+        U_std_res = residual_stats["U_std"].to(device)
+        RES_mean_res = residual_stats["RES_mean"].to(device)
+        RES_std_res = residual_stats["RES_std"].to(device)
+        diff_scale_res = residual_stats.get("diff_scale", 1.0)
+        if torch.is_tensor(diff_scale_res):
+            diff_scale_res = diff_scale_res.item()
+        Residual_Network = FN_Net(3, 3, 50).to(device)
+        Residual_Network.load_state_dict(torch.load(residual_nn_path, map_location=device))
+        Residual_Network.eval()
+    else:
+        print("[INFO] Residual_Network.pth not found (FEX+TFDM will use Gaussian fallback).")
+
+    has_vae = os.path.exists(vae_path) and os.path.exists(vae_stats_path)
+    Residual_VAE = None
+    ZT_mean_vae = ZT_std_vae = RES_mean = RES_std = None
+    diff_scale_vae = args.DIFF_SCALE
+    vae_format = 1
+    vae_latent_dim = 8
+    if has_vae:
+        print(f"[INFO] Loading ResidualVAE (FEX+VAE) from: {vae_path}")
+        vae_stats = torch.load(vae_stats_path, map_location=device)
+        vae_format = int(vae_stats.get("vae_format", 1))
+        vae_latent_dim = int(vae_stats.get("latent_dim", 8))
+        Residual_VAE = ResidualVAE(3, 3, latent_dim=vae_latent_dim, hid_dim=50).to(device)
+        Residual_VAE.load_state_dict(torch.load(vae_path, map_location=device))
+        Residual_VAE.eval()
+        if vae_format < 2:
+            ZT_mean_vae = vae_stats["ZT_mean"].to(device)
+            ZT_std_vae = vae_stats["ZT_std"].to(device)
+        RES_mean = vae_stats["RES_mean"].to(device)
+        RES_std = vae_stats["RES_std"].to(device)
+        diff_scale_vae = vae_stats.get("diff_scale", args.DIFF_SCALE)
+        if torch.is_tensor(diff_scale_vae):
+            diff_scale_vae = diff_scale_vae.item()
+    else:
+        print("[INFO] ResidualVAE assets not found (FEX+VAE disabled).")
+
+    has_nn = has_residual_nn or has_nn_legacy
+    if not has_nn and not has_vae:
+        print(
+            "[WARNING] No second-stage checkpoints for this regime; "
+            "independent FEX+NN / FEX+TFDM / FEX+VAE all use matched Gaussian noise. "
+            f"Expected under:\n  {save_dir}\n  {independent_save_dir}\n"
+            "Train 2stage_stochastic_time_independent.py for this params_name + noise "
+            "when you want learned stochastic corrections."
+        )
+
+    ones_mc = np.ones((NPATH, 1), dtype=np.float64)
+    L64 = np.asarray(L, dtype=np.float64)
+    G64 = np.asarray(G, dtype=np.float64)
+    B64 = np.asarray(B, dtype=np.float64)
+    dt64 = float(dt)
+    nl64 = float(args.NOISE_LEVEL)
+
+    for idx in range(1, Nt_ind + 1):
+        # Ground truth: Heun drift + diffusion (same as choice 4 in 2stage_stochastic_time_independent.py)
+        tm_row = np.asarray(tmM[idx - 1, :], dtype=np.float64)
+        cs = np.asarray(current_state, dtype=np.float64)
+        k1 = (L64 @ cs.T).T - cs @ G64 + Buu(B64, cs, cs) + ones_mc * tm_row
+        u1 = cs + dt64 * k1
+        k2 = (L64 @ u1.T).T - u1 @ G64 + Buu(B64, u1, u1) + ones_mc * tm_row
+        next_det = cs + dt64 * (k1 + k2) / 2.0
+        SS_nd = np.asarray(
+            params["SS"] + tmS[idx - 1] ** 2 * (params["SSt"] - params["SS"]),
+            dtype=np.float64,
+        )
+        Winc = np.random.randn(NPATH, 3).astype(np.float64)
+        next_state = next_det + np.sqrt(dt64) * nl64 * (Winc @ SS_nd)
+        next_state = np.asarray(next_state, dtype=np.result_type(current_state, np.float32))
+        SS = SS_nd.astype(np.float32)
+        Winc_f32 = Winc.astype(np.float32)
+        
+        # Dependent (time-dependent) ground truth update for t <= 10
+        if idx <= Nt_dep:
+            k1_dep = (
+                (L @ current_state_dependent.T).T
+                - current_state_dependent @ G
+                + Buu(B, current_state_dependent, current_state_dependent)
+                + np.ones((NPATH, 1)) * tmM_dep[idx - 1, :]
+            )
+            u1_dep = current_state_dependent + dt * k1_dep
+            k2_dep = (
+                (L @ u1_dep.T).T
+                - u1_dep @ G
+                + Buu(B, u1_dep, u1_dep)
+                + np.ones((NPATH, 1)) * tmM_dep[idx - 1, :]
+            )
+            next_state_dependent = current_state_dependent + dt * (k1_dep + k2_dep) / 2
+
+            SS_dep_step = params['SS'] + tmS_dep[idx - 1] ** 2 * (params['SSt'] - params['SS'])
+            next_state_dependent = next_state_dependent + np.sqrt(dt) * (Winc_f32 @ SS_dep_step) * args.NOISE_LEVEL
+
+            mean_state_record_dependent[:, idx] = np.mean(next_state_dependent, axis=0)
+            cov_state_record_dependent[:, :, idx] = np.cov(next_state_dependent, rowvar=False)
+            current_state_dependent = next_state_dependent
+        u_all[:, :, idx] = next_state
+
+    
+        mean_state_record[:,idx] = np.mean(next_state, axis=0)
+        cov_state_record[:,:,idx] = np.cov(next_state, rowvar=False)
+        moment3_state_record[:,:,:,idx],_ = compute_third_order_moments(next_state)
+        Energy_MC_all[0, idx] = 0.5 * np.sum(mean_state_record[:,idx] ** 2) + 0.5 * np.trace(cov_state_record[:,:,idx])
+        Energy_MC_all[1, idx] = 0.5 * (mean_state_record[0,idx] ** 2 + cov_state_record[0,0,idx])
+        Energy_MC_all[2, idx] = 0.5 * (mean_state_record[1,idx] ** 2 + cov_state_record[1,1,idx])
+        Energy_MC_all[3, idx] = 0.5 * (mean_state_record[2,idx] ** 2 + cov_state_record[2,2,idx])
+        
+      
+        diag_G = np.diag(G)
+        damp1 = np.max(diag_G)
+        damp2 = max(np.min(diag_G), 0)
+        damp3 = np.mean(diag_G)
+        SS_sq_diag = np.diag(SS @ SS.T)
+        
+      
+        Energy_update_record[0] += dt * (
+            -np.sum(diag_G * (mean_state_record[:, idx] ** 2 + np.diag(cov_state_record[:, :, idx]))) +
+             np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) +
+             0.5 * np.sum(SS_sq_diag)
+        )
+        Energy_update_record[1] += dt * (-2 * damp1 * Energy_update_record[1] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+        Energy_update_record[2] += dt * (-2 * damp2 * Energy_update_record[2] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+        Energy_update_record[3] += dt * (-2 * damp3 * Energy_update_record[3] + np.sum(tmM[idx - 1, :] * mean_state_record[:, idx]) + 0.5 * np.sum(SS_sq_diag))
+    
+        current_state = next_state
+
+        def det_update_from_state(state_np):
+            state_tensor = torch.tensor(state_np, dtype=torch.float32).to(device)
+            if args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+                current_time = idx * dt
+                time_column = torch.full(
+                    (state_tensor.shape[0], 1),
+                    current_time,
+                    dtype=torch.float32,
+                    device=device,
+                )
+                state_with_time = torch.cat([state_tensor, time_column], dim=1)
+                k1_det = FEX_model_check(
+                    state_with_time,
+                    model_name=args.Model,
+                    params_name=args.params_name,
+                    noise_level=args.NOISE_LEVEL,
+                    device=device,
+                ) * dt
+                u1_det = state_tensor + k1_det
+                u1_with_time = torch.cat([u1_det, time_column], dim=1)
+                k2_det = FEX_model_check(
+                    u1_with_time,
+                    model_name=args.Model,
+                    params_name=args.params_name,
+                    noise_level=args.NOISE_LEVEL,
+                    device=device,
+                ) * dt
+            else:
+                k1_det = FEX_model_check(
+                    state_tensor,
+                    model_name=args.Model,
+                    params_name=args.params_name,
+                    noise_level=args.NOISE_LEVEL,
+                    device=device,
+                ) * dt
+                u1_det = state_tensor + k1_det
+                k2_det = FEX_model_check(
+                    u1_det,
+                    model_name=args.Model,
+                    params_name=args.params_name,
+                    noise_level=args.NOISE_LEVEL,
+                    device=device,
+                ) * dt
+            return ((k1_det + k2_det) / 2).cpu().detach().numpy()
+
+        det_update_nn = det_update_from_state(current_pred_state_nn)
+        det_update_tfdm = det_update_from_state(current_pred_state_tfdm)
+        det_update_vae = det_update_from_state(current_pred_state_vae)
+
+        Npath = current_pred_state_nn.shape[0]
+        Winc_tensor = torch.tensor(Winc_f32, dtype=torch.float32).to(device)
+        with torch.no_grad():
+            stoch_update_nn = None
+            stoch_update_tfdm = None
+            stoch_update_vae = None
+            if has_nn_legacy:
+                winc_nn = (Winc_tensor - ZT_mean_nn) / ZT_std_nn
+                pred_nn = Neural_Network(winc_nn) * ODE_std + ODE_mean
+                stoch_update_nn = (pred_nn / diff_scale_nn).cpu().detach().numpy()
+            if has_residual_nn:
+                z_norm = (Winc_tensor - U_mean_res) / U_std_res
+                pred_res = Residual_Network(z_norm) * RES_std_res + RES_mean_res
+                stoch_update_tfdm = (pred_res / diff_scale_res).cpu().detach().numpy()
+            if has_vae:
+                if vae_format >= 2:
+                    z_prior = torch.randn(
+                        Npath, vae_latent_dim, device=device, dtype=torch.float32
+                    )
+                    y_hat_vae = Residual_VAE.decode(z_prior)
+                    pred_vae = y_hat_vae * RES_std + RES_mean
+                else:
+                    winc_vae = (Winc_tensor - ZT_mean_vae) / ZT_std_vae
+                    y_hat_vae, _, _ = Residual_VAE(winc_vae)
+                    pred_vae = y_hat_vae * RES_std + RES_mean
+                stoch_update_vae = (pred_vae / diff_scale_vae).cpu().detach().numpy()
+
+        simple_noise = np.sqrt(dt) * args.NOISE_LEVEL * (Winc_f32 @ SS)
+        if stoch_update_nn is not None and not np.isfinite(stoch_update_nn).all():
+            stoch_update_nn = simple_noise.copy()
+        if stoch_update_tfdm is not None and not np.isfinite(stoch_update_tfdm).all():
+            stoch_update_tfdm = simple_noise.copy()
+        if stoch_update_vae is not None and not np.isfinite(stoch_update_vae).all():
+            stoch_update_vae = simple_noise.copy()
+
+        std_simple = np.std(simple_noise, axis=0)
+        std_simple = np.maximum(std_simple, 1e-12)
+        mean_simple = np.mean(simple_noise, axis=0)
+        if stoch_update_nn is not None:
+            std_n = np.std(stoch_update_nn, axis=0)
+            mean_n = np.mean(stoch_update_nn, axis=0)
+            scale_n = np.where(std_n > 1e-12, std_simple / std_n, 1.0)
+            stoch_update_nn = (stoch_update_nn - mean_n) * scale_n + mean_simple
+        if stoch_update_tfdm is not None:
+            std_t = np.std(stoch_update_tfdm, axis=0)
+            mean_t = np.mean(stoch_update_tfdm, axis=0)
+            scale_t = np.where(std_t > 1e-12, std_simple / std_t, 1.0)
+            stoch_update_tfdm = (stoch_update_tfdm - mean_t) * scale_t + mean_simple
+        if stoch_update_vae is not None:
+            std_v = np.std(stoch_update_vae, axis=0)
+            mean_v = np.mean(stoch_update_vae, axis=0)
+            scale_v = np.where(std_v > 1e-12, std_simple / std_v, 1.0)
+            stoch_update_vae = (stoch_update_vae - mean_v) * scale_v + mean_simple
+
+        # Dependent (time-dependent) stochastic update for t <= 10
+        if idx <= Nt_dep:
+            stoch_update_dependent = None
+            # Recompute SS_dep_step for consistent SS scaling in prediction.
+            SS_dep_step = params['SS'] + tmS_dep[idx - 1] ** 2 * (params['SSt'] - params['SS'])
+            simple_noise_dependent = np.sqrt(dt) * (Winc @ SS_dep_step) * args.NOISE_LEVEL
+
+            if os.path.exists(save_dir_single_dep):
+                if args.params_name in ['equipart', 'cascade']:
+                    stoch_update_dependent = simple_step_update(
+                        Winc_tensor=Winc_tensor,
+                        device=device,
+                        idx=idx,
+                        save_dir_single=save_dir_single_dep,
+                        save_dir_ensemble=save_dir_ensemble_dep,
+                        model_type='single',
+                        dim=3,
+                        scaler=scaler,
+                    )
+                else:
+                    stoch_update_dependent = FN_multi_update(
+                        Winc_tensor=Winc_tensor,
+                        device=device,
+                        idx=idx,
+                        save_dir_single=save_dir_single_dep,
+                        dim=3,
+                        scaler=scaler,
+                    )
+
+            if stoch_update_dependent is None:
+                stoch_update_dependent = simple_noise_dependent
+
+            # Deterministic RK4 update for the dependent predictor (must be computed
+            # from `current_pred_state_dependent`, same as in `2stage_stochastic_time_dependent.py`).
+            current_tensor_dep = torch.tensor(
+                current_pred_state_dependent, dtype=torch.float32
+            ).to(device)
+            if args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+                current_time = idx * dt
+                time_column_dep = torch.full(
+                    (current_tensor_dep.shape[0], 1),
+                    current_time,
+                    dtype=torch.float32,
+                ).to(device)
+                current_tensor_with_time_dep = torch.cat(
+                    [current_tensor_dep, time_column_dep],
+                    dim=1,
+                )
+                k1_det_dep = (
+                    FEX_model_check(
+                        current_tensor_with_time_dep,
+                        model_name=args.Model,
+                        params_name=args.params_name,
+                        noise_level=args.NOISE_LEVEL,
+                        device=device,
+                    )
+                    * dt
+                )
+                k1_det_dep_np = k1_det_dep.cpu().detach().numpy()
+                u1_dep = current_tensor_dep + k1_det_dep
+
+                u1_dep_with_time = torch.cat([u1_dep, time_column_dep], dim=1)
+                k2_det_dep = (
+                    FEX_model_check(
+                        u1_dep_with_time,
+                        model_name=args.Model,
+                        params_name=args.params_name,
+                        noise_level=args.NOISE_LEVEL,
+                        device=device,
+                    )
+                    * dt
+                )
+                k2_det_dep_np = k2_det_dep.cpu().detach().numpy()
+            else:
+                k1_det_dep = (
+                    FEX_model_check(
+                        current_tensor_dep,
+                        model_name=args.Model,
+                        params_name=args.params_name,
+                        noise_level=args.NOISE_LEVEL,
+                        device=device,
+                    )
+                    * dt
+                )
+                k1_det_dep_np = k1_det_dep.cpu().detach().numpy()
+                u1_dep = current_tensor_dep + k1_det_dep
+
+                k2_det_dep = (
+                    FEX_model_check(
+                        u1_dep,
+                        model_name=args.Model,
+                        params_name=args.params_name,
+                        noise_level=args.NOISE_LEVEL,
+                        device=device,
+                    )
+                    * dt
+                )
+                k2_det_dep_np = k2_det_dep.cpu().detach().numpy()
+
+            det_update_dep = (k1_det_dep_np + k2_det_dep_np) / 2.0
+            next_pred_state_dependent = (
+                current_pred_state_dependent + det_update_dep + stoch_update_dependent
+            )
+            # Store dependent prediction samples for 3D phase-space clouds (t <= 10).
+            u_pred_dependent[:, :, idx] = next_pred_state_dependent
+            current_pred_state_dependent = next_pred_state_dependent
+            mean_state_pred_dependent[:, idx] = np.mean(next_pred_state_dependent, axis=0)
+            cov_state_pred_dependent[:, :, idx] = np.cov(next_pred_state_dependent, rowvar=False)
+
+            # Third-order moments for dependent prediction
+            moment3_pred_dep, _ = compute_third_order_moments(next_pred_state_dependent)
+            moment3_state_pred_dependent[:, :, :, idx] = moment3_pred_dep
+
+            # Dependent prediction energy (optional but kept consistent with mean/cov definition)
+            Energy_MC_pred_dependent[0, idx] = (
+                0.5 * np.sum(mean_state_pred_dependent[:, idx] ** 2)
+                + 0.5 * np.trace(cov_state_pred_dependent[:, :, idx])
+            )
+            Energy_MC_pred_dependent[1, idx] = 0.5 * (
+                mean_state_pred_dependent[0, idx] ** 2 + cov_state_pred_dependent[0, 0, idx]
+            )
+            Energy_MC_pred_dependent[2, idx] = 0.5 * (
+                mean_state_pred_dependent[1, idx] ** 2 + cov_state_pred_dependent[1, 1, idx]
+            )
+            Energy_MC_pred_dependent[3, idx] = 0.5 * (
+                mean_state_pred_dependent[2, idx] ** 2 + cov_state_pred_dependent[2, 2, idx]
+            )
+    
+        if idx % 50 == 0:
+            t_now = idx * dt
+            print(f"\nStep {idx} (t={t_now:.2f}): independent stochastic increments (matched to simple noise)")
+            print("=" * 50)
+            if stoch_update_tfdm is not None:
+                print(f"FEX+TFDM — mean {np.mean(stoch_update_tfdm, axis=0)}  std {np.std(stoch_update_tfdm, axis=0)}")
+            else:
+                print("FEX+TFDM — not available")
+            if stoch_update_nn is not None:
+                print(f"FEX+NN   — mean {np.mean(stoch_update_nn, axis=0)}  std {np.std(stoch_update_nn, axis=0)}")
+            else:
+                print("FEX+NN   — not available")
+            if stoch_update_vae is not None:
+                print(f"FEX+VAE  — mean {np.mean(stoch_update_vae, axis=0)}  std {np.std(stoch_update_vae, axis=0)}")
+            else:
+                print("FEX+VAE  — not available")
+            print(f"Simple noise — mean {mean_simple}  std {std_simple}")
+            print("=" * 50)
+
+        next_pred_nn = (
+            current_pred_state_nn + det_update_nn + stoch_update_nn
+            if stoch_update_nn is not None
+            else current_pred_state_nn
+            + det_update_nn
+            + (stoch_update_tfdm if stoch_update_tfdm is not None else simple_noise)
+        )
+        next_pred_tfdm = (
+            current_pred_state_tfdm + det_update_tfdm + stoch_update_tfdm
+            if stoch_update_tfdm is not None
+            else current_pred_state_tfdm + det_update_tfdm + simple_noise
+        )
+        next_pred_vae = (
+            current_pred_state_vae + det_update_vae + stoch_update_vae
+            if stoch_update_vae is not None
+            else current_pred_state_vae + det_update_vae + simple_noise
+        )
+
+        # Independent curves in plots: orange = FEX+TFDM; store FEX+NN in u_pred_single for debugging.
+        u_pred_all[:, :, idx] = next_pred_tfdm
+        u_pred_single[:, :, idx] = next_pred_nn
+
+        mean_state_nn[:, idx] = np.mean(next_pred_nn, axis=0)
+        cov_state_nn[:, :, idx] = np.cov(next_pred_nn, rowvar=False)
+        moment3_state_nn[:, :, :, idx], _ = compute_third_order_moments(next_pred_nn)
+
+        mean_state_tfdm[:, idx] = np.mean(next_pred_tfdm, axis=0)
+        cov_state_tfdm[:, :, idx] = np.cov(next_pred_tfdm, rowvar=False)
+        moment3_state_tfdm[:, :, :, idx], _ = compute_third_order_moments(next_pred_tfdm)
+
+        mean_state_vae[:, idx] = np.mean(next_pred_vae, axis=0)
+        cov_state_vae[:, :, idx] = np.cov(next_pred_vae, rowvar=False)
+        moment3_state_vae[:, :, :, idx], _ = compute_third_order_moments(next_pred_vae)
+
+        mean_state_pred[:, idx] = mean_state_tfdm[:, idx]
+        cov_state_pred[:, :, idx] = cov_state_tfdm[:, :, idx]
+        moment3_state_pred[:, :, :, idx] = moment3_state_tfdm[:, :, :, idx]
+
+        mean_state_single[:, idx] = mean_state_nn[:, idx]
+        cov_state_single[:, :, idx] = cov_state_nn[:, :, idx]
+
+        Energy_MC_pred[0, idx] = 0.5 * np.sum(mean_state_pred[:, idx] ** 2) + 0.5 * np.trace(cov_state_pred[:, :, idx])
+        Energy_MC_pred[1, idx] = 0.5 * (mean_state_pred[0, idx] ** 2 + cov_state_pred[0, 0, idx])
+        Energy_MC_pred[2, idx] = 0.5 * (mean_state_pred[1, idx] ** 2 + cov_state_pred[1, 1, idx])
+        Energy_MC_pred[3, idx] = 0.5 * (mean_state_pred[2, idx] ** 2 + cov_state_pred[2, 2, idx])
+
+        current_pred_state_nn = next_pred_nn
+        current_pred_state_tfdm = next_pred_tfdm
+        current_pred_state_vae = next_pred_vae
+
+    idx_t20 = int(round(TIME_AMOUNT / dt))
+    print("\n" + "=" * 60)
+    print(
+        f"[INFO] t = {TIME_AMOUNT} (time index {idx_t20}): mean, var(u_i), "
+        "third moments — GT, FEX+NN, FEX+TFDM, FEX+VAE"
+    )
+    print("=" * 60)
+    _snap = [
+        ("Ground truth", mean_state_record, cov_state_record, moment3_state_record),
+        ("FEX+NN", mean_state_nn, cov_state_nn, moment3_state_nn),
+        ("FEX+TFDM", mean_state_tfdm, cov_state_tfdm, moment3_state_tfdm),
+        ("FEX+VAE", mean_state_vae, cov_state_vae, moment3_state_vae),
+    ]
+    for label, ms, cs, m3 in _snap:
+        md = ms[:, idx_t20]
+        vd = np.diag(cs[:, :, idx_t20])
+        print(
+            f"  {label}: mean={md}  cov_diag={vd}  "
+            f"M123={m3[0, 1, 2, idx_t20]:.6g}  M122={m3[0, 1, 1, idx_t20]:.6g}  "
+            f"M133={m3[0, 2, 2, idx_t20]:.6g}  M223={m3[1, 1, 2, idx_t20]:.6g}"
+        )
+    print("=" * 60)
+
+    np.random.seed(0)
+    Time_record = np.arange(int(TIME_AMOUNT/dt)+1) * dt
+    Time_dep = np.arange(Nt_dep + 1) * dt
+    os.makedirs(args.LOG_SAVE_PATH, exist_ok=True)
+    if plot_composite:
+        from .plot import plot_discussion_choice3_composite
+        save_path_composite = os.path.join(
+            args.LOG_SAVE_PATH, "discussion_choice3_composite.pdf"
+        )
+        plot_discussion_choice3_composite(
+            save_path=save_path_composite,
+            u_all=u_all,
+            u_pred_all=u_pred_all,
+            u_pred_dependent=u_pred_dependent,
+            dt=dt,
+            Time_record=Time_record,
+            Time_dep=Time_dep,
+            mean_state_record_independent=mean_state_record_independent,
+            cov_state_record_independent=cov_state_record_independent,
+            mean_state_pred_independent=mean_state_pred_independent,
+            cov_state_pred_independent=cov_state_pred_independent,
+            mean_state_pred_dependent=mean_state_pred_dependent,
+            cov_state_pred_dependent=cov_state_pred_dependent,
+            moment3_state_record=moment3_state_record,
+            moment3_state_pred=moment3_state_pred,
+            moment3_state_pred_dependent=moment3_state_pred_dependent,
+            TIME_AMOUNT=TIME_AMOUNT,
+            TIME_DEP_AMOUNT=TIME_DEP_AMOUNT,
+            params_name=args.params_name.capitalize(),
+            font_size=20,
+        )
+    return {
+        "Time_ind": Time_record,
+        "Time_dep": Time_dep,
+        "cov_gt": cov_state_record,
+        "moment3_gt": moment3_state_record,
+        "cov_pred_ind": cov_state_pred,
+        "moment3_pred_ind": moment3_state_pred,
+        "cov_pred_dep": cov_state_pred_dependent,
+        "moment3_pred_dep": moment3_state_pred_dependent,
+    }
 
