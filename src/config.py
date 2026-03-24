@@ -233,8 +233,8 @@ class Config:
                             help = 'Model to use')
         # Case selection
         parser.add_argument('--params_name', type=str, 
-                            choices = ['cascade', 'equipart','dual_cascade','periodic_cascade','random_cascade'],
-                            default='equipart',
+                            choices = ['cascade', 'equipart','dual_cascade','periodic_cascade','random_cascade','random_cascade_deterministic'],
+                            default='random_cascade',
                             help='Case to use')
         # Seed
         parser.add_argument('--SEED', type=int, 

@@ -99,7 +99,7 @@ if choice == '1':
         [coefficients_equipart, coefficients_cascade, coefficients_dual_cascade],
         noise_levels=noise_levels,
         save_dir=args.LOG_SAVE_PATH,
-        panel_labels=['Equipart', 'Forward Cascade', 'Dual Cascade'],
+        panel_labels=['Equipartition', 'Forward Cascade', 'Dual Cascade'],
     )
 
     # Optional: plot the original energy-conservation diagnostic
@@ -130,7 +130,7 @@ elif choice == '2':
         sample_sizes=sample_sizes,
         save_dir=results_dir,
         filename='cross_terms_vs_sample.pdf',
-        panel_labels=['Equipart', 'Forward Cascade', 'Dual Cascade'],
+        panel_labels=['Equipartition', 'Forward Cascade', 'Dual Cascade'],
     )
 
     # Copy the same nonlinear terms graph into each regime folder
