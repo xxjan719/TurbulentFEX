@@ -2079,16 +2079,22 @@ def plot_discussion_choice4_triad_grid(
                 err_tfdm = np.abs(np.asarray(y_tfdm) - np.asarray(y_gt)) + eps
                 err_sran = np.abs(np.asarray(y_sran) - np.asarray(y_gt)) + eps
                 err_vae = np.abs(np.asarray(y_vae) - np.asarray(y_gt)) + eps
+                # Dual-cascade inset excludes the first point (t=0) by request.
+                t_err = Time_ind[1:]
+                err_tfdm = err_tfdm[1:]
+                err_sran = err_sran[1:]
+                err_vae = err_vae[1:]
+                inset_loc = "upper right" if col in (0, 1, 2) else "lower right"
                 axins = inset_axes(
                     ax,
                     width="40%",
                     height="40%",
-                    loc="upper left",
+                    loc=inset_loc,
                     borderpad=0.9,
                 )
-                axins.plot(Time_ind, err_tfdm, color=tfdm_color, linewidth=1.0)
-                axins.plot(Time_ind, err_sran, color=sran_color, linewidth=1.0)
-                axins.plot(Time_ind, err_vae, color=vae_color, linewidth=1.0)
+                axins.plot(t_err, err_tfdm, color=tfdm_color, linewidth=1.0)
+                axins.plot(t_err, err_sran, color=sran_color, linewidth=1.0)
+                axins.plot(t_err, err_vae, color=vae_color, linewidth=1.0)
                 axins.set_yscale("log")
                 axins.set_title("log error", fontsize=26, pad=1.0)
                 axins.set_facecolor((1.0, 1.0, 1.0, 0.9))
