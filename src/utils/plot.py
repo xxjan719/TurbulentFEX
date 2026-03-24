@@ -1976,7 +1976,7 @@ def plot_discussion_choice3_composite(
 def plot_discussion_choice4_triad_grid(
     packs,
     save_path,
-    row_labels=("Equipart", "Cascade", "Dual cascade"),
+    row_labels=("Equipartition", "Cascade", "Dual cascade"),
     fs=28,
 ):
     """
@@ -2097,7 +2097,7 @@ def plot_discussion_choice4_triad_grid(
                         bbox_transform=ax.transAxes,
                         borderpad=inset_borderpad,
                     )
-                    inset_title_y = 0.95
+                    inset_title_y = 1
                 else:
                     # Last 3: move inset left and keep title slightly higher.
                     axins = inset_axes(
@@ -2692,7 +2692,6 @@ def plot_comparative_grid(u_all, u_pred_single, u_pred_ensemble,
         time_indices.append(idx)
         time_values.append(idx * dt)
 
-    # -------- 全局坐标范围 (u1,u2,u3) 保证所有 3D 面板范围一致 --------
     all_states = np.concatenate([
         u_all.reshape(-1, 3),
         u_pred_single.reshape(-1, 3),
@@ -2702,7 +2701,6 @@ def plot_comparative_grid(u_all, u_pred_single, u_pred_ensemble,
     u2_min, u2_max = np.percentile(all_states[:, 1], [1, 99])
     u3_min, u3_max = np.percentile(all_states[:, 2], [1, 99])
 
-    # -------- figure 布局 --------
     fig = plt.figure(figsize=(18, 10))
     fig.suptitle(f'3D triad: Numerical vs Emulator vs Thermalized – {title_suffix}',
                  fontsize=14, fontweight='bold')
@@ -2710,13 +2708,11 @@ def plot_comparative_grid(u_all, u_pred_single, u_pred_ensemble,
     row_labels = ['Numerical model', 'Emulator', 'Thermalized']
     data_sets = [u_all, u_pred_single, u_pred_ensemble]
 
-    # 固定随机种子，保证截图可复现
     np.random.seed(0)
     NPATH = u_all.shape[0]
     sample_size = min(1000, NPATH)
     sample_idx = np.random.choice(NPATH, sample_size, replace=False)
 
-    # -------- 上三行：3D scatter --------
     for row in range(3):
         U = data_sets[row]  # (NPATH, 3, Nt)
 
@@ -2724,7 +2720,6 @@ def plot_comparative_grid(u_all, u_pred_single, u_pred_ensemble,
             tidx = time_indices[col]
             snapshot = U[sample_idx, :, tidx]  # (sample_size, 3)
 
-            # subplot index: 4 行 × 6 列
             ax_idx = row * 6 + col + 1
             ax = fig.add_subplot(4, 6, ax_idx, projection='3d')
 
@@ -2737,7 +2732,6 @@ def plot_comparative_grid(u_all, u_pred_single, u_pred_ensemble,
             ax.set_ylim([u2_min, u2_max])
             ax.set_zlim([u3_min, u3_max])
 
-            # 只在左边几列标轴，避免太乱
             if col == 0:
                 ax.set_xlabel('u1')
                 ax.set_ylabel('u2')
@@ -2747,19 +2741,18 @@ def plot_comparative_grid(u_all, u_pred_single, u_pred_ensemble,
                 ax.set_yticks([])
                 ax.set_zticks([])
 
-            # 第一行加时间标题
+
             if row == 0:
                 ax.set_title(f't={time_values[col]:.1f}s\nstep={tidx}',
                              fontsize=9, pad=2)
 
-            # 每行左边加行标题
             if col == 0:
                 ax.text2D(-0.25, 0.5, row_labels[row],
                           transform=ax.transAxes,
                           fontsize=11, fontweight='bold',
                           rotation=90, va='center', ha='right')
 
-    # -------- 最后一行：energy vs time (log) --------
+    
     t_full = Time_record * dt
 
     for col in range(6):
