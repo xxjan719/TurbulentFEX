@@ -2200,6 +2200,145 @@ def run_discussion_choice4_triad_grid(
     plot_discussion_choice4_triad_grid(packs, save_path=save_pdf, fs=fs)
 
 
+def plot_discussion5_offdiagonal_cov_grid(
+    packs,
+    save_path,
+    row_labels=("Equipartition", "Cascade", "Dual cascade"),
+    fs=20,
+):
+    """
+    3×3 grid: rows = regimes, columns = cov(u1,u2), cov(u1,u3), cov(u2,u3).
+    Curves: Ground truth, ASD-FEX-TFDM time-independent, ASD-FEX-TFDM time-dependent
+    (dependent only up to ``Time_dep``).
+
+    ``packs`` are dicts from ``discussion_choice5_rollout(..., plot_composite=False)``:
+    Time_ind, Time_dep, cov_gt, cov_pred_tfdm (or cov_pred_ind), cov_pred_dep.
+    """
+    from matplotlib.lines import Line2D
+
+    assert len(packs) == len(row_labels) == 3
+    ij_cols = [(0, 1), (0, 2), (1, 2)]
+    col_labels = [
+        r"$\mathrm{cov}(u_1,u_2)$",
+        r"$\mathrm{cov}(u_1,u_3)$",
+        r"$\mathrm{cov}(u_2,u_3)$",
+    ]
+    gt_color = "black"
+    ind_color = "#ff7f0e"
+    dep_color = "#1f77b4"
+
+    fig, axes = plt.subplots(3, 3, figsize=(18, 12), sharex=False)
+
+    for row, (axrow, pack, rlabel) in enumerate(zip(axes, packs, row_labels)):
+        Time_ind = np.asarray(pack["Time_ind"], dtype=float).ravel()
+        Time_dep = np.asarray(pack["Time_dep"], dtype=float).ravel()
+        cov_gt = pack["cov_gt"]
+        cov_tfdm = pack.get("cov_pred_tfdm", pack["cov_pred_ind"])
+        cov_dep = pack["cov_pred_dep"]
+
+        for col, (i, j) in enumerate(ij_cols):
+            ax = axrow[col]
+            y_gt = cov_gt[i, j, :]
+            y_ind = cov_tfdm[i, j, :]
+            y_dep_full = cov_dep[i, j, :]
+            n_dep = min(Time_dep.size, np.asarray(y_dep_full).shape[-1])
+            y_dep = np.asarray(y_dep_full).reshape(-1)[:n_dep]
+            t_dep = Time_dep[:n_dep]
+
+            ax.plot(Time_ind, y_gt, "-", color=gt_color, linewidth=2.0, label="ground truth")
+            ax.plot(
+                Time_ind,
+                y_ind,
+                "-",
+                color=ind_color,
+                linewidth=1.8,
+                label="ASD-FEX-TFDM-time independent",
+            )
+            ax.plot(
+                t_dep,
+                y_dep,
+                "-",
+                color=dep_color,
+                linewidth=1.8,
+                label="ASD-FEX-TFDM-time-dependent",
+            )
+
+            if row == 0:
+                ax.set_title(col_labels[col], fontsize=fs)
+            if col == 0:
+                ax.set_ylabel(rlabel, fontsize=fs)
+            if row == 2:
+                ax.set_xlabel("Time", fontsize=fs)
+            ax.tick_params(axis="both", labelsize=fs)
+            ax.grid(False)
+
+    handles = [
+        Line2D([0], [0], color=gt_color, lw=2.5, linestyle="-", label="ground truth"),
+        Line2D(
+            [0],
+            [0],
+            color=ind_color,
+            lw=2.5,
+            linestyle="-",
+            label="ASD-FEX-TFDM-time independent",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color=dep_color,
+            lw=2.5,
+            linestyle="-",
+            label="ASD-FEX-TFDM-time-dependent",
+        ),
+    ]
+    fig.legend(
+        handles=handles,
+        loc="upper center",
+        ncol=3,
+        fontsize=fs,
+        frameon=False,
+        bbox_to_anchor=(0.5, 1.02),
+    )
+    plt.tight_layout(rect=[0, 0.02, 1, 0.92])
+    save_path = os.path.abspath(save_path)
+    os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[INFO] Saved discussion choice 5 off-diagonal cov grid to: {save_path}")
+
+
+def run_discussion_choice5_offdiagonal_cov_grid(
+    args,
+    base_path: str,
+    dir_example: str,
+    model_name: str,
+    rollout_worker,
+    regimes=("equipart", "cascade", "dual_cascade"),
+    fs=20,
+):
+    """
+    Three rollouts (one per regime), then :func:`plot_discussion5_offdiagonal_cov_grid`.
+    """
+    _saved_pn = args.params_name
+    _saved_log = args.LOG_SAVE_PATH
+    packs = []
+    try:
+        for regime in regimes:
+            args.params_name = regime
+            args.LOG_SAVE_PATH = f"{base_path}/{regime}"
+            packs.append(rollout_worker(plot_composite=False))
+    finally:
+        args.params_name = _saved_pn
+        args.LOG_SAVE_PATH = _saved_log
+    out_dir = os.path.join(dir_example, model_name, "Results")
+    os.makedirs(out_dir, exist_ok=True)
+    save_pdf = os.path.abspath(
+        os.path.join(out_dir, "discussion_choice5_offdiag_cov_grid.pdf")
+    )
+    print(f"[INFO] Discussion choice 5 off-diagonal cov output path: {save_pdf}")
+    plot_discussion5_offdiagonal_cov_grid(packs, save_path=save_pdf, fs=fs)
+
+
 def plot_probability_distributions(u_all, u_pred, Time_record, save_path=None, title_suffix="FEX-framework"):
     """
     Plot probability distributions and joint distributions comparing ground truth and prediction.

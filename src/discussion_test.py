@@ -16,6 +16,7 @@ from utils.plot import (
     plot_third_order_moments_ind_dep_2x2,
     plot_triad_3d_time_grid_matplotlib_cloud_3x3_times,
     run_discussion_choice4_triad_grid,
+    run_discussion_choice5_offdiagonal_cov_grid,
 )
 from utils.helper import (
     get_coefficients,
@@ -158,6 +159,16 @@ elif choice == '3':
 
 elif choice == '4':
     print("=" * 60)
-    print("[INFO] Discussion 5: time independent vs time dependent (composite figure).")
+    print("[INFO] Discussion 5: 3×3 off-diagonal cov + composite figure.")
     print("=" * 60)
-    discussion_choice5_rollout(args, device, plot_composite=True)
+    run_discussion_choice5_offdiagonal_cov_grid(
+        args,
+        base_path=base_path,
+        dir_example=DIR_EXAMPLE,
+        model_name=args.Model,
+        rollout_worker=lambda plot_composite=False: discussion_choice5_rollout(
+            args, device, plot_composite=plot_composite
+        ),
+        fs=20,
+    )
+    # discussion_choice5_rollout(args, device, plot_composite=True)
