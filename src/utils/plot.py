@@ -2085,18 +2085,31 @@ def plot_discussion_choice4_triad_grid(
                 err_sran = err_sran[1:]
                 err_vae = err_vae[1:]
                 inset_loc = "upper right" if col in (0, 1, 2) else "lower right"
-                axins = inset_axes(
-                    ax,
-                    width="40%",
-                    height="40%",
-                    loc=inset_loc,
-                    borderpad=0.9,
-                )
+                inset_borderpad = 1.6 if col in (0, 1) else 0.9
+                if col in (3, 4, 5, 6):
+                    # Shift right-side insets slightly left so title/text remains inside.
+                    axins = inset_axes(
+                        ax,
+                        width="40%",
+                        height="40%",
+                        loc=inset_loc,
+                        bbox_to_anchor=(0.0, 0.0, 0.92, 1.0),
+                        bbox_transform=ax.transAxes,
+                        borderpad=inset_borderpad,
+                    )
+                else:
+                    axins = inset_axes(
+                        ax,
+                        width="40%",
+                        height="40%",
+                        loc=inset_loc,
+                        borderpad=inset_borderpad,
+                    )
                 axins.plot(t_err, err_tfdm, color=tfdm_color, linewidth=1.0)
                 axins.plot(t_err, err_sran, color=sran_color, linewidth=1.0)
                 axins.plot(t_err, err_vae, color=vae_color, linewidth=1.0)
                 axins.set_yscale("log")
-                axins.set_title("log error", fontsize=26, pad=1.0)
+                axins.set_title("log error", fontsize=26, y=0.78, pad=0.0)
                 axins.set_facecolor((1.0, 1.0, 1.0, 0.9))
                 axins.grid(False)
                 axins.tick_params(axis="both", labelsize=max(10, int(fs * 0.55)))
