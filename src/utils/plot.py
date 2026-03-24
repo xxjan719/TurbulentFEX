@@ -1977,7 +1977,7 @@ def plot_discussion_choice4_triad_grid(
     packs,
     save_path,
     row_labels=("Equipart", "Cascade", "Dual cascade"),
-    fs=25,
+    fs=28,
 ):
     """
     3×7 panel figure: rows = regimes, columns = cov(u_i,u_i) for i=1,2,3 and
@@ -1990,6 +1990,7 @@ def plot_discussion_choice4_triad_grid(
     Falls back to ``cov_pred_ind`` / ``moment3_pred_ind`` if *_tfdm keys are absent.
     """
     from matplotlib.lines import Line2D
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
     assert len(packs) == len(row_labels) == 3
     moment_idx = [(0, 1, 2), (0, 1, 1), (0, 2, 2), (1, 1, 2)]
@@ -2071,6 +2072,23 @@ def plot_discussion_choice4_triad_grid(
                 label="ASD-FEX-VAE",
             )
 
+            # For dual-cascade row, add inset log-error curves on selected panels:
+            # cov(u1,u1), cov(u2,u2), cov(u3,u3), <M123>, <M122>, <M133>.
+            if row == 2 and col in (0, 1, 2, 3, 4, 5):
+                eps = 1e-12
+                err_tfdm = np.abs(np.asarray(y_tfdm) - np.asarray(y_gt)) + eps
+                err_sran = np.abs(np.asarray(y_sran) - np.asarray(y_gt)) + eps
+                err_vae = np.abs(np.asarray(y_vae) - np.asarray(y_gt)) + eps
+                axins = inset_axes(ax, width="45%", height="45%", loc="upper right", borderpad=0.8)
+                axins.plot(Time_ind, err_tfdm, color=tfdm_color, linewidth=1.0)
+                axins.plot(Time_ind, err_sran, color=sran_color, linewidth=1.0)
+                axins.plot(Time_ind, err_vae, color=vae_color, linewidth=1.0)
+                axins.set_yscale("log")
+                axins.grid(False)
+                axins.tick_params(axis="both", labelsize=max(8, int(fs * 0.35)))
+                for spine in axins.spines.values():
+                    spine.set_alpha(0.8)
+
             if row == 0:
                 ax.set_title(col_labels[col], fontsize=fs)
             if col == 0:
@@ -2108,7 +2126,7 @@ def run_discussion_choice4_triad_grid(
     model_name: str,
     rollout_worker,
     regimes=("equipart", "cascade", "dual_cascade"),
-    fs=25,
+    fs=28,
 ):
     """
     Run `rollout_worker(plot_composite=False)` per regime (mutates and restores
