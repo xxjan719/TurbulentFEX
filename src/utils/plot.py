@@ -2079,13 +2079,21 @@ def plot_discussion_choice4_triad_grid(
                 err_tfdm = np.abs(np.asarray(y_tfdm) - np.asarray(y_gt)) + eps
                 err_sran = np.abs(np.asarray(y_sran) - np.asarray(y_gt)) + eps
                 err_vae = np.abs(np.asarray(y_vae) - np.asarray(y_gt)) + eps
-                axins = inset_axes(ax, width="45%", height="45%", loc="upper right", borderpad=0.8)
+                axins = inset_axes(
+                    ax,
+                    width="40%",
+                    height="40%",
+                    loc="upper left",
+                    borderpad=0.9,
+                )
                 axins.plot(Time_ind, err_tfdm, color=tfdm_color, linewidth=1.0)
                 axins.plot(Time_ind, err_sran, color=sran_color, linewidth=1.0)
                 axins.plot(Time_ind, err_vae, color=vae_color, linewidth=1.0)
                 axins.set_yscale("log")
+                axins.set_title("log error", fontsize=26, pad=1.0)
+                axins.set_facecolor((1.0, 1.0, 1.0, 0.9))
                 axins.grid(False)
-                axins.tick_params(axis="both", labelsize=max(8, int(fs * 0.35)))
+                axins.tick_params(axis="both", labelsize=max(10, int(fs * 0.55)))
                 for spine in axins.spines.values():
                     spine.set_alpha(0.8)
 
@@ -2113,8 +2121,20 @@ def plot_discussion_choice4_triad_grid(
         bbox_to_anchor=(0.5, 1.02),
     )
     plt.tight_layout(rect=[0, 0.02, 1, 0.92])
+    save_path = os.path.abspath(save_path)
     os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    try:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        # Always emit a PNG sibling for quick preview/debugging.
+        root, ext = os.path.splitext(save_path)
+        png_path = root + ".png"
+        if ext.lower() != ".png":
+            plt.savefig(png_path, dpi=300, bbox_inches="tight")
+            print(f"[INFO] Saved discussion choice 4 grid PNG to: {png_path}")
+    except Exception as e:
+        print(f"[ERROR] Failed to save discussion choice 4 grid to: {save_path}")
+        print(f"[ERROR] savefig exception: {e}")
+        raise
     plt.close(fig)
     print(f"[INFO] Saved discussion choice 4 grid to: {save_path}")
 
@@ -2126,7 +2146,7 @@ def run_discussion_choice4_triad_grid(
     model_name: str,
     rollout_worker,
     regimes=("equipart", "cascade", "dual_cascade"),
-    fs=28,
+    fs=26,
 ):
     """
     Run `rollout_worker(plot_composite=False)` per regime (mutates and restores
@@ -2149,7 +2169,10 @@ def run_discussion_choice4_triad_grid(
         args.LOG_SAVE_PATH = _saved_log
     out_dir = os.path.join(dir_example, model_name, "Results")
     os.makedirs(out_dir, exist_ok=True)
-    save_pdf = os.path.join(out_dir, "discussion_choice4_cov_moments_grid.pdf")
+    save_pdf = os.path.abspath(
+        os.path.join(out_dir, "discussion_choice4_cov_moments_grid.pdf")
+    )
+    print(f"[INFO] Discussion choice 4 output path: {save_pdf}")
     plot_discussion_choice4_triad_grid(packs, save_path=save_pdf, fs=fs)
 
 
