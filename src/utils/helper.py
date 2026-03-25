@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 import math
+import warnings
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
@@ -122,6 +123,63 @@ def check_allowed_terms_periodic_cascade(expression, dimension):
     has_time_var = (has_sin_t or has_cos_t or has_exp_t) and not has_high_power_t
                     
     return {'valid': has_allowed_var and has_time_var, 'terms_present': terms_present}
+
+
+def random_cascade_deterministic_tmM_ou(Nt_eval: int, Dt: float, seed: int = 42) -> np.ndarray:
+    """OU forcing path; same recursion as MC_triad.params_init('random_cascade_deterministic')."""
+    theta = 5.0
+    sigma = 0.2
+    rng = np.random.RandomState(seed)
+    tmM = np.zeros((Nt_eval, 3), dtype=np.float32)
+    tmt = 1.5
+    for j in range(Nt_eval):
+        dW = np.sqrt(Dt) * rng.randn()
+        tmt = tmt - theta * tmt * Dt + sigma * dW
+        tmM[j, :] = tmt
+    return tmM
+
+
+def build_tmM_eval(Nt_eval: int, params: dict, params_name: str) -> np.ndarray:
+    """
+    Build (Nt_eval, 3) deterministic mean forcing for moment-closure rollouts.
+
+    - periodic_cascade: sin(fr * k * dt) for k = 0..Nt_eval-1 (no tiling jump at T=10).
+    - random_cascade_deterministic: full OU path with RandomState(42), not np.tile of the first 10s
+      (tiling would repeat the same OU segment and misalign ground truth vs continuous-time FEX).
+    - Otherwise: use params['tmM'] when length matches, else tile (e.g. dual_cascade).
+    """
+    Dt = float(params["Dt"])
+    tmM = np.zeros((Nt_eval, 3), dtype=np.float32)
+    raw = params.get("tmM")
+    tmM_src = np.asarray(raw, dtype=np.float32) if raw is not None else None
+
+    if params_name == "periodic_cascade" and "fr" in params:
+        fr = float(params["fr"])
+        k = np.arange(Nt_eval, dtype=np.float32)
+        s = np.sin(fr * Dt * k).astype(np.float32)
+        tmM[:, 0] = s
+        tmM[:, 1] = s
+        tmM[:, 2] = s
+        return tmM
+
+    if params_name == "random_cascade_deterministic":
+        tmM_ou = random_cascade_deterministic_tmM_ou(Nt_eval, Dt, seed=42)
+        if tmM_src is not None and tmM_src.shape[0] > 0:
+            L = min(int(tmM_src.shape[0]), Nt_eval)
+            if not np.allclose(tmM_ou[:L], tmM_src[:L], rtol=1e-4, atol=1e-3):
+                warnings.warn(
+                    "random_cascade_deterministic: params['tmM'] does not match OU replay (seed=42); "
+                    "using the seed=42 OU path for the full evaluation horizon.",
+                    stacklevel=2,
+                )
+        return tmM_ou
+
+    if tmM_src is not None and tmM_src.shape[0] > 0:
+        if tmM_src.shape[0] == Nt_eval:
+            return tmM_src.copy()
+        reps = int(np.ceil(Nt_eval / tmM_src.shape[0]))
+        return np.tile(tmM_src, (reps, 1))[:Nt_eval].copy()
+    return tmM
 
 
 def Buu(B,u,v):
@@ -802,15 +860,8 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
     Nt_eval = int(TIME_AMOUNT / dt)
     # Deterministic forcing/noise scaling must match `params_init()`.
     # Previously these were hard-coded to zero, which can bias mean_state.
-    tmM = np.zeros((Nt_eval, 3), dtype=np.float32)
+    tmM = build_tmM_eval(Nt_eval, params, args.params_name)
     tmS = np.zeros(Nt_eval, dtype=np.float32)
-    if 'tmM' in params and params['tmM'] is not None:
-        tmM_src = np.asarray(params['tmM'], dtype=np.float32)
-        if tmM_src.shape[0] >= Nt_eval:
-            tmM = tmM_src[:Nt_eval, :]
-        else:
-            reps = int(np.ceil(Nt_eval / tmM_src.shape[0]))
-            tmM = np.tile(tmM_src, (reps, 1))[:Nt_eval, :]
     if 'tmS' in params and params['tmS'] is not None:
         tmS_src = np.asarray(params['tmS'], dtype=np.float32)
         if tmS_src.shape[0] >= Nt_eval:

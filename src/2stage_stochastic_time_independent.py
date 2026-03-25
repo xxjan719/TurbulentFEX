@@ -9,7 +9,7 @@ sys.path.append("../src/Example/MC_triad")
 import torch
 import torch.nn as nn
 from utils import *
-from utils.helper import ResidualVAE
+from utils.helper import ResidualVAE, build_tmM_eval
 from utils.FEX_with_force import FEX_with_force_model_learned
 from utils.plot import (
     plot_mean_comparison_tfdm_vae_nn,
@@ -90,127 +90,149 @@ if choice == '1':
     data = np.load(os.path.join(independent_save_dir,'..',f'simulation_results_noise_{args.NOISE_LEVEL}.npz'))
     dt = 0.01
 
-    def learned_model_wrapper(x):
-        return FEX_model_learned(
-            x,
-            model_name=args.Model,
-            params_name=args.params_name,
-            noise_level=args.NOISE_LEVEL,
-            device=device,
+    # If a full independent-stage cache exists, skip residue / FAISS / neighbor gather / ODE_solver_chunk.
+    _choice1_cache_files = (
+        'residual_cov_truth.npy',
+        'select_row_indices.npy',
+        'short_indices.npy',
+        'u_short.npy',
+        'residuals_short.npy',
+        'ZT_Solution.npy',
+        'ODE_Solution.npy',
+    )
+    _choice1_cache_paths = [os.path.join(independent_save_dir, f) for f in _choice1_cache_files]
+    choice1_cache_ready = all(os.path.isfile(p) for p in _choice1_cache_paths)
+
+    if choice1_cache_ready:
+        print(
+            '[INFO] Found complete independent-stage cache; skipping residue generation, '
+            'FAISS indexing, neighbor batches, and ODE_solver_chunk.'
         )
-
-    def learned_model_with_force_wrapper(x):
-        return FEX_with_force_model_learned(
-            x,
-            model_name=args.Model,
-            params_name=args.params_name,
-            noise_level=args.NOISE_LEVEL,
-            device=device,
-        )
-
-    if args.params_name in ['equipart', 'cascade', 'dual_cascade', 'random_cascade']:
-        residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_wrapper, data, dt)
-    elif args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
-        residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_with_force_wrapper, data, dt)
+        print('[INFO] Files:', ', '.join(_choice1_cache_files))
+        ODE_Solution = np.load(os.path.join(independent_save_dir, 'ODE_Solution.npy'))
+        ZT_Solution = np.load(os.path.join(independent_save_dir, 'ZT_Solution.npy'))
     else:
-        raise ValueError(f"Unsupported params_name for residue generation: {args.params_name}")
-    print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
-    np.save(os.path.join(independent_save_dir,'residual_cov_truth.npy'), residual_cov_truth)
-    print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
-    
-    # Use original data structure to preserve proper indexing
-    residuals_current_train = residuals[:300,:,:]  # Shape: (MC_samples, 3, 1000)
-    u_current_train = u_current[:300,:,:]  # Shape: (MC_samples, 3, 1000)
-    
-    # Flatten while preserving trajectory structure
-    residuals_train_flat = residuals_current_train.reshape(-1, residuals_current_train.shape[1])  # Shape: (MC_samples*1000, 3)
-    # Scale residuals with scaler (per-dimension) like 2stage_stochastic_time_dependent.py / generate_second_step
-    scaler = np.ones(3) * args.DIFF_SCALE
-    residuals_train_flat = residuals_train_flat * scaler
-    u_current_train_flat = u_current_train.reshape(-1, u_current_train.shape[1])  # Shape: (MC_samples*1000, 3)
-    
-    print(f'[INFO] the residual shape is {residuals_train_flat.shape},the state of dyamics is {u_current_train_flat.shape}')
-    train_size = 100000
-    short_size = 2048
-    it_size_utrain = 2000
-    
-    it_n_index = train_size // it_size_utrain
-    print(f'[INFO] the train size is {train_size}; the short size is {short_size}; the it_size_utrain is {it_size_utrain}; the it_n_index is {it_n_index}')
-    select_row_indices = np.random.permutation(residuals_train_flat.shape[0])[:train_size]
-    u_train = u_current_train_flat[select_row_indices]
-    residuals_train = residuals_train_flat[select_row_indices]
-    print(f'[INFO] u_train shape is {u_train.shape}')
-    # Use u_train as the reference set to ensure proper indexing
-    if not os.path.exists(os.path.join(independent_save_dir,'indices_uint32.npy')):
-        indices = process_chunk_faiss_cpu(it_n_index, it_size_utrain, short_size, u_current_train_flat, u_train, train_size,3)
-        print(indices)
-        #indices = indices.astype(np.uint32)
-        #np.save(os.path.join(independent_save_dir, "indices_uint32.npy"), indices)
-        #print("[INFO] indices saved:", indices.shape, indices.dtype)
-    #else:
-    #    indices = np.load(os.path.join(independent_save_dir, "indices_uint32.npy"))
-    n_train, k = indices.shape
-    u_dim = u_current_train_flat.shape[1]
+        def learned_model_wrapper(x):
+            return FEX_model_learned(
+                x,
+                model_name=args.Model,
+                params_name=args.params_name,
+                noise_level=args.NOISE_LEVEL,
+                device=device,
+            )
 
-    if residuals_train_flat.ndim == 1:
-        z_short = np.empty((n_train, k), dtype=residuals_train_flat.dtype)
-    else:
-        z_dim = residuals_train_flat.shape[1]
-        z_short = np.empty((n_train, k, z_dim), dtype=residuals_train_flat.dtype)
+        def learned_model_with_force_wrapper(x):
+            return FEX_with_force_model_learned(
+                x,
+                model_name=args.Model,
+                params_name=args.params_name,
+                noise_level=args.NOISE_LEVEL,
+                device=device,
+            )
 
-    u_short = np.empty((n_train, k, u_dim), dtype=u_current_train_flat.dtype)
+        if args.params_name in ['equipart', 'cascade', 'dual_cascade', 'random_cascade']:
+            residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_wrapper, data, dt)
+        elif args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+            residuals, u_current, residual_cov_truth = generate_euler_residue(learned_model_with_force_wrapper, data, dt)
+        else:
+            raise ValueError(f"Unsupported params_name for residue generation: {args.params_name}")
+        print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
+        np.save(os.path.join(independent_save_dir,'residual_cov_truth.npy'), residual_cov_truth)
+        print(f'[INFO] the residual shape is {residuals.shape},the state of dyamics is {u_current.shape}')
 
-    batch_rows = 10   # try 50 / 100 / 200
+        # Use original data structure to preserve proper indexing
+        residuals_current_train = residuals[:300,:,:]  # Shape: (MC_samples, 3, 1000)
+        u_current_train = u_current[:300,:,:]  # Shape: (MC_samples, 3, 1000)
 
-    for start in range(0, n_train, batch_rows):
-        end = min(start + batch_rows, n_train)
-        idx_batch = indices[start:end]
+        # Flatten while preserving trajectory structure
+        residuals_train_flat = residuals_current_train.reshape(-1, residuals_current_train.shape[1])  # Shape: (MC_samples*1000, 3)
+        # Scale residuals with scaler (per-dimension) like 2stage_stochastic_time_dependent.py / generate_second_step
+        scaler = np.ones(3) * args.DIFF_SCALE
+        residuals_train_flat = residuals_train_flat * scaler
+        u_current_train_flat = u_current_train.reshape(-1, u_current_train.shape[1])  # Shape: (MC_samples*1000, 3)
 
-        u_short_batch = u_current_train_flat[idx_batch]
-        z_short_batch = residuals_train_flat[idx_batch]
+        print(f'[INFO] the residual shape is {residuals_train_flat.shape},the state of dyamics is {u_current_train_flat.shape}')
+        train_size = 100000
+        short_size = 2048
+        it_size_utrain = 2000
 
-        u_short[start:end] = u_short_batch
-        z_short[start:end] = z_short_batch
+        it_n_index = train_size // it_size_utrain
+        print(f'[INFO] the train size is {train_size}; the short size is {short_size}; the it_size_utrain is {it_size_utrain}; the it_n_index is {it_n_index}')
+        select_row_indices = np.random.permutation(residuals_train_flat.shape[0])[:train_size]
+        u_train = u_current_train_flat[select_row_indices]
+        residuals_train = residuals_train_flat[select_row_indices]
+        print(f'[INFO] u_train shape is {u_train.shape}')
+        # Use u_train as the reference set to ensure proper indexing
+        if not os.path.exists(os.path.join(independent_save_dir,'indices_uint32.npy')):
+            indices = process_chunk_faiss_cpu(it_n_index, it_size_utrain, short_size, u_current_train_flat, u_train, train_size,3)
+            print(indices)
+            #indices = indices.astype(np.uint32)
+            #np.save(os.path.join(independent_save_dir, "indices_uint32.npy"), indices)
+            #print("[INFO] indices saved:", indices.shape, indices.dtype)
+        #else:
+        #    indices = np.load(os.path.join(independent_save_dir, "indices_uint32.npy"))
+        n_train, k = indices.shape
+        u_dim = u_current_train_flat.shape[1]
 
-        print(f"[INFO] saved batch {start}:{end}, "
-          f"u_short_batch shape is {u_short_batch.shape}, "
-          f"z_short_batch shape is {z_short_batch.shape}")
+        if residuals_train_flat.ndim == 1:
+            z_short = np.empty((n_train, k), dtype=residuals_train_flat.dtype)
+        else:
+            z_dim = residuals_train_flat.shape[1]
+            z_short = np.empty((n_train, k, z_dim), dtype=residuals_train_flat.dtype)
 
-        del u_short_batch, z_short_batch
+        u_short = np.empty((n_train, k, u_dim), dtype=u_current_train_flat.dtype)
 
-    print(f'[INFO] u_short shape is {u_short.shape}, z_short shape is {z_short.shape}')
-    #===================================================================================
-    if not os.path.exists(os.path.join(independent_save_dir,'ODE_Solution.npy')) and not os.path.exists(os.path.join(independent_save_dir,'ZT_Solution.npy')):
-        ZT_Solution = np.random.randn(train_size,3)
-        ODE_Solution = np.zeros((train_size,3))
-        it_size = min(train_size,60000)
-        it_n = int(train_size/it_size)
-        ODEsolver_time_steps = 2000
-        torch.cuda.empty_cache()
-        for jj in range(it_n):
-            start_indx = jj*it_size
-            end_idx = min((jj+1)*it_size,train_size)
-            print(f'[INFO] the start index is {start_indx}, the end index is {end_idx}')
-            it_ZT =torch.tensor(ZT_Solution[start_indx:end_idx,:],dtype=torch.float32,device=device)
-            it_u0 = torch.tensor(u_train[start_indx:end_idx,:],dtype=torch.float32,device=device)
+        batch_rows = 10   # try 50 / 100 / 200
 
-            u_mini_batch = torch.tensor(u_short[start_indx:end_idx]).to(device)
-            z_mini_batch = torch.tensor(z_short[start_indx:end_idx]).to(device)
-            ODE_Solution[start_indx:end_idx,:] = ODE_solver_chunk(it_ZT,u_mini_batch,z_mini_batch,it_u0,ODEsolver_time_steps).to('cpu').detach().numpy()
-            if jj % 5==0:
-                print(f'[INFO] the {jj}th iteration is done')
-            
-        print(f'[INFO] the ODE solution shape is: {ODE_Solution.shape}')
-        np.save(os.path.join(independent_save_dir, "ODE_Solution.npy"), ODE_Solution)
-        np.save(os.path.join(independent_save_dir, "ZT_Solution.npy"), ZT_Solution)
-        np.save(os.path.join(independent_save_dir, "u_short.npy"), u_short)
-        np.save(os.path.join(independent_save_dir, "residuals_short.npy"), z_short)
-        np.save(os.path.join(independent_save_dir, "select_row_indices.npy"), select_row_indices)
-        np.save(os.path.join(independent_save_dir, "short_indices.npy"), indices)
-    else:
-        print('[INFO] the ODE solution has already been generated, skip the generation process.')
-        ODE_Solution = np.load(os.path.join(independent_save_dir, "ODE_Solution.npy"))
-        ZT_Solution = np.load(os.path.join(independent_save_dir, "ZT_Solution.npy"))
+        for start in range(0, n_train, batch_rows):
+            end = min(start + batch_rows, n_train)
+            idx_batch = indices[start:end]
+
+            u_short_batch = u_current_train_flat[idx_batch]
+            z_short_batch = residuals_train_flat[idx_batch]
+
+            u_short[start:end] = u_short_batch
+            z_short[start:end] = z_short_batch
+
+            print(f"[INFO] saved batch {start}:{end}, "
+              f"u_short_batch shape is {u_short_batch.shape}, "
+              f"z_short_batch shape is {z_short_batch.shape}")
+
+            del u_short_batch, z_short_batch
+
+        print(f'[INFO] u_short shape is {u_short.shape}, z_short shape is {z_short.shape}')
+        #===================================================================================
+        if not os.path.exists(os.path.join(independent_save_dir,'ODE_Solution.npy')) and not os.path.exists(os.path.join(independent_save_dir,'ZT_Solution.npy')):
+            ZT_Solution = np.random.randn(train_size,3)
+            ODE_Solution = np.zeros((train_size,3))
+            it_size = min(train_size,60000)
+            it_n = int(train_size/it_size)
+            ODEsolver_time_steps = 2000
+            torch.cuda.empty_cache()
+            for jj in range(it_n):
+                start_indx = jj*it_size
+                end_idx = min((jj+1)*it_size,train_size)
+                print(f'[INFO] the start index is {start_indx}, the end index is {end_idx}')
+                it_ZT =torch.tensor(ZT_Solution[start_indx:end_idx,:],dtype=torch.float32,device=device)
+                it_u0 = torch.tensor(u_train[start_indx:end_idx,:],dtype=torch.float32,device=device)
+
+                u_mini_batch = torch.tensor(u_short[start_indx:end_idx]).to(device)
+                z_mini_batch = torch.tensor(z_short[start_indx:end_idx]).to(device)
+                ODE_Solution[start_indx:end_idx,:] = ODE_solver_chunk(it_ZT,u_mini_batch,z_mini_batch,it_u0,ODEsolver_time_steps).to('cpu').detach().numpy()
+                if jj % 5==0:
+                    print(f'[INFO] the {jj}th iteration is done')
+
+            print(f'[INFO] the ODE solution shape is: {ODE_Solution.shape}')
+            np.save(os.path.join(independent_save_dir, "ODE_Solution.npy"), ODE_Solution)
+            np.save(os.path.join(independent_save_dir, "ZT_Solution.npy"), ZT_Solution)
+            np.save(os.path.join(independent_save_dir, "u_short.npy"), u_short)
+            np.save(os.path.join(independent_save_dir, "residuals_short.npy"), z_short)
+            np.save(os.path.join(independent_save_dir, "select_row_indices.npy"), select_row_indices)
+            np.save(os.path.join(independent_save_dir, "short_indices.npy"), indices)
+        else:
+            print('[INFO] the ODE solution has already been generated, skip the generation process.')
+            ODE_Solution = np.load(os.path.join(independent_save_dir, "ODE_Solution.npy"))
+            ZT_Solution = np.load(os.path.join(independent_save_dir, "ZT_Solution.npy"))
     
     is_finite_ODE_Solution = np.isfinite(ODE_Solution) &~np.isnan(ODE_Solution)
     print(f'[INFO] the number of finite ODE solution is {np.sum(is_finite_ODE_Solution)}')
@@ -274,7 +296,7 @@ if choice == '1':
         optimizer = torch.optim.Adam(Neural_Network.parameters(), lr=learning_rate, weight_decay=1e-6)
         criterion = torch.nn.MSELoss()
         best_valid_err = 5.0
-        n_iter = 200000
+        n_iter = 2000
         for j in range(n_iter):
             optimizer.zero_grad()
             pred = Neural_Network(ZT_train_normal)
@@ -615,25 +637,8 @@ elif choice == '4':
     # Use the forcing/noise scaling defined by `params_init`.
     # For example, `dual_cascade` has a *constant* forcing tmM = [0, -1, 1],
     # so hard-coding tmM=0 breaks the deterministic mean balance.
-    tmM = np.zeros((Nt_eval, 3), dtype=np.float32)
+    tmM = build_tmM_eval(Nt_eval, params, args.params_name)
     tmS = np.zeros(Nt_eval, dtype=np.float32)
-    if 'tmM' in params and params['tmM'] is not None:
-        tmM_src = np.asarray(params['tmM'], dtype=np.float32)
-        if tmM_src.shape[0] == Nt_eval:
-            tmM = tmM_src
-        elif args.params_name == 'periodic_cascade' and 'fr' in params:
-            # `params_init` only fills tmM for j in 0..Nt-1 with T=10. Tiling repeats that block, so at t=10
-            # forcing jumps back to sin(0) instead of sin(fr*10). Ground truth then looks "wrong" or frozen
-            # vs the learned FEX (continuous sin in t). Match MC_triad: tmM[k] = sin(fr * k * dt) for k = idx-1.
-            fr = float(params['fr'])
-            k = np.arange(Nt_eval, dtype=np.float32)
-            s = np.sin(fr * dt * k).astype(np.float32)
-            tmM[:, 0] = s
-            tmM[:, 1] = s
-            tmM[:, 2] = s
-        else:
-            reps = int(np.ceil(Nt_eval / tmM_src.shape[0]))
-            tmM = np.tile(tmM_src, (reps, 1))[:Nt_eval]
     if 'tmS' in params and params['tmS'] is not None:
         tmS_src = np.asarray(params['tmS'], dtype=np.float32)
         if tmS_src.shape[0] == Nt_eval:
