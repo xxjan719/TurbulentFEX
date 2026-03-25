@@ -3346,7 +3346,7 @@ def plot_state_projections_cases_3x9(
                 Hplot = H.T
                 hist_data[(r, ci, pidx)] = (Xc, Yc, Hplot)
 
-    fig, axes = plt.subplots(len(times), n_cases * 3, figsize=(54, 18))
+    fig, axes = plt.subplots(len(times), n_cases * 3, figsize=(72, 24))
     mappable = None
     level_vals = np.linspace(0.0, 1.0, int(levels) + 1)[1:]
 
@@ -3368,21 +3368,23 @@ def plot_state_projections_cases_3x9(
                     ax.set_xlabel(pair_labels[pidx][0], fontsize=fs)
                 else:
                     ax.set_xlabel("")
+                    ax.set_xticklabels([])
                 # Keep u2 on left side for the first projection in each case block.
                 if pidx == 0:
                     ax.set_ylabel("u2", fontsize=fs, labelpad=3)
                     ax.yaxis.set_label_coords(-0.13, 0.5)
                 else:
                     ax.set_ylabel("")
+                    ax.set_yticklabels([])
 
                 if r == 0:
                     ax.set_title(proj_titles[pidx], fontsize=fs, pad=14)
 
                 ax.grid(True, alpha=0.2)
-                ax.tick_params(axis="both", labelsize=max(fs - 6, 10))
+                ax.tick_params(axis="both", labelsize=max(fs - 10, 10))
 
     # Layout and grouped case headers.
-    fig.subplots_adjust(left=0.09, right=0.90, top=0.90, bottom=0.10, wspace=0.35, hspace=0.40)
+    fig.subplots_adjust(left=0.10, right=0.88, top=0.90, bottom=0.13, wspace=0.55, hspace=0.62)
 
     # Row labels on the left.
     row_y = [0.80, 0.50, 0.20]
@@ -3391,14 +3393,14 @@ def plot_state_projections_cases_3x9(
 
     # Case labels centered above each 3-column block.
     for ci, (case_name, _) in enumerate(case_items):
-        x_center = 0.10 + (ci * 3 + 1.5) * (0.80 / (n_cases * 3))
+        x_center = 0.10 + (ci * 3 + 1.5) * (0.78 / (n_cases * 3))
         fig.text(x_center, 0.965, case_name, fontsize=fs + 2, ha="center", va="center")
 
     if mappable is not None:
-        cax = fig.add_axes([0.92, 0.14, 0.015, 0.72])
+        cax = fig.add_axes([0.90, 0.17, 0.012, 0.66])
         cbar = fig.colorbar(mappable, cax=cax)
         cbar.set_label("Normalized density (per panel)", fontsize=fs)
-        cbar.ax.tick_params(labelsize=max(fs - 8, 10))
+        cbar.ax.tick_params(labelsize=max(fs - 12, 10))
 
     if save_path is not None:
         os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
