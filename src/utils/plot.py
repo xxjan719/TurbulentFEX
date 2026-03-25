@@ -657,7 +657,7 @@ def plot_cross_term_vs_noise(coeff,
 
     # Font sizes tuned to avoid header overlap in the saved PDF.
     label_fs = 14
-    title_fs = 16
+    title_fs = 14
     tick_fs = 12
     legend_fs = 12
 
@@ -708,7 +708,7 @@ def plot_cross_term_vs_noise(coeff,
     # Overall layout first (leave a bit more headroom)
     # Keep extra top margin so the shared legend never overlaps panel titles,
     # but don't float the legend too high above the panels.
-    fig.tight_layout(rect=[0, 0, 1, 0.78])
+    fig.tight_layout(rect=[0, 0, 1, 0.75])
 
     # Shared legend as a single row just above the axes area, with a bigger box
     if legend_handles:
@@ -716,7 +716,7 @@ def plot_cross_term_vs_noise(coeff,
             legend_handles,
             legend_labels,
             loc='upper center',
-            bbox_to_anchor=(0.5, 1.03),
+            bbox_to_anchor=(0.5, 1.06),
             ncol=len(legend_handles),
             frameon=True,
             fancybox=True,
