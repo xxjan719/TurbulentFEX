@@ -245,6 +245,6 @@ elif choice == "7":
         dt=rollout["dt"],
         times=(5, 10, 20),
         save_path=out_png,
-        fs=28,
+        fs=42,
     )
     print(f"[SAVED] {saved}")

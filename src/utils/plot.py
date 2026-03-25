@@ -3307,7 +3307,7 @@ def plot_state_projections_cases_3x9(
     bins: int = 70,
     levels: int = 12,
     cmap: str = "jet",
-    fs: int = 28,
+    fs: int = 42,
 ):
     """
     Plot 3x9 projection panel:
