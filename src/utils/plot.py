@@ -2322,7 +2322,7 @@ def plot_discussion5_offdiagonal_cov_grid(
             y_dep = np.asarray(y_dep_full).reshape(-1)[:n_dep]
             t_dep = Time_dep[:n_dep]
 
-            ax.plot(Time_ind, y_gt, "-", color=gt_color, linewidth=2.0, label="ground truth")
+            ax.plot(Time_ind, y_gt, "-", color=gt_color, linewidth=2.0, label="Ground Truth")
             ax.plot(
                 Time_ind,
                 y_ind,
@@ -2350,7 +2350,7 @@ def plot_discussion5_offdiagonal_cov_grid(
             ax.grid(False)
 
     handles = [
-        Line2D([0], [0], color=gt_color, lw=2.5, linestyle="-", label="ground truth"),
+        Line2D([0], [0], color=gt_color, lw=2.5, linestyle="-", label="Ground Truth"),
         Line2D(
             [0],
             [0],
