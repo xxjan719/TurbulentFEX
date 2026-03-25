@@ -3364,24 +3364,21 @@ def plot_state_projections_cases_3x9(
                     ax.contour(Xc, Yc, Hnorm, levels=level_vals, colors="black", linewidths=0.8, alpha=0.95)
                     mappable = cf
 
+                # Horizontal axis = first component, vertical = second (e.g. u1–u2 → x=u1, y=u2).
+                xname, yname = pair_labels[pidx][0], pair_labels[pidx][1]
                 if r == len(times) - 1:
-                    ax.set_xlabel(pair_labels[pidx][0], fontsize=fs)
+                    ax.set_xlabel(xname, fontsize=fs, labelpad=10)
                 else:
                     ax.set_xlabel("")
                     ax.set_xticklabels([])
-                # Keep u2 on left side for the first projection in each case block.
-                if pidx == 0:
-                    ax.set_ylabel("u2", fontsize=fs, labelpad=3)
-                    ax.yaxis.set_label_coords(-0.13, 0.5)
-                else:
-                    ax.set_ylabel("")
-                    ax.set_yticklabels([])
+                ax.set_ylabel(yname, fontsize=fs, labelpad=10)
+                ax.yaxis.set_label_coords(-0.08, 0.5)
 
                 if r == 0:
-                    ax.set_title(proj_titles[pidx], fontsize=fs, pad=14)
+                    ax.set_title(proj_titles[pidx], fontsize=fs, pad=18)
 
                 ax.grid(True, alpha=0.2)
-                ax.tick_params(axis="both", labelsize=max(fs - 10, 10))
+                ax.tick_params(axis="both", labelsize=max(fs - 10, 12))
 
     # Layout and grouped case headers.
     fig.subplots_adjust(left=0.10, right=0.88, top=0.90, bottom=0.13, wspace=0.55, hspace=0.62)
@@ -3394,7 +3391,7 @@ def plot_state_projections_cases_3x9(
     # Case labels centered above each 3-column block.
     for ci, (case_name, _) in enumerate(case_items):
         x_center = 0.10 + (ci * 3 + 1.5) * (0.78 / (n_cases * 3))
-        fig.text(x_center, 0.965, case_name, fontsize=fs + 2, ha="center", va="center")
+        fig.text(x_center, 0.965, case_name, fontsize=fs, ha="center", va="center")
 
     if mappable is not None:
         cax = fig.add_axes([0.90, 0.17, 0.012, 0.66])
