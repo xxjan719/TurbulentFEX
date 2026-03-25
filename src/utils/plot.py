@@ -3307,7 +3307,7 @@ def plot_state_projections_cases_3x9(
     bins: int = 70,
     levels: int = 12,
     cmap: str = "jet",
-    fs: int = 20,
+    fs: int = 28,
 ):
     """
     Plot 3x9 projection panel:
@@ -3324,9 +3324,8 @@ def plot_state_projections_cases_3x9(
     pair_labels = [("u1", "u2"), ("u2", "u3"), ("u1", "u3")]
     proj_titles = ["u1-u2 projection", "u2-u3 projection", "u1-u3 projection"]
 
-    # First pass: compute histograms and global vmax for consistent color scale.
+    # First pass: compute panel histograms.
     hist_data = {}
-    global_vmax = 0.0
     for ci, (_, u_all) in enumerate(case_items):
         if u_all.ndim != 3 or u_all.shape[1] != 3:
             raise ValueError(f"u_all for case index {ci} must have shape (N,3,T); got {u_all.shape}")
@@ -3345,15 +3344,11 @@ def plot_state_projections_cases_3x9(
                 yc = 0.5 * (yedges[:-1] + yedges[1:])
                 Xc, Yc = np.meshgrid(xc, yc, indexing="xy")
                 Hplot = H.T
-                vmax = float(np.max(Hplot))
-                global_vmax = max(global_vmax, vmax)
                 hist_data[(r, ci, pidx)] = (Xc, Yc, Hplot)
 
-    fig, axes = plt.subplots(len(times), n_cases * 3, figsize=(46, 15))
+    fig, axes = plt.subplots(len(times), n_cases * 3, figsize=(54, 18))
     mappable = None
-    level_vals = None
-    if global_vmax > 0:
-        level_vals = np.linspace(0.0, global_vmax, int(levels) + 1)[1:]
+    level_vals = np.linspace(0.0, 1.0, int(levels) + 1)[1:]
 
     for r, t in enumerate(times):
         for ci, (case_name, _) in enumerate(case_items):
@@ -3362,9 +3357,11 @@ def plot_state_projections_cases_3x9(
                 ax = axes[r, c]
                 Xc, Yc, Hplot = hist_data[(r, ci, pidx)]
 
-                if level_vals is not None:
-                    cf = ax.contourf(Xc, Yc, Hplot, levels=level_vals, cmap=cmap)
-                    ax.contour(Xc, Yc, Hplot, levels=level_vals, colors="black", linewidths=0.6, alpha=0.9)
+                panel_max = float(np.max(Hplot))
+                if panel_max > 0:
+                    Hnorm = Hplot / panel_max
+                    cf = ax.contourf(Xc, Yc, Hnorm, levels=level_vals, cmap=cmap)
+                    ax.contour(Xc, Yc, Hnorm, levels=level_vals, colors="black", linewidths=0.8, alpha=0.95)
                     mappable = cf
 
                 if r == len(times) - 1:
@@ -3385,7 +3382,7 @@ def plot_state_projections_cases_3x9(
                 ax.tick_params(axis="both", labelsize=max(fs - 6, 10))
 
     # Layout and grouped case headers.
-    fig.subplots_adjust(left=0.10, right=0.90, top=0.90, bottom=0.10, wspace=0.35, hspace=0.40)
+    fig.subplots_adjust(left=0.09, right=0.90, top=0.90, bottom=0.10, wspace=0.35, hspace=0.40)
 
     # Row labels on the left.
     row_y = [0.80, 0.50, 0.20]
@@ -3400,7 +3397,7 @@ def plot_state_projections_cases_3x9(
     if mappable is not None:
         cax = fig.add_axes([0.92, 0.14, 0.015, 0.72])
         cbar = fig.colorbar(mappable, cax=cax)
-        cbar.set_label("Probability density", fontsize=fs)
+        cbar.set_label("Normalized density (per panel)", fontsize=fs)
         cbar.ax.tick_params(labelsize=max(fs - 8, 10))
 
     if save_path is not None:
