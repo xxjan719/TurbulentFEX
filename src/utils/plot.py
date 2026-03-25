@@ -3343,7 +3343,7 @@ def plot_state_projections_cases_3x9(
 
         pairs = [(0, 1), (1, 2), (0, 2)]
         pair_labels = [("u1", "u2"), ("u2", "u3"), ("u1", "u3")]
-        proj_titles = ["u1-u2 projection", "u2-u3 projection", "u1-u3 projection"]
+        proj_titles = ["u1-u2", "u2-u3", "u1-u3"]
 
         # First pass: compute panel histograms.
         hist_data = {}
@@ -3393,8 +3393,8 @@ def plot_state_projections_cases_3x9(
                         ax.set_xlabel("")
                         ax.set_xticklabels([])
                     # Y label: extra padding + shift left so it does not overlap tick numerals.
-                    ax.set_ylabel(yname, fontsize=fs, labelpad=28)
-                    ax.yaxis.set_label_coords(-0.25, 0.5)
+                    ax.set_ylabel(yname, fontsize=fs, labelpad=24)
+                    ax.yaxis.set_label_coords(-0.20, 0.5)
 
                     if r == 0:
                         ax.set_title(proj_titles[pidx], fontsize=fs, pad=22)
@@ -3408,7 +3408,7 @@ def plot_state_projections_cases_3x9(
         # Row labels on the left.
         row_y = [0.80, 0.50, 0.20]
         for yy, t in zip(row_y, times):
-            fig.text(0.05, yy, f"t={t}", fontsize=fs, va="center", ha="left")
+            fig.text(0.07, yy, f"t={t}", fontsize=fs, va="center", ha="left")
 
         # Case labels centered above each 3-column block.
         for ci, (case_name, _) in enumerate(case_items):
