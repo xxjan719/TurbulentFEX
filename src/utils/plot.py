@@ -3307,7 +3307,7 @@ def plot_state_projections_cases_3x9(
     bins: int = 70,
     levels: int = 12,
     cmap: str = "jet",
-    fs: int = 52,
+    fs: int = 56,
 ):
     """
     Plot 3x9 projection panel:
@@ -3396,7 +3396,8 @@ def plot_state_projections_cases_3x9(
                     ax.set_ylabel(yname, fontsize=fs, labelpad=24)
                     # Keep Forward/Dual case y-labels farther left.
                     if ci >= 1:
-                        ax.yaxis.set_label_coords(-0.24, 0.5)
+                        # Shift Forward/Cascade and Dual/Cascade y labels further left.
+                        ax.yaxis.set_label_coords(-0.27, 0.5)
                     else:
                         ax.yaxis.set_label_coords(-0.20, 0.5)
 
