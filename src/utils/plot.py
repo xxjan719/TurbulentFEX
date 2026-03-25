@@ -3397,7 +3397,7 @@ def plot_state_projections_cases_3x9(
                     # Keep Forward/Dual case y-labels farther left.
                     if ci >= 1:
                         # Shift Forward/Cascade and Dual/Cascade y labels further left.
-                        ax.yaxis.set_label_coords(-0.27, 0.5)
+                        ax.yaxis.set_label_coords(-0.30, 0.5)
                     else:
                         ax.yaxis.set_label_coords(-0.20, 0.5)
 
