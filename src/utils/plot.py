@@ -706,8 +706,9 @@ def plot_cross_term_vs_noise(coeff,
         ax.tick_params(axis='both', labelsize=tick_fs)
 
     # Overall layout first (leave a bit more headroom)
-    # Keep more top margin so the shared legend never overlaps panel titles.
-    fig.tight_layout(rect=[0, 0, 1, 0.72])
+    # Keep extra top margin so the shared legend never overlaps panel titles,
+    # but don't float the legend too high above the panels.
+    fig.tight_layout(rect=[0, 0, 1, 0.78])
 
     # Shared legend as a single row just above the axes area, with a bigger box
     if legend_handles:
@@ -715,11 +716,11 @@ def plot_cross_term_vs_noise(coeff,
             legend_handles,
             legend_labels,
             loc='upper center',
-            bbox_to_anchor=(0.5, 1.12),
+            bbox_to_anchor=(0.5, 1.03),
             ncol=len(legend_handles),
             frameon=True,
             fancybox=True,
-            borderaxespad=0.2,
+            borderaxespad=0.35,
             title=None,
             fontsize=legend_fs,
             handlelength=2.0,
