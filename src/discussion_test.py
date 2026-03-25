@@ -17,6 +17,7 @@ from utils.plot import (
     plot_triad_3d_time_grid_matplotlib_cloud_3x3_times,
     run_discussion_choice4_triad_grid,
     run_discussion_choice5_offdiagonal_cov_grid,
+    run_discussion_cov_moments_grid,
 )
 from utils.helper import (
     get_coefficients,
@@ -59,15 +60,17 @@ print("SECOND STAGE: STOCHASTIC OPTIONS")
 print("="*60)
 print("1. Discussion 2: different noise levels test")
 print("2. Discussion 3: different sample sizes test")
-print("3. Discussion 4: covariance diagonals + third moments (3×7 grid: equipart / cascade / dual_cascade)")
-print("4. Discussion 5: time independent vs time dependent (composite figure)")
+print("3. Discussion 4: covariance diagonals + third moments (3×7 grid: equipart / Forward Cascade / dual_cascade)")
+print("4. Discussion 5: off-diagonal covariances (3×3) time indep vs dep")
+print("5. Diffusion (random_cascade): cov(u_i,u_i) + all ⟨M⟩ (1×7), fontsize 28")
+print("6. Periodic + random deterministic forcing: same columns (2×7), fontsize 28")
 
 while True:
     # choice = '1'  # uncomment for debugging
-    choice = input("\nChoose option (1, 2, 3, or 4): ").strip()
-    if choice in ['1', '2', '3', '4']:
+    choice = input("\nChoose option (1–6): ").strip()
+    if choice in ["1", "2", "3", "4", "5", "6"]:
         break
-    print("Please enter '1', '2', '3', or '4'.")
+    print("Please enter a number from 1 to 6.")
 
 if choice == '1':
     print("=" * 60)
@@ -159,7 +162,7 @@ elif choice == '3':
 
 elif choice == '4':
     print("=" * 60)
-    print("[INFO] Discussion 5: 3×3 off-diagonal cov + composite figure.")
+    print("[INFO] Discussion 5: 3×3 off-diagonal cov (time indep vs dep).")
     print("=" * 60)
     run_discussion_choice5_offdiagonal_cov_grid(
         args,
@@ -171,4 +174,45 @@ elif choice == '4':
         ),
         fs=20,
     )
-    # discussion_choice5_rollout(args, device, plot_composite=True)
+
+elif choice == "5":
+    print("=" * 60)
+    print("[INFO] Diffusion (random_cascade): 1×7 cov diagonals + third moments, fs=28.")
+    print("=" * 60)
+    run_discussion_cov_moments_grid(
+        args,
+        base_path=base_path,
+        dir_example=DIR_EXAMPLE,
+        model_name=args.Model,
+        rollout_worker=lambda plot_composite=False: discussion_choice5_rollout(
+            args, device, plot_composite=plot_composite
+        ),
+        regimes=("random_cascade",),
+        row_labels=("Random cascade",),
+        save_filename="discussion_diffusion_random_cascade_cov_moments_grid.pdf",
+        fs=28,
+        log_inset_row_index=None,
+        log_label="discussion diffusion 1×7 grid",
+    )
+
+elif choice == "6":
+    print("=" * 60)
+    print(
+        "[INFO] Periodic cascade + random cascade (deterministic): 2×7 cov + ⟨M⟩, fs=28."
+    )
+    print("=" * 60)
+    run_discussion_cov_moments_grid(
+        args,
+        base_path=base_path,
+        dir_example=DIR_EXAMPLE,
+        model_name=args.Model,
+        rollout_worker=lambda plot_composite=False: discussion_choice5_rollout(
+            args, device, plot_composite=plot_composite
+        ),
+        regimes=("periodic_cascade", "random_cascade_deterministic"),
+        row_labels=("Periodic cascade", "Random cascade"),
+        save_filename="discussion_periodic_random_det_cov_moments_grid.pdf",
+        fs=28,
+        log_inset_row_index=None,
+        log_label="discussion periodic + random det 2×7 grid",
+    )

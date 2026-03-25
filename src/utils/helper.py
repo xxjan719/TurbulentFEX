@@ -125,6 +125,31 @@ def check_allowed_terms_periodic_cascade(expression, dimension):
     return {'valid': has_allowed_var and has_time_var, 'terms_present': terms_present}
 
 
+def random_cascade_diffusion_forcing_for_eval(n_steps: int, Dt: float, seed: int = 42):
+    """
+    Mean forcing tmM and noise-modulation tmS for ``random_cascade`` (diffusive OU drivers),
+    same recursion as MC_triad.params_init('random_cascade'), length n_steps for indices 0..n_steps-1.
+    """
+    fr = 2 * np.pi / 2
+    theta = fr / (2 * np.pi)
+    sigma = np.sqrt(2 * theta)
+    rng = np.random.RandomState(seed)
+    tmS = np.zeros(n_steps + 1, dtype=np.float64)
+    tmM = np.zeros((n_steps + 1, 3), dtype=np.float64)
+    tmt = 0.0
+    for j in range(n_steps):
+        dW1 = np.sqrt(Dt / 4) * rng.randn(4)
+        winc = np.sum(dW1)
+        tmS[j + 1] = tmS[j] - theta * tmS[j] * Dt + sigma * winc
+        dW1 = np.sqrt(Dt / 4) * rng.randn(4)
+        winc = np.sum(dW1)
+        tmt = tmt - theta * tmt * Dt + sigma * winc
+        tmM[j + 1, :] = tmt
+    tmS_out = (0.8 * tmS[:n_steps]).astype(np.float32)
+    tmM_out = tmM[:n_steps].astype(np.float32)
+    return tmM_out, tmS_out
+
+
 def random_cascade_deterministic_tmM_ou(Nt_eval: int, Dt: float, seed: int = 42) -> np.ndarray:
     """OU forcing path; same recursion as MC_triad.params_init('random_cascade_deterministic')."""
     theta = 5.0
@@ -842,7 +867,7 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
     m0,var0 = MC_triad_initial_value()
     params = params_init(args.params_name)
     # Choose the correct model based on params_name
-    if args.params_name in ['equipart', 'cascade', 'dual_cascade']:
+    if args.params_name in ['equipart', 'cascade', 'dual_cascade', 'random_cascade']:
         FEX_model_check = FEX_model_learned
     elif args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
         FEX_model_check = FEX_with_force_model_learned
@@ -858,17 +883,21 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
     scaler = args.DIFF_SCALE
     
     Nt_eval = int(TIME_AMOUNT / dt)
-    # Deterministic forcing/noise scaling must match `params_init()`.
-    # Previously these were hard-coded to zero, which can bias mean_state.
-    tmM = build_tmM_eval(Nt_eval, params, args.params_name)
-    tmS = np.zeros(Nt_eval, dtype=np.float32)
-    if 'tmS' in params and params['tmS'] is not None:
-        tmS_src = np.asarray(params['tmS'], dtype=np.float32)
-        if tmS_src.shape[0] >= Nt_eval:
-            tmS = tmS_src[:Nt_eval]
-        else:
-            reps = int(np.ceil(Nt_eval / tmS_src.shape[0]))
-            tmS = np.tile(tmS_src, reps)[:Nt_eval]
+    # Forcing / noise scaling must match `params_init()` (or seed-consistent replay for long horizons).
+    if args.params_name == "random_cascade":
+        tmM, tmS = random_cascade_diffusion_forcing_for_eval(
+            Nt_eval, float(params["Dt"]), seed=42
+        )
+    else:
+        tmM = build_tmM_eval(Nt_eval, params, args.params_name)
+        tmS = np.zeros(Nt_eval, dtype=np.float32)
+        if "tmS" in params and params["tmS"] is not None:
+            tmS_src = np.asarray(params["tmS"], dtype=np.float32)
+            if tmS_src.shape[0] >= Nt_eval:
+                tmS = tmS_src[:Nt_eval]
+            else:
+                reps = int(np.ceil(Nt_eval / tmS_src.shape[0]))
+                tmS = np.tile(tmS_src, reps)[:Nt_eval]
     mean_state_pred = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     mean_state_record = np.zeros((3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     mean_state_record[:, 0] = np.mean(initial_state, axis=0)
@@ -977,18 +1006,27 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
 
     tmM_dep = np.zeros((Nt_dep, 3), dtype=np.float32)
     tmS_dep = np.zeros(Nt_dep, dtype=np.float32)
-    if 'tmM' in params and params['tmM'] is not None:
-        if params['tmM'].shape[0] >= Nt_dep:
-            tmM_dep[:] = params['tmM'][:Nt_dep, :].astype(np.float32)
+    if args.params_name == "random_cascade":
+        tmM_dep[:] = tmM[:Nt_dep, :]
+        tmS_dep[:] = tmS[:Nt_dep]
+    elif "tmM" in params and params["tmM"] is not None:
+        if params["tmM"].shape[0] >= Nt_dep:
+            tmM_dep[:] = params["tmM"][:Nt_dep, :].astype(np.float32)
         else:
-            rep = int(np.ceil(Nt_dep / params['tmM'].shape[0]))
-            tmM_dep[:] = np.tile(params['tmM'].astype(np.float32), (rep, 1))[:Nt_dep, :]
-    if 'tmS' in params and params['tmS'] is not None:
-        if params['tmS'].shape[0] >= Nt_dep:
-            tmS_dep[:] = params['tmS'][:Nt_dep].astype(np.float32)
+            rep = int(np.ceil(Nt_dep / params["tmM"].shape[0]))
+            tmM_dep[:] = np.tile(params["tmM"].astype(np.float32), (rep, 1))[:Nt_dep, :]
+        if "tmS" in params and params["tmS"] is not None:
+            if params["tmS"].shape[0] >= Nt_dep:
+                tmS_dep[:] = params["tmS"][:Nt_dep].astype(np.float32)
+            else:
+                rep_s = int(np.ceil(Nt_dep / params["tmS"].shape[0]))
+                tmS_dep[:] = np.tile(params["tmS"].astype(np.float32), rep_s)[:Nt_dep]
+    elif "tmS" in params and params["tmS"] is not None:
+        if params["tmS"].shape[0] >= Nt_dep:
+            tmS_dep[:] = params["tmS"][:Nt_dep].astype(np.float32)
         else:
-            rep_s = int(np.ceil(Nt_dep / params['tmS'].shape[0]))
-            tmS_dep[:] = np.tile(params['tmS'].astype(np.float32), rep_s)[:Nt_dep]
+            rep_s = int(np.ceil(Nt_dep / params["tmS"].shape[0]))
+            tmS_dep[:] = np.tile(params["tmS"].astype(np.float32), rep_s)[:Nt_dep]
 
     # Dependent arrays (only meaningful for t <= TIME_DEP_AMOUNT)
     mean_state_record_dependent = np.zeros((3, Nt_dep + 1), dtype=np.float32)
@@ -1214,7 +1252,10 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
 
         def det_update_from_state(state_np):
             state_tensor = torch.tensor(state_np, dtype=torch.float32).to(device)
-            if args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+            if args.params_name in [
+                "periodic_cascade",
+                "random_cascade_deterministic",
+            ]:
                 current_time = idx * dt
                 time_column = torch.full(
                     (state_tensor.shape[0], 1),
@@ -1352,7 +1393,10 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
             current_tensor_dep = torch.tensor(
                 current_pred_state_dependent, dtype=torch.float32
             ).to(device)
-            if args.params_name in ['periodic_cascade', 'random_cascade_deterministic']:
+            if args.params_name in [
+                "periodic_cascade",
+                "random_cascade_deterministic",
+            ]:
                 current_time = idx * dt
                 time_column_dep = torch.full(
                     (current_tensor_dep.shape[0], 1),
@@ -1544,6 +1588,10 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
         save_path_composite = os.path.join(
             args.LOG_SAVE_PATH, "discussion_choice3_composite.pdf"
         )
+        if args.params_name == "cascade":
+            regime_display_title = "Forward Cascade"
+        else:
+            regime_display_title = args.params_name.capitalize()
         plot_discussion_choice3_composite(
             save_path=save_path_composite,
             u_all=u_all,
@@ -1563,7 +1611,7 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
             moment3_state_pred_dependent=moment3_state_pred_dependent,
             TIME_AMOUNT=TIME_AMOUNT,
             TIME_DEP_AMOUNT=TIME_DEP_AMOUNT,
-            params_name=args.params_name.capitalize(),
+            params_name=regime_display_title,
             font_size=20,
         )
     return {

@@ -1973,26 +1973,27 @@ def plot_discussion_choice3_composite(
     return None
 
 
-def plot_discussion_choice4_triad_grid(
+def plot_discussion_cov_moments_grid(
     packs,
     save_path,
-    row_labels=("Equipartition", "Cascade", "Dual cascade"),
+    row_labels,
     fs=28,
+    log_inset_row_index=None,
+    log_label="discussion cov/moments grid",
 ):
     """
-    3×7 panel figure: rows = regimes, columns = cov(u_i,u_i) for i=1,2,3 and
-    ⟨M123⟩, ⟨M122⟩, ⟨M133⟩, ⟨M223⟩. Each panel: ground truth (black), ASD-FEX-TFDM
-    (orange), ASD-FEX-SRAN (pink), ASD-FEX-VAE (green), all over t∈[0,20].
+    N×7 panels: rows = regimes, columns = cov(u_i,u_i), i=1,2,3 and four third moments.
+    Curves: ground truth (black), ASD-FEX-TFDM (orange), SRAN (pink), VAE (green).
 
-    `packs` is a length-3 list of dicts from ``discussion_choice5_rollout(..., plot_composite=False)``:
-    Time_ind, cov_gt, moment3_gt, cov_pred_tfdm, moment3_pred_tfdm,
-    cov_pred_sran, moment3_pred_sran, cov_pred_vae, moment3_pred_vae.
-    Falls back to ``cov_pred_ind`` / ``moment3_pred_ind`` if *_tfdm keys are absent.
+    ``packs`` are dicts from ``discussion_choice5_rollout(..., plot_composite=False)``.
+    Optional ``log_inset_row_index``: row (0-based) that gets log-|error| insets on cols 0–5
+    (Discussion 4 dual-cascade row uses index 2 when N=3).
     """
     from matplotlib.lines import Line2D
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-    assert len(packs) == len(row_labels) == 3
+    nrows = len(packs)
+    assert nrows == len(row_labels)
     moment_idx = [(0, 1, 2), (0, 1, 1), (0, 2, 2), (1, 1, 2)]
     moment_latex = [
         r"$\langle M_{123} \rangle$",
@@ -2006,13 +2007,18 @@ def plot_discussion_choice4_triad_grid(
         r"$\mathrm{cov}(u_3,u_3)$",
     ] + moment_latex
 
-    fig, axes = plt.subplots(3, 7, figsize=(28, 10), sharex=False)
+    fig_h = max(6.5, 10.0 * nrows / 3.0)
+    fig, axes = plt.subplots(nrows, 7, figsize=(28, fig_h), sharex=False)
+    if nrows == 1:
+        axes = np.asarray([axes])
 
     gt_color = "black"
     tfdm_color = "#ff7f0e"
     sran_color = "#e377c2"
     vae_color = "#2ca02c"
+    inset_title_fs = max(12, int(round(fs * 26 / 28)))
 
+    last_row = nrows - 1
     for row, (axrow, pack, rlabel) in enumerate(zip(axes, packs, row_labels)):
         Time_ind = np.asarray(pack["Time_ind"], dtype=float).ravel()
         cov_gt = pack["cov_gt"]
@@ -2072,14 +2078,15 @@ def plot_discussion_choice4_triad_grid(
                 label="ASD-FEX-VAE",
             )
 
-            # For dual-cascade row, add inset log-error curves on selected panels:
-            # cov(u1,u1), cov(u2,u2), cov(u3,u3), <M123>, <M122>, <M133>.
-            if row == 2 and col in (0, 1, 2, 3, 4, 5):
+            if (
+                log_inset_row_index is not None
+                and row == log_inset_row_index
+                and col in (0, 1, 2, 3, 4, 5)
+            ):
                 eps = 1e-12
                 err_tfdm = np.abs(np.asarray(y_tfdm) - np.asarray(y_gt)) + eps
                 err_sran = np.abs(np.asarray(y_sran) - np.asarray(y_gt)) + eps
                 err_vae = np.abs(np.asarray(y_vae) - np.asarray(y_gt)) + eps
-                # Dual-cascade inset excludes the first point (t=0) by request.
                 t_err = Time_ind[1:]
                 err_tfdm = err_tfdm[1:]
                 err_sran = err_sran[1:]
@@ -2087,7 +2094,6 @@ def plot_discussion_choice4_triad_grid(
                 inset_loc = "upper right" if col in (0, 1, 2) else "lower right"
                 inset_borderpad = 1.1
                 if col in (0, 1, 2):
-                    # First 3: move inset left and down to avoid overlap with main curves.
                     axins = inset_axes(
                         ax,
                         width="40%",
@@ -2099,7 +2105,6 @@ def plot_discussion_choice4_triad_grid(
                     )
                     inset_title_y = 1
                 else:
-                    # Last 3: move inset left and keep title slightly higher.
                     axins = inset_axes(
                         ax,
                         width="40%",
@@ -2114,7 +2119,9 @@ def plot_discussion_choice4_triad_grid(
                 axins.plot(t_err, err_sran, color=sran_color, linewidth=1.0)
                 axins.plot(t_err, err_vae, color=vae_color, linewidth=1.0)
                 axins.set_yscale("log")
-                axins.set_title("log error", fontsize=26, y=inset_title_y, pad=0.0)
+                axins.set_title(
+                    "log error", fontsize=inset_title_fs, y=inset_title_y, pad=0.0
+                )
                 axins.set_facecolor((1.0, 1.0, 1.0, 0.9))
                 axins.grid(False)
                 axins.tick_params(axis="both", labelsize=max(10, int(fs * 0.55)))
@@ -2125,7 +2132,7 @@ def plot_discussion_choice4_triad_grid(
                 ax.set_title(col_labels[col], fontsize=fs)
             if col == 0:
                 ax.set_ylabel(rlabel, fontsize=fs)
-            if row == 2:
+            if row == last_row:
                 ax.set_xlabel("Time", fontsize=fs)
             ax.tick_params(axis="both", labelsize=fs)
             ax.grid(False)
@@ -2149,18 +2156,44 @@ def plot_discussion_choice4_triad_grid(
     os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
     try:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
-        # Always emit a PNG sibling for quick preview/debugging.
         root, ext = os.path.splitext(save_path)
         png_path = root + ".png"
         if ext.lower() != ".png":
             plt.savefig(png_path, dpi=300, bbox_inches="tight")
-            print(f"[INFO] Saved discussion choice 4 grid PNG to: {png_path}")
+            print(f"[INFO] Saved {log_label} PNG to: {png_path}")
     except Exception as e:
-        print(f"[ERROR] Failed to save discussion choice 4 grid to: {save_path}")
+        print(f"[ERROR] Failed to save {log_label} to: {save_path}")
         print(f"[ERROR] savefig exception: {e}")
         raise
     plt.close(fig)
-    print(f"[INFO] Saved discussion choice 4 grid to: {save_path}")
+    print(f"[INFO] Saved {log_label} to: {save_path}")
+
+
+def plot_discussion_choice4_triad_grid(
+    packs,
+    save_path,
+    row_labels=("Equipartition", "Forward Cascade", "Dual cascade"),
+    fs=28,
+):
+    """
+    3×7 panel figure: rows = regimes, columns = cov(u_i,u_i) for i=1,2,3 and
+    ⟨M123⟩, ⟨M122⟩, ⟨M133⟩, ⟨M223⟩. Each panel: ground truth (black), ASD-FEX-TFDM
+    (orange), ASD-FEX-SRAN (pink), ASD-FEX-VAE (green), all over t∈[0,20].
+
+    `packs` is a length-3 list of dicts from ``discussion_choice5_rollout(..., plot_composite=False)``:
+    Time_ind, cov_gt, moment3_gt, cov_pred_tfdm, moment3_pred_tfdm,
+    cov_pred_sran, moment3_pred_sran, cov_pred_vae, moment3_pred_vae.
+    Falls back to ``cov_pred_ind`` / ``moment3_pred_ind`` if *_tfdm keys are absent.
+    """
+    assert len(packs) == len(row_labels) == 3
+    plot_discussion_cov_moments_grid(
+        packs,
+        save_path,
+        row_labels,
+        fs=fs,
+        log_inset_row_index=2,
+        log_label="discussion choice 4 grid",
+    )
 
 
 def run_discussion_choice4_triad_grid(
@@ -2198,6 +2231,50 @@ def run_discussion_choice4_triad_grid(
     )
     print(f"[INFO] Discussion choice 4 output path: {save_pdf}")
     plot_discussion_choice4_triad_grid(packs, save_path=save_pdf, fs=fs)
+
+
+def run_discussion_cov_moments_grid(
+    args,
+    base_path: str,
+    dir_example: str,
+    model_name: str,
+    rollout_worker,
+    regimes,
+    row_labels,
+    save_filename: str,
+    fs: int = 28,
+    log_inset_row_index=None,
+    log_label=None,
+):
+    """
+    Run ``rollout_worker`` per regime, then :func:`plot_discussion_cov_moments_grid`.
+
+    ``save_filename`` is written under ``dir_example / model_name / Results``.
+    """
+    _saved_pn = args.params_name
+    _saved_log = args.LOG_SAVE_PATH
+    packs = []
+    try:
+        for regime in regimes:
+            args.params_name = regime
+            args.LOG_SAVE_PATH = f"{base_path}/{regime}"
+            packs.append(rollout_worker(plot_composite=False))
+    finally:
+        args.params_name = _saved_pn
+        args.LOG_SAVE_PATH = _saved_log
+    out_dir = os.path.join(dir_example, model_name, "Results")
+    os.makedirs(out_dir, exist_ok=True)
+    save_pdf = os.path.abspath(os.path.join(out_dir, save_filename))
+    tag = log_label if log_label is not None else save_filename
+    print(f"[INFO] Discussion cov/moments grid output path: {save_pdf}")
+    plot_discussion_cov_moments_grid(
+        packs,
+        save_path=save_pdf,
+        row_labels=row_labels,
+        fs=fs,
+        log_inset_row_index=log_inset_row_index,
+        log_label=tag,
+    )
 
 
 def plot_discussion5_offdiagonal_cov_grid(
