@@ -655,6 +655,12 @@ def plot_cross_term_vs_noise(coeff,
         r'$\log_{10}(|\hat{B}_1+\hat{B}_2+\hat{B}_3-0|)$',
     ]
 
+    # Font sizes tuned to avoid header overlap in the saved PDF.
+    label_fs = 14
+    title_fs = 16
+    tick_fs = 12
+    legend_fs = 12
+
     fig, axes = plt.subplots(1, 3, figsize=(12, 3.5), sharey=True)
     set_figure_position(x=100, y=100, width=1400, height=600)
     legend_handles = []
@@ -693,14 +699,15 @@ def plot_cross_term_vs_noise(coeff,
                 legend_handles.append(h_sum[0])
 
         if idx == 0:
-            ax.set_ylabel(r'semi-log scale error', fontsize=18)
-        ax.set_xlabel('Noise Level', fontsize=18)
-        ax.set_title(panel_labels[idx], fontsize=18)
+            ax.set_ylabel(r'semi-log scale error', fontsize=label_fs)
+        ax.set_xlabel('Noise Level', fontsize=label_fs)
+        ax.set_title(panel_labels[idx], fontsize=title_fs)
         ax.grid(True, which='both', alpha=0.3)
-        ax.tick_params(axis='both', labelsize=18)
+        ax.tick_params(axis='both', labelsize=tick_fs)
 
     # Overall layout first (leave a bit more headroom)
-    fig.tight_layout(rect=[0, 0, 1, 0.86])
+    # Keep more top margin so the shared legend never overlaps panel titles.
+    fig.tight_layout(rect=[0, 0, 1, 0.72])
 
     # Shared legend as a single row just above the axes area, with a bigger box
     if legend_handles:
@@ -708,13 +715,13 @@ def plot_cross_term_vs_noise(coeff,
             legend_handles,
             legend_labels,
             loc='upper center',
-            bbox_to_anchor=(0.5, 0.97),
+            bbox_to_anchor=(0.5, 1.12),
             ncol=len(legend_handles),
             frameon=True,
             fancybox=True,
-            borderaxespad=0.6,
+            borderaxespad=0.2,
             title=None,
-            fontsize=18,
+            fontsize=legend_fs,
             handlelength=2.0,
             handletextpad=0.6,
             columnspacing=1.2,
