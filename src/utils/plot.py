@@ -772,7 +772,7 @@ def plot_cross_term_vs_sample(coeff,
             (2.0, -1.0, -1.0),   # dual_cascade
         ]
     if panel_labels is None:
-        panel_labels = ['Equipart', 'Forward Cascade', 'Dual Cascade']
+        panel_labels = ['Equipartition', 'Forward Cascade', 'Dual Cascade']
     if sample_sizes is None:
         sample_sizes = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
 
@@ -788,6 +788,12 @@ def plot_cross_term_vs_sample(coeff,
         r'$\log_{10}(|\hat{B}_3-B_3|)$',
         r'$\log_{10}(|\hat{B}_1+\hat{B}_2+\hat{B}_3-0|)$',
     ]
+
+    # Match Discussion 2 layout: prevent legend/title overlap and fill vertical space.
+    label_fs = 14
+    title_fs = 14
+    tick_fs = 12
+    legend_fs = 12
 
     fig, axes = plt.subplots(1, 3, figsize=(12, 3.5), sharey=True)
     set_figure_position(x=100, y=100, width=1400, height=600)
@@ -828,24 +834,24 @@ def plot_cross_term_vs_sample(coeff,
                 legend_handles.append(h_sum[0])
 
         if idx == 0:
-            ax.set_ylabel(r'semi-log scale error', fontsize=18)
-        ax.set_xlabel('Sample size', fontsize=18)
-        ax.set_title(panel_labels[idx], fontsize=18)
+            ax.set_ylabel(r'semi-log scale error', fontsize=label_fs)
+        ax.set_xlabel('Sample size', fontsize=label_fs)
+        ax.set_title(panel_labels[idx], fontsize=title_fs)
         ax.grid(True, which='both', alpha=0.3)
-        ax.tick_params(axis='both', labelsize=18)
+        ax.tick_params(axis='both', labelsize=tick_fs)
 
-    fig.tight_layout(rect=[0, 0, 1, 0.86])
+    fig.tight_layout(rect=[0, 0, 1, 0.85])
     if legend_handles:
         fig.legend(
             legend_handles,
             legend_labels,
             loc='upper center',
-            bbox_to_anchor=(0.5, 0.97),
+            bbox_to_anchor=(0.5, 1.01),
             ncol=len(legend_handles),
             frameon=True,
             fancybox=True,
-            borderaxespad=0.6,
-            fontsize=18,
+            borderaxespad=0.35,
+            fontsize=legend_fs,
             handlelength=2.0,
             handletextpad=0.6,
             columnspacing=1.2,
