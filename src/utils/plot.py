@@ -3307,7 +3307,7 @@ def plot_state_projections_cases_3x9(
     bins: int = 70,
     levels: int = 12,
     cmap: str = "jet",
-    fs: int = 48,
+    fs: int = 52,
 ):
     """
     Plot 3x9 projection panel:
@@ -3394,7 +3394,11 @@ def plot_state_projections_cases_3x9(
                         ax.set_xticklabels([])
                     # Y label: extra padding + shift left so it does not overlap tick numerals.
                     ax.set_ylabel(yname, fontsize=fs, labelpad=24)
-                    ax.yaxis.set_label_coords(-0.20, 0.5)
+                    # Keep Forward/Dual case y-labels farther left.
+                    if ci >= 1:
+                        ax.yaxis.set_label_coords(-0.24, 0.5)
+                    else:
+                        ax.yaxis.set_label_coords(-0.20, 0.5)
 
                     if r == 0:
                         ax.set_title(proj_titles[pidx], fontsize=fs, pad=22)
@@ -3408,7 +3412,7 @@ def plot_state_projections_cases_3x9(
         # Row labels on the left.
         row_y = [0.80, 0.50, 0.20]
         for yy, t in zip(row_y, times):
-            fig.text(0.07, yy, f"t={t}", fontsize=fs, va="center", ha="left")
+            fig.text(0.09, yy, f"t={t}", fontsize=fs, va="center", ha="left")
 
         # Case labels centered above each 3-column block.
         for ci, (case_name, _) in enumerate(case_items):
