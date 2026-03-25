@@ -1,4 +1,5 @@
 import config
+import argparse
 import numpy as np
 import os
 import re
@@ -14,6 +15,8 @@ from utils.plot import (
     plot_log10_error_mean_covariance_grid_ind_dep,
     plot_third_order_moments_2x2,
     plot_third_order_moments_ind_dep_2x2,
+    plot_state_projections_3x3,
+    plot_state_projections_cases_3x9,
     plot_triad_3d_time_grid_matplotlib_cloud_3x3_times,
     run_discussion_choice4_triad_grid,
     run_discussion_choice5_offdiagonal_cov_grid,
@@ -64,13 +67,14 @@ print("3. Discussion 4: covariance diagonals + third moments (3×7 grid: equipar
 print("4. Discussion 5: off-diagonal covariances (3×3) time indep vs dep")
 print("5. Diffusion (random_cascade): cov(u_i,u_i) + all ⟨M⟩ (1×7), fontsize 28")
 print("6. Periodic + random deterministic forcing: same columns (2×7), fontsize 28")
+print("7. State projections 3×9: three cases × three projections at t=5,10,20")
 
 while True:
     # choice = '1'  # uncomment for debugging
-    choice = input("\nChoose option (1–6): ").strip()
-    if choice in ["1", "2", "3", "4", "5", "6"]:
+    choice = input("\nChoose option (1–7): ").strip()
+    if choice in ["1", "2", "3", "4", "5", "6", "7"]:
         break
-    print("Please enter a number from 1 to 6.")
+    print("Please enter a number from 1 to 7.")
 
 if choice == '1':
     print("=" * 60)
@@ -216,3 +220,30 @@ elif choice == "6":
         log_inset_row_index=None,
         log_label="discussion periodic + random det 2×7 grid",
     )
+
+elif choice == "7":
+    print("=" * 60)
+    print("[INFO] State projections 3×9: Equipartition / Forward Cascade / Dual Cascade.")
+    print("=" * 60)
+    out_png = os.path.join(
+        base_path, "discussion_state_projections_3x9_cases_t5_t10_t20.pdf"
+    )
+    case_specs = [
+        ("Equipartition", "equipart"),
+        ("Forward Cascade", "cascade"),
+        ("Dual Cascade", "dual_cascade"),
+    ]
+    case_data = {}
+    for display_name, params_name in case_specs:
+        args_case = argparse.Namespace(**vars(args))
+        args_case.params_name = params_name
+        rollout = discussion_choice5_rollout(args_case, device, plot_composite=False)
+        case_data[display_name] = rollout["u_all_gt"]
+
+    saved = plot_state_projections_cases_3x9(
+        case_data=case_data,
+        dt=rollout["dt"],
+        times=(5, 10, 20),
+        save_path=out_png,
+    )
+    print(f"[SAVED] {saved}")

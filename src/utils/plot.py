@@ -3208,3 +3208,204 @@ def plot_triad_3d_grid(u_all, u_pred_single, u_pred_ensemble,
         print(f"[INFO] Saved: {png_path}")
 
     return fig
+
+
+def plot_state_projections_3x3(
+    u_all: np.ndarray,
+    dt: float,
+    times=(5, 10, 20),
+    save_path: str = None,
+    bins: int = 70,
+    levels: int = 12,
+    cmap: str = "jet",
+    fs: int = 28,
+):
+    """
+    Plot 3x3 projection panel of triad states:
+    columns = (u1,u2), (u2,u3), (u1,u3), rows = selected times.
+    """
+    if u_all.ndim != 3 or u_all.shape[1] != 3:
+        raise ValueError(f"u_all must have shape (N,3,T); got {u_all.shape}")
+
+    idxs = [int(round(float(t) / float(dt))) for t in times]
+    nt = u_all.shape[2]
+    if any(i < 0 or i >= nt for i in idxs):
+        raise ValueError(f"Times {list(times)} map outside available index range [0, {nt-1}]")
+
+    pairs = [(0, 1), (1, 2), (0, 2)]
+    pair_labels = [("u1", "u2"), ("u2", "u3"), ("u1", "u3")]
+    proj_titles = ["u1-u2 projection", "u2-u3 projection", "u1-u3 projection"]
+
+    fig, axes = plt.subplots(3, 3, figsize=(16, 15))
+    mappable = None
+    for r, (t, idx) in enumerate(zip(times, idxs)):
+        state = u_all[:, :, idx]
+        for c, (a, b) in enumerate(pairs):
+            ax = axes[r, c]
+            x = state[:, a]
+            y = state[:, b]
+            H, xedges, yedges = np.histogram2d(x, y, bins=int(bins), density=True)
+            xc = 0.5 * (xedges[:-1] + xedges[1:])
+            yc = 0.5 * (yedges[:-1] + yedges[1:])
+            Xc, Yc = np.meshgrid(xc, yc, indexing="xy")
+            Hplot = H.T
+            vmax = np.max(Hplot)
+            if vmax > 0:
+                level_vals = np.linspace(0.0, vmax, int(levels) + 1)[1:]
+                cf = ax.contourf(Xc, Yc, Hplot, levels=level_vals, cmap=cmap)
+                ax.contour(
+                    Xc,
+                    Yc,
+                    Hplot,
+                    levels=level_vals,
+                    colors="black",
+                    linewidths=0.9,
+                    alpha=0.95,
+                )
+                mappable = cf
+            if r == len(times) - 1:
+                ax.set_xlabel(pair_labels[c][0], fontsize=fs)
+            else:
+                ax.set_xlabel("")
+            if c == 0:
+                ax.set_ylabel("u2", fontsize=fs, labelpad=4)
+                ax.yaxis.set_label_coords(-0.15, 0.5)
+            else:
+                ax.set_ylabel("")
+            if r == 0:
+                ax.set_title(proj_titles[c], fontsize=fs, pad=16)
+            ax.grid(True, alpha=0.2)
+            ax.tick_params(axis="both", labelsize=max(fs - 6, 12))
+
+    if mappable is not None:
+        fig.subplots_adjust(left=0.20, right=0.88, top=0.94, bottom=0.08, wspace=0.42, hspace=0.48)
+        row_y = [0.81, 0.50, 0.19]
+        for yy, t in zip(row_y, times):
+            fig.text(0.05, yy, f"t={t}", fontsize=fs, va="center", ha="left")
+        cax = fig.add_axes([0.90, 0.14, 0.02, 0.72])
+        cbar = fig.colorbar(mappable, cax=cax)
+        cbar.set_label("Probability density", fontsize=fs)
+        cbar.ax.tick_params(labelsize=max(fs - 8, 12))
+    else:
+        fig.subplots_adjust(left=0.20, right=0.95, top=0.94, bottom=0.08, wspace=0.42, hspace=0.48)
+        row_y = [0.81, 0.50, 0.19]
+        for yy, t in zip(row_y, times):
+            fig.text(0.05, yy, f"t={t}", fontsize=fs, va="center", ha="left")
+    if save_path is not None:
+        os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        return save_path
+    return fig
+
+
+def plot_state_projections_cases_3x9(
+    case_data: dict,
+    dt: float,
+    times=(5, 10, 20),
+    save_path: str = None,
+    bins: int = 70,
+    levels: int = 12,
+    cmap: str = "jet",
+    fs: int = 20,
+):
+    """
+    Plot 3x9 projection panel:
+    - rows: times (t=5, t=10, t=20)
+    - columns grouped by case (Equipartition, Forward Cascade, Dual Cascade)
+      each case has 3 projection columns: (u1,u2), (u2,u3), (u1,u3)
+    """
+    case_items = list(case_data.items())
+    n_cases = len(case_items)
+    if n_cases == 0:
+        raise ValueError("case_data is empty.")
+
+    pairs = [(0, 1), (1, 2), (0, 2)]
+    pair_labels = [("u1", "u2"), ("u2", "u3"), ("u1", "u3")]
+    proj_titles = ["u1-u2 projection", "u2-u3 projection", "u1-u3 projection"]
+
+    # First pass: compute histograms and global vmax for consistent color scale.
+    hist_data = {}
+    global_vmax = 0.0
+    for ci, (_, u_all) in enumerate(case_items):
+        if u_all.ndim != 3 or u_all.shape[1] != 3:
+            raise ValueError(f"u_all for case index {ci} must have shape (N,3,T); got {u_all.shape}")
+        idxs = [int(round(float(t) / float(dt))) for t in times]
+        nt = u_all.shape[2]
+        if any(i < 0 or i >= nt for i in idxs):
+            raise ValueError(f"Times {list(times)} map outside available index range [0, {nt-1}]")
+
+        for r, idx in enumerate(idxs):
+            state = u_all[:, :, idx]
+            for pidx, (a, b) in enumerate(pairs):
+                x = state[:, a]
+                y = state[:, b]
+                H, xedges, yedges = np.histogram2d(x, y, bins=int(bins), density=True)
+                xc = 0.5 * (xedges[:-1] + xedges[1:])
+                yc = 0.5 * (yedges[:-1] + yedges[1:])
+                Xc, Yc = np.meshgrid(xc, yc, indexing="xy")
+                Hplot = H.T
+                vmax = float(np.max(Hplot))
+                global_vmax = max(global_vmax, vmax)
+                hist_data[(r, ci, pidx)] = (Xc, Yc, Hplot)
+
+    fig, axes = plt.subplots(len(times), n_cases * 3, figsize=(46, 15))
+    mappable = None
+    level_vals = None
+    if global_vmax > 0:
+        level_vals = np.linspace(0.0, global_vmax, int(levels) + 1)[1:]
+
+    for r, t in enumerate(times):
+        for ci, (case_name, _) in enumerate(case_items):
+            for pidx, (a, b) in enumerate(pairs):
+                c = ci * 3 + pidx
+                ax = axes[r, c]
+                Xc, Yc, Hplot = hist_data[(r, ci, pidx)]
+
+                if level_vals is not None:
+                    cf = ax.contourf(Xc, Yc, Hplot, levels=level_vals, cmap=cmap)
+                    ax.contour(Xc, Yc, Hplot, levels=level_vals, colors="black", linewidths=0.6, alpha=0.9)
+                    mappable = cf
+
+                if r == len(times) - 1:
+                    ax.set_xlabel(pair_labels[pidx][0], fontsize=fs)
+                else:
+                    ax.set_xlabel("")
+                # Keep u2 on left side for the first projection in each case block.
+                if pidx == 0:
+                    ax.set_ylabel("u2", fontsize=fs, labelpad=3)
+                    ax.yaxis.set_label_coords(-0.13, 0.5)
+                else:
+                    ax.set_ylabel("")
+
+                if r == 0:
+                    ax.set_title(proj_titles[pidx], fontsize=fs, pad=14)
+
+                ax.grid(True, alpha=0.2)
+                ax.tick_params(axis="both", labelsize=max(fs - 6, 10))
+
+    # Layout and grouped case headers.
+    fig.subplots_adjust(left=0.10, right=0.90, top=0.90, bottom=0.10, wspace=0.35, hspace=0.40)
+
+    # Row labels on the left.
+    row_y = [0.80, 0.50, 0.20]
+    for yy, t in zip(row_y, times):
+        fig.text(0.02, yy, f"t={t}", fontsize=fs, va="center", ha="left")
+
+    # Case labels centered above each 3-column block.
+    for ci, (case_name, _) in enumerate(case_items):
+        x_center = 0.10 + (ci * 3 + 1.5) * (0.80 / (n_cases * 3))
+        fig.text(x_center, 0.965, case_name, fontsize=fs + 2, ha="center", va="center")
+
+    if mappable is not None:
+        cax = fig.add_axes([0.92, 0.14, 0.015, 0.72])
+        cbar = fig.colorbar(mappable, cax=cax)
+        cbar.set_label("Probability density", fontsize=fs)
+        cbar.ax.tick_params(labelsize=max(fs - 8, 10))
+
+    if save_path is not None:
+        os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        return save_path
+    return fig

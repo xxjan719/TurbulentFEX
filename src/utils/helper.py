@@ -1617,6 +1617,9 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
     return {
         "Time_ind": Time_record,
         "Time_dep": Time_dep,
+        "dt": dt,
+        "params": params,
+        "u_all_gt": u_all,
         "cov_gt": cov_state_record,
         "moment3_gt": moment3_state_record,
         # Discussion 4 grid: TFDM (Residual NN), SRAN (legacy z→residual NN), VAE
@@ -1632,4 +1635,6 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
         "cov_pred_dep": cov_state_pred_dependent,
         "moment3_pred_dep": moment3_state_pred_dependent,
     }
+
+
 
