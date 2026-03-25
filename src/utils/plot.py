@@ -3320,88 +3320,113 @@ def plot_state_projections_cases_3x9(
     if n_cases == 0:
         raise ValueError("case_data is empty.")
 
-    pairs = [(0, 1), (1, 2), (0, 2)]
-    pair_labels = [("u1", "u2"), ("u2", "u3"), ("u1", "u3")]
-    proj_titles = ["u1-u2 projection", "u2-u3 projection", "u1-u3 projection"]
+    # Enforce readable type at fs=42; restore rcParams after so other plots are unaffected.
+    tick_fs = max(int(fs) - 4, 24)
+    _rc_keys = (
+        "font.size",
+        "axes.labelsize",
+        "axes.titlesize",
+        "xtick.labelsize",
+        "ytick.labelsize",
+    )
+    _rc_old = {k: mpl.rcParams[k] for k in _rc_keys}
+    try:
+        mpl.rcParams.update(
+            {
+                "font.size": fs,
+                "axes.labelsize": fs,
+                "axes.titlesize": fs,
+                "xtick.labelsize": tick_fs,
+                "ytick.labelsize": tick_fs,
+            }
+        )
 
-    # First pass: compute panel histograms.
-    hist_data = {}
-    for ci, (_, u_all) in enumerate(case_items):
-        if u_all.ndim != 3 or u_all.shape[1] != 3:
-            raise ValueError(f"u_all for case index {ci} must have shape (N,3,T); got {u_all.shape}")
-        idxs = [int(round(float(t) / float(dt))) for t in times]
-        nt = u_all.shape[2]
-        if any(i < 0 or i >= nt for i in idxs):
-            raise ValueError(f"Times {list(times)} map outside available index range [0, {nt-1}]")
+        pairs = [(0, 1), (1, 2), (0, 2)]
+        pair_labels = [("u1", "u2"), ("u2", "u3"), ("u1", "u3")]
+        proj_titles = ["u1-u2 projection", "u2-u3 projection", "u1-u3 projection"]
 
-        for r, idx in enumerate(idxs):
-            state = u_all[:, :, idx]
-            for pidx, (a, b) in enumerate(pairs):
-                x = state[:, a]
-                y = state[:, b]
-                H, xedges, yedges = np.histogram2d(x, y, bins=int(bins), density=True)
-                xc = 0.5 * (xedges[:-1] + xedges[1:])
-                yc = 0.5 * (yedges[:-1] + yedges[1:])
-                Xc, Yc = np.meshgrid(xc, yc, indexing="xy")
-                Hplot = H.T
-                hist_data[(r, ci, pidx)] = (Xc, Yc, Hplot)
+        # First pass: compute panel histograms.
+        hist_data = {}
+        for ci, (_, u_all) in enumerate(case_items):
+            if u_all.ndim != 3 or u_all.shape[1] != 3:
+                raise ValueError(f"u_all for case index {ci} must have shape (N,3,T); got {u_all.shape}")
+            idxs = [int(round(float(t) / float(dt))) for t in times]
+            nt = u_all.shape[2]
+            if any(i < 0 or i >= nt for i in idxs):
+                raise ValueError(f"Times {list(times)} map outside available index range [0, {nt-1}]")
 
-    fig, axes = plt.subplots(len(times), n_cases * 3, figsize=(72, 24))
-    mappable = None
-    level_vals = np.linspace(0.0, 1.0, int(levels) + 1)[1:]
+            for r, idx in enumerate(idxs):
+                state = u_all[:, :, idx]
+                for pidx, (a, b) in enumerate(pairs):
+                    x = state[:, a]
+                    y = state[:, b]
+                    H, xedges, yedges = np.histogram2d(x, y, bins=int(bins), density=True)
+                    xc = 0.5 * (xedges[:-1] + xedges[1:])
+                    yc = 0.5 * (yedges[:-1] + yedges[1:])
+                    Xc, Yc = np.meshgrid(xc, yc, indexing="xy")
+                    Hplot = H.T
+                    hist_data[(r, ci, pidx)] = (Xc, Yc, Hplot)
 
-    for r, t in enumerate(times):
+        fig, axes = plt.subplots(len(times), n_cases * 3, figsize=(72, 24))
+        mappable = None
+        level_vals = np.linspace(0.0, 1.0, int(levels) + 1)[1:]
+
+        for r, t in enumerate(times):
+            for ci, (case_name, _) in enumerate(case_items):
+                for pidx, (a, b) in enumerate(pairs):
+                    c = ci * 3 + pidx
+                    ax = axes[r, c]
+                    Xc, Yc, Hplot = hist_data[(r, ci, pidx)]
+
+                    panel_max = float(np.max(Hplot))
+                    if panel_max > 0:
+                        Hnorm = Hplot / panel_max
+                        cf = ax.contourf(Xc, Yc, Hnorm, levels=level_vals, cmap=cmap)
+                        ax.contour(Xc, Yc, Hnorm, levels=level_vals, colors="black", linewidths=0.8, alpha=0.95)
+                        mappable = cf
+
+                    # Horizontal axis = first component, vertical = second (e.g. u1–u2 → x=u1, y=u2).
+                    xname, yname = pair_labels[pidx][0], pair_labels[pidx][1]
+                    if r == len(times) - 1:
+                        ax.set_xlabel(xname, fontsize=fs, labelpad=16)
+                    else:
+                        ax.set_xlabel("")
+                        ax.set_xticklabels([])
+                    # Y label: extra padding + shift left so it does not overlap tick numerals.
+                    ax.set_ylabel(yname, fontsize=fs, labelpad=28)
+                    ax.yaxis.set_label_coords(-0.22, 0.5)
+
+                    if r == 0:
+                        ax.set_title(proj_titles[pidx], fontsize=fs, pad=22)
+
+                    ax.grid(True, alpha=0.2)
+                    ax.tick_params(axis="both", labelsize=tick_fs, pad=8)
+
+        # Layout: extra left margin for y labels shifted left at fs≈42.
+        fig.subplots_adjust(left=0.16, right=0.86, top=0.90, bottom=0.14, wspace=0.58, hspace=0.65)
+
+        # Row labels on the left.
+        row_y = [0.80, 0.50, 0.20]
+        for yy, t in zip(row_y, times):
+            fig.text(0.02, yy, f"t={t}", fontsize=fs, va="center", ha="left")
+
+        # Case labels centered above each 3-column block.
         for ci, (case_name, _) in enumerate(case_items):
-            for pidx, (a, b) in enumerate(pairs):
-                c = ci * 3 + pidx
-                ax = axes[r, c]
-                Xc, Yc, Hplot = hist_data[(r, ci, pidx)]
+            x_center = 0.10 + (ci * 3 + 1.5) * (0.78 / (n_cases * 3))
+            fig.text(x_center, 0.965, case_name, fontsize=fs, ha="center", va="center")
 
-                panel_max = float(np.max(Hplot))
-                if panel_max > 0:
-                    Hnorm = Hplot / panel_max
-                    cf = ax.contourf(Xc, Yc, Hnorm, levels=level_vals, cmap=cmap)
-                    ax.contour(Xc, Yc, Hnorm, levels=level_vals, colors="black", linewidths=0.8, alpha=0.95)
-                    mappable = cf
+        if mappable is not None:
+            cax = fig.add_axes([0.90, 0.17, 0.012, 0.66])
+            cbar = fig.colorbar(mappable, cax=cax)
+            cbar.set_label("Normalized density (per panel)", fontsize=fs)
+            cbar.ax.tick_params(labelsize=tick_fs)
 
-                # Horizontal axis = first component, vertical = second (e.g. u1–u2 → x=u1, y=u2).
-                xname, yname = pair_labels[pidx][0], pair_labels[pidx][1]
-                if r == len(times) - 1:
-                    ax.set_xlabel(xname, fontsize=fs, labelpad=10)
-                else:
-                    ax.set_xlabel("")
-                    ax.set_xticklabels([])
-                ax.set_ylabel(yname, fontsize=fs, labelpad=10)
-                ax.yaxis.set_label_coords(-0.08, 0.5)
-
-                if r == 0:
-                    ax.set_title(proj_titles[pidx], fontsize=fs, pad=18)
-
-                ax.grid(True, alpha=0.2)
-                ax.tick_params(axis="both", labelsize=max(fs - 10, 12))
-
-    # Layout and grouped case headers.
-    fig.subplots_adjust(left=0.10, right=0.88, top=0.90, bottom=0.13, wspace=0.55, hspace=0.62)
-
-    # Row labels on the left.
-    row_y = [0.80, 0.50, 0.20]
-    for yy, t in zip(row_y, times):
-        fig.text(0.02, yy, f"t={t}", fontsize=fs, va="center", ha="left")
-
-    # Case labels centered above each 3-column block.
-    for ci, (case_name, _) in enumerate(case_items):
-        x_center = 0.10 + (ci * 3 + 1.5) * (0.78 / (n_cases * 3))
-        fig.text(x_center, 0.965, case_name, fontsize=fs, ha="center", va="center")
-
-    if mappable is not None:
-        cax = fig.add_axes([0.90, 0.17, 0.012, 0.66])
-        cbar = fig.colorbar(mappable, cax=cax)
-        cbar.set_label("Normalized density (per panel)", fontsize=fs)
-        cbar.ax.tick_params(labelsize=max(fs - 12, 10))
-
-    if save_path is not None:
-        os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
-        plt.close(fig)
-        return save_path
-    return fig
+        if save_path is not None:
+            os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+            fig.savefig(save_path, dpi=300, bbox_inches="tight", pad_inches=0.35)
+            plt.close(fig)
+            return save_path
+        return fig
+    finally:
+        for k, v in _rc_old.items():
+            mpl.rcParams[k] = v
