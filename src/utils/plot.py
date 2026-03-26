@@ -3299,6 +3299,371 @@ def plot_state_projections_3x3(
     return fig
 
 
+def plot_discussion_first_moments_5x6(
+    regime_series: list,
+    save_path: str,
+    *,
+    fs: int = 28,
+):
+    """
+    N×6 grid: rows = regimes; cols 0–2 = ⟨u1⟩,⟨u2⟩,⟨u3⟩; cols 3–5 =
+    :math:`\\log_{10}(|\\langle u_i\\rangle_{\\mathrm{pred}}-\\langle u_i\\rangle_{\\mathrm{GT}}|)`
+    for ASD-FEX-TFDM / SRAN / VAE (dashed, same colors as means).
+
+    Legend uses phantom :class:`~matplotlib.lines.Line2D` handles (same pattern as
+    :func:`plot_discussion_cov_moments_grid`) so entries render inside a framed box.
+
+    Each ``regime_series`` item: ``row_label``, ``rollout`` with ``Time_ind``,
+    ``mean_gt``, ``mean_pred_tfdm``, ``mean_pred_sran``, ``mean_pred_vae``.
+
+    Regime and log y-axis titles use ``fs - 10`` (min 12) so long names overlap less.
+    """
+    from matplotlib.lines import Line2D
+
+    n_rows = len(regime_series)
+    if n_rows == 0:
+        raise ValueError("regime_series is empty.")
+
+    ncols = 6
+    fig_w = 26.0
+    fig_h = max(4.0, 3.0 * n_rows)
+    fig, axes = plt.subplots(n_rows, ncols, figsize=(fig_w, fig_h), sharex="col")
+    if n_rows == 1:
+        axes = np.asarray([axes])
+
+    gt_color = "black"
+    tfdm_color = "#ff7f0e"
+    sran_color = "#e377c2"
+    vae_color = "#2ca02c"
+    eps = 1e-16
+    last_row = n_rows - 1
+    fs_yaxis_label = max(12, fs - 10)
+
+    mean_titles = [
+        r"$\langle u_1\rangle$",
+        r"$\langle u_2\rangle$",
+        r"$\langle u_3\rangle$",
+    ]
+    # Matplotlib mathtext has no \\bigl/\\bigr; use \\left| \\right| instead.
+    log_titles = [
+        r"$\log_{10}\left|\langle u_1\rangle_{\mathrm{pred}}-\langle u_1\rangle_{\mathrm{GT}}\right|$",
+        r"$\log_{10}\left|\langle u_2\rangle_{\mathrm{pred}}-\langle u_2\rangle_{\mathrm{GT}}\right|$",
+        r"$\log_{10}\left|\langle u_3\rangle_{\mathrm{pred}}-\langle u_3\rangle_{\mathrm{GT}}\right|$",
+    ]
+    log_ylabel = r"$\log_{10}|\,\mathrm{error}\,|$"
+
+    def _finite_mask(y):
+        y = np.asarray(y, dtype=float)
+        m = np.isfinite(y)
+        return m if np.any(m) else np.ones_like(y, dtype=bool)
+
+    for r, item in enumerate(regime_series):
+        row_label = item["row_label"]
+        out = item["rollout"]
+        t = np.asarray(out["Time_ind"], dtype=float).ravel()
+        mean_gt = np.asarray(out["mean_gt"], dtype=float)
+        mean_tfdm = np.asarray(out["mean_pred_tfdm"], dtype=float)
+        mean_sran = np.asarray(
+            out.get("mean_pred_sran", mean_tfdm), dtype=float
+        )
+        mean_vae = np.asarray(out.get("mean_pred_vae", mean_tfdm), dtype=float)
+
+        for c in range(3):
+            ax = axes[r, c]
+            mg = mean_gt[c]
+            mask = _finite_mask(mg)
+            ax.plot(
+                t[mask],
+                mg[mask],
+                "-",
+                color=gt_color,
+                linewidth=2.2,
+            )
+            for series, color in (
+                (mean_tfdm[c], tfdm_color),
+                (mean_sran[c], sran_color),
+                (mean_vae[c], vae_color),
+            ):
+                m2 = _finite_mask(series)
+                ax.plot(t[m2], series[m2], "--", color=color, linewidth=2.0)
+
+            if c == 0:
+                ax.set_ylabel(row_label, fontsize=fs_yaxis_label, labelpad=6)
+            if r == 0:
+                ax.set_title(mean_titles[c], fontsize=fs)
+            ax.tick_params(axis="both", labelsize=fs - 2)
+            ax.grid(True, alpha=0.25)
+
+        for j in range(3):
+            ax = axes[r, 3 + j]
+            mg = np.asarray(mean_gt[j], dtype=float)
+            for series, color in (
+                (mean_tfdm[j], tfdm_color),
+                (mean_sran[j], sran_color),
+                (mean_vae[j], vae_color),
+            ):
+                pred = np.asarray(series, dtype=float)
+                err = np.abs(pred - mg) + eps
+                log_e = np.log10(err)
+                # Include t=t[0] (initial state); align x so time starts at first sample (usually 0).
+                m3 = np.isfinite(t) & np.isfinite(log_e)
+                if not np.any(m3):
+                    m3 = np.ones_like(log_e, dtype=bool)
+                ax.plot(t[m3], log_e[m3], "--", color=color, linewidth=2.0)
+
+            if t.size:
+                ax.set_xlim(left=float(t[0]), right=float(t[-1]))
+            ax.set_ylim(-6.0, 0.0)
+
+            if r == 0:
+                ax.set_title(log_titles[j], fontsize=max(10, fs - 4))
+            if j == 0:
+                ax.set_ylabel(log_ylabel, fontsize=fs_yaxis_label, labelpad=6)
+            if r == last_row:
+                ax.set_xlabel("Time", fontsize=fs)
+            ax.tick_params(axis="both", labelsize=fs - 2)
+            ax.grid(True, alpha=0.25)
+
+        for c in range(3):
+            axes[r, c].set_xlabel("Time" if r == last_row else "", fontsize=fs)
+
+    handles = [
+        Line2D([0], [0], color=gt_color, lw=2.5, linestyle="-", label="Ground truth"),
+        Line2D(
+            [0],
+            [0],
+            color=tfdm_color,
+            lw=2.5,
+            linestyle="--",
+            label="ASD-FEX-TFDM",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color=sran_color,
+            lw=2.5,
+            linestyle="--",
+            label="ASD-FEX-SRAN",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color=vae_color,
+            lw=2.5,
+            linestyle="--",
+            label="ASD-FEX-VAE",
+        ),
+    ]
+    fig.legend(
+        handles=handles,
+        loc="upper center",
+        ncol=4,
+        fontsize=fs,
+        frameon=True,
+        fancybox=True,
+        edgecolor="0.35",
+        facecolor="white",
+        bbox_to_anchor=(0.5, 1.0),
+    )
+
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
+
+    os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+    fig.savefig(save_path, dpi=300, bbox_inches="tight", pad_inches=0.15)
+    plt.close(fig)
+    return save_path
+
+
+# Backward-compatible alias
+plot_discussion_first_moments_5x3 = plot_discussion_first_moments_5x6
+
+
+def plot_discussion_energy_modes_5x6(
+    regime_series: list,
+    save_path: str,
+    *,
+    fs: int = 28,
+    log_ylim: tuple | None = None,
+):
+    """
+    N×6 grid: per-regime row; columns 0–2 = per-dimension stochastic energy (modes 1–3,
+    not total); columns 3–5 = :math:`\\log_{10}(|E^{\\mathrm{pred}}-E^{\\mathrm{GT}}|)` for
+    each mode (ASD-FEX-TFDM / SRAN / VAE dashed).
+
+    Row / log y-axis titles are vertical (default rotation) with a smaller font than ``fs``
+    to reduce overlap. Log panels omit :math:`t=0` (error starts from the first evolved step).
+    If ``log_ylim`` is None, log-column y-limits are chosen automatically from the data.
+
+    ``Energy_MC`` convention: index 0 total, 1–3 = :math:`\\frac12(\\langle u_i\\rangle^2+\\mathrm{var}(u_i))`.
+
+    Each ``regime_series`` item: ``row_label``, ``rollout`` with ``Time_ind``,
+    ``energy_gt``, ``energy_pred_tfdm``, ``energy_pred_sran``, ``energy_pred_vae``
+    (each shape ``(4, n_times)``).
+    """
+    from matplotlib.lines import Line2D
+
+    n_rows = len(regime_series)
+    if n_rows == 0:
+        raise ValueError("regime_series is empty.")
+
+    ncols = 6
+    fig_w = 30.0
+    fig_h = max(4.0, 3.0 * n_rows)
+    fig, axes = plt.subplots(n_rows, ncols, figsize=(fig_w, fig_h), sharex="col")
+    if n_rows == 1:
+        axes = np.asarray([axes])
+
+    gt_color = "black"
+    tfdm_color = "#ff7f0e"
+    sran_color = "#e377c2"
+    vae_color = "#2ca02c"
+    eps = 1e-16
+    last_row = n_rows - 1
+    mode_idx = (1, 2, 3)
+
+    energy_titles = [
+        r"Mode 1 ($u_1$)",
+        r"Mode 2 ($u_2$)",
+        r"Mode 3 ($u_3$)",
+    ]
+    log_titles = [
+        r"$\log_{10}\left|E_1^{\mathrm{pred}}-E_1^{\mathrm{GT}}\right|$",
+        r"$\log_{10}\left|E_2^{\mathrm{pred}}-E_2^{\mathrm{GT}}\right|$",
+        r"$\log_{10}\left|E_3^{\mathrm{pred}}-E_3^{\mathrm{GT}}\right|$",
+    ]
+    log_ylabel = r"$\log_{10}|\,\mathrm{error}\,|$"
+    fs_yaxis_label = max(12, fs - 10)
+
+    def _finite_mask(y):
+        y = np.asarray(y, dtype=float)
+        m = np.isfinite(y)
+        return m if np.any(m) else np.ones_like(y, dtype=bool)
+
+    for r, item in enumerate(regime_series):
+        row_label = item["row_label"]
+        out = item["rollout"]
+        t = np.asarray(out["Time_ind"], dtype=float).ravel()
+        e_gt = np.asarray(out["energy_gt"], dtype=float)
+        e_tfdm = np.asarray(out["energy_pred_tfdm"], dtype=float)
+        e_sran = np.asarray(out.get("energy_pred_sran", e_tfdm), dtype=float)
+        e_vae = np.asarray(out.get("energy_pred_vae", e_tfdm), dtype=float)
+
+        for ci, k in enumerate(mode_idx):
+            ax = axes[r, ci]
+            mg = e_gt[k]
+            mask = _finite_mask(mg)
+            ax.plot(
+                t[mask],
+                mg[mask],
+                "-",
+                color=gt_color,
+                linewidth=2.2,
+            )
+            for series, color in (
+                (e_tfdm[k], tfdm_color),
+                (e_sran[k], sran_color),
+                (e_vae[k], vae_color),
+            ):
+                m2 = _finite_mask(series)
+                ax.plot(t[m2], series[m2], "--", color=color, linewidth=2.0)
+
+            if ci == 0:
+                ax.set_ylabel(row_label, fontsize=fs_yaxis_label, labelpad=6)
+            if r == 0:
+                ax.set_title(energy_titles[ci], fontsize=fs)
+            ax.tick_params(axis="both", labelsize=fs - 2)
+            ax.grid(True, alpha=0.25)
+
+        for j, k in enumerate(mode_idx):
+            ax = axes[r, 3 + j]
+            mg = np.asarray(e_gt[k], dtype=float)
+            for series, color in (
+                (e_tfdm[k], tfdm_color),
+                (e_sran[k], sran_color),
+                (e_vae[k], vae_color),
+            ):
+                pred = np.asarray(series, dtype=float)
+                err = np.abs(pred - mg) + eps
+                log_e = np.log10(err)
+                if t.size > 1:
+                    t_plot = t[1:]
+                    log_e = log_e[1:]
+                else:
+                    t_plot = t
+                m3 = np.isfinite(t_plot) & np.isfinite(log_e)
+                if not np.any(m3):
+                    m3 = np.ones_like(log_e, dtype=bool)
+                ax.plot(t_plot[m3], log_e[m3], "--", color=color, linewidth=2.0)
+
+            if t.size > 1:
+                ax.set_xlim(left=float(t[1]), right=float(t[-1]))
+            elif t.size:
+                ax.set_xlim(left=float(t[0]), right=float(t[-1]))
+            if log_ylim is not None:
+                ax.set_ylim(log_ylim[0], log_ylim[1])
+            else:
+                ax.relim(visible_only=True)
+                ax.autoscale_view(scalex=False, scaley=True)
+
+            if r == 0:
+                ax.set_title(log_titles[j], fontsize=max(10, fs - 4))
+            if j == 0:
+                ax.set_ylabel(log_ylabel, fontsize=fs_yaxis_label, labelpad=6)
+            if r == last_row:
+                ax.set_xlabel("Time", fontsize=fs)
+            ax.tick_params(axis="both", labelsize=fs - 2)
+            ax.grid(True, alpha=0.25)
+
+        for c in range(3):
+            axes[r, c].set_xlabel("Time" if r == last_row else "", fontsize=fs)
+
+    handles = [
+        Line2D([0], [0], color=gt_color, lw=2.5, linestyle="-", label="Ground truth"),
+        Line2D(
+            [0],
+            [0],
+            color=tfdm_color,
+            lw=2.5,
+            linestyle="--",
+            label="ASD-FEX-TFDM",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color=sran_color,
+            lw=2.5,
+            linestyle="--",
+            label="ASD-FEX-SRAN",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color=vae_color,
+            lw=2.5,
+            linestyle="--",
+            label="ASD-FEX-VAE",
+        ),
+    ]
+    fig.legend(
+        handles=handles,
+        loc="upper center",
+        ncol=4,
+        fontsize=fs,
+        frameon=True,
+        fancybox=True,
+        edgecolor="0.35",
+        facecolor="white",
+        bbox_to_anchor=(0.5, 1.0),
+    )
+
+    plt.tight_layout(rect=[0.10, 0, 1, 0.93])
+
+    os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+    fig.savefig(save_path, dpi=300, bbox_inches="tight", pad_inches=0.2)
+    plt.close(fig)
+    return save_path
+
+
 def plot_state_projections_cases_3x9(
     case_data: dict,
     dt: float,
@@ -3399,7 +3764,8 @@ def plot_state_projections_cases_3x9(
                         # Shift Forward/Cascade and Dual/Cascade y labels further left.
                         ax.yaxis.set_label_coords(-0.33, 0.5)
                     else:
-                        ax.yaxis.set_label_coords(-0.20, 0.5)
+                        # Periodic cascade: move slightly left.
+                        ax.yaxis.set_label_coords(-0.23, 0.5)
 
                     if r == 0:
                         ax.set_title(proj_titles[pidx], fontsize=fs, pad=22)

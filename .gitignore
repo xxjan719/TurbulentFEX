@@ -16,5 +16,4 @@ slurm/*
 turbulentfex_env/*
 src/slurm/*
 archive/*
-src/Example/Tree_structure.svg
 src/Example/Tree_structure.pdf

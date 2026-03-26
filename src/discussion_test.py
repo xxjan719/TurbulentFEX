@@ -17,6 +17,8 @@ from utils.plot import (
     plot_third_order_moments_ind_dep_2x2,
     plot_state_projections_3x3,
     plot_state_projections_cases_3x9,
+    plot_discussion_first_moments_5x6,
+    plot_discussion_energy_modes_5x6,
     plot_triad_3d_time_grid_matplotlib_cloud_3x3_times,
     run_discussion_choice4_triad_grid,
     run_discussion_choice5_offdiagonal_cov_grid,
@@ -68,13 +70,20 @@ print("4. Discussion 5: off-diagonal covariances (3×3) time indep vs dep")
 print("5. Diffusion (random_cascade): cov(u_i,u_i) + all ⟨M⟩ (1×7), fontsize 28")
 print("6. Periodic + random deterministic forcing: same columns (2×7), fontsize 28")
 print("7. State projections 3×9: three cases × three projections at t=5,10,20")
+print("8. State projections 3×6: periodic + random cascade deterministic at t=5,10,20")
+print(
+    "9. First moments 5×6: ⟨u1⟩,⟨u2⟩,⟨u3⟩ + log10|pred−GT| per component, five regimes"
+)
+print(
+    "10. Energy modes 5×6: per-dimension energy (no total) + log10|pred−GT|, five regimes"
+)
 
 while True:
     # choice = '1'  # uncomment for debugging
-    choice = input("\nChoose option (1–7): ").strip()
-    if choice in ["1", "2", "3", "4", "5", "6", "7"]:
+    choice = input("\nChoose option (1–10): ").strip()
+    if choice in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]:
         break
-    print("Please enter a number from 1 to 7.")
+    print("Please enter a number from 1 to 10.")
 
 if choice == '1':
     print("=" * 60)
@@ -246,5 +255,95 @@ elif choice == "7":
         times=(5, 10, 20),
         save_path=out_png,
         fs=56,
+    )
+    print(f"[SAVED] {saved}")
+
+elif choice == "8":
+    print("=" * 60)
+    print("[INFO] State projections 3×6: Periodic cascade + Random cascade (deterministic).")
+    print("=" * 60)
+
+    out_pdf = os.path.join(
+        base_path, "discussion_state_projections_3x6_periodic_random_det_cases_t5_t10_t20.pdf"
+    )
+
+    case_specs = [
+        ("Periodic cascade", "periodic_cascade"),
+        ("Random cascade", "random_cascade_deterministic"),
+    ]
+    case_data = {}
+    for display_name, params_name in case_specs:
+        args_case = argparse.Namespace(**vars(args))
+        args_case.params_name = params_name
+        rollout = discussion_choice5_rollout(args_case, device, plot_composite=False)
+        case_data[display_name] = rollout["u_all_gt"]
+
+    saved = plot_state_projections_cases_3x9(
+        case_data=case_data,
+        dt=rollout["dt"],
+        times=(5, 10, 20),
+        save_path=out_pdf,
+        fs=56,
+    )
+    print(f"[SAVED] {saved}")
+
+elif choice == "9":
+    print("=" * 60)
+    print(
+        "[INFO] First moments 5×6: means + log10|mean_pred−mean_GT| "
+        "(ASD-FEX-TFDM / SRAN / VAE; see rollout print block)."
+    )
+    print("=" * 60)
+    out_pdf = os.path.join(
+        base_path, "discussion_first_moments_5x3_five_regimes.pdf"
+    )
+    regime_specs = [
+        ("Equipartition", "equipart"),
+        ("Forward cascade", "cascade"),
+        ("Dual cascade", "dual_cascade"),
+        ("Periodic cascade", "periodic_cascade"),
+        ("Random cascade", "random_cascade_deterministic"),
+    ]
+    regime_series = []
+    for row_label, params_name in regime_specs:
+        args_case = argparse.Namespace(**vars(args))
+        args_case.params_name = params_name
+        rollout = discussion_choice5_rollout(args_case, device, plot_composite=False)
+        regime_series.append({"row_label": row_label, "rollout": rollout})
+
+    saved = plot_discussion_first_moments_5x6(
+        regime_series=regime_series,
+        save_path=out_pdf,
+        fs=28,
+    )
+    print(f"[SAVED] {saved}")
+
+elif choice == "10":
+    print("=" * 60)
+    print(
+        "[INFO] Energy modes 5×6: modes 1–3 only (no total) + log10|energy_pred−energy_GT|."
+    )
+    print("=" * 60)
+    out_pdf = os.path.join(
+        base_path, "discussion_energy_modes_5x6_five_regimes.pdf"
+    )
+    regime_specs = [
+        ("Equipartition", "equipart"),
+        ("Forward cascade", "cascade"),
+        ("Dual cascade", "dual_cascade"),
+        ("Periodic cascade", "periodic_cascade"),
+        ("Random cascade", "random_cascade_deterministic"),
+    ]
+    regime_series = []
+    for row_label, params_name in regime_specs:
+        args_case = argparse.Namespace(**vars(args))
+        args_case.params_name = params_name
+        rollout = discussion_choice5_rollout(args_case, device, plot_composite=False)
+        regime_series.append({"row_label": row_label, "rollout": rollout})
+
+    saved = plot_discussion_energy_modes_5x6(
+        regime_series=regime_series,
+        save_path=out_pdf,
+        fs=28,
     )
     print(f"[SAVED] {saved}")

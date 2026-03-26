@@ -299,18 +299,46 @@ def FEX_model_learned(x,
     
     # Construct path to final_expressions.txt
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if str(device) == 'cuda:0':
-        expr_file = os.path.join(base_dir, "Example", model_name, "Results", "Results1", "Results", params_name, f"noise_{noise_level}", "deter1000","final_expressions.txt")
-    else:
-        expr_file = os.path.join(base_dir, "Example", model_name, "Results", params_name, f"noise_{noise_level}", "deter1000","final_expressions.txt")
-    
-    # print(device)
-    # print(expr_file)
+
+    def _expr_path(pname: str) -> str:
+        if str(device) == "cuda:0":
+            return os.path.join(
+                base_dir,
+                "Example",
+                model_name,
+                "Results",
+                "Results1",
+                "Results",
+                pname,
+                f"noise_{noise_level}",
+                "deter1000",
+                "final_expressions.txt",
+            )
+        return os.path.join(
+            base_dir,
+            "Example",
+            model_name,
+            "Results",
+            pname,
+            f"noise_{noise_level}",
+            "deter1000",
+            "final_expressions.txt",
+        )
+
+    expr_file = _expr_path(params_name)
+    resolved_params = params_name
+    # No deter1000 under ``random_cascade`` in this project; OU-forcing expressions live in ``random_cascade_deterministic``.
+    if not os.path.exists(expr_file) and params_name == "random_cascade":
+        alt = _expr_path("random_cascade_deterministic")
+        if os.path.exists(alt):
+            expr_file = alt
+            resolved_params = "random_cascade_deterministic"
+
     if not os.path.exists(expr_file):
         raise FileNotFoundError(f"Final expressions file not found: {expr_file}")
-    
+
     # Check if expressions are already cached for this configuration
-    cache_key = f"{model_name}_{params_name}_noise_{noise_level}"
+    cache_key = f"{model_name}_{resolved_params}_noise_{noise_level}"
     if cache_key not in _expression_cache:
         # Read the expressions from file
         expressions = {}

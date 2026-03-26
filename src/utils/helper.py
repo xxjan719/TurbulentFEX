@@ -962,6 +962,8 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
 
     Energy_MC_all = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     Energy_MC_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_MC_sran = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    Energy_MC_vae = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
 
     current_state = initial_state
     current_pred_state_nn = initial_state.copy()
@@ -989,6 +991,10 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
         0.5 * (mean_state_record[2, 0] ** 2 + cov_state_record[2, 2, 0]),
     ]
     Energy_dyn_record[:, 0] = Energy_update_record
+    Energy_MC_all[:, 0] = Energy_update_record
+    Energy_MC_pred[:, 0] = Energy_update_pred
+    Energy_MC_sran[:, 0] = Energy_update_pred
+    Energy_MC_vae[:, 0] = Energy_update_pred
 
     # -----------------------------
     # Independent/Dependent setup (shared loop over t=0..TIME_AMOUNT)
@@ -1524,7 +1530,7 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
             else current_pred_state_vae + det_update_vae + simple_noise
         )
 
-        # Independent curves in plots: orange = FEX+TFDM; store FEX+NN in u_pred_single for debugging.
+        # Independent curves in plots: orange = ASD-FEX-TFDM; u_pred_single holds SRAN ensemble for debugging.
         u_pred_all[:, :, idx] = next_pred_tfdm
         u_pred_single[:, :, idx] = next_pred_nn
 
@@ -1552,6 +1558,16 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
         Energy_MC_pred[2, idx] = 0.5 * (mean_state_pred[1, idx] ** 2 + cov_state_pred[1, 1, idx])
         Energy_MC_pred[3, idx] = 0.5 * (mean_state_pred[2, idx] ** 2 + cov_state_pred[2, 2, idx])
 
+        Energy_MC_sran[0, idx] = 0.5 * np.sum(mean_state_nn[:, idx] ** 2) + 0.5 * np.trace(cov_state_nn[:, :, idx])
+        Energy_MC_sran[1, idx] = 0.5 * (mean_state_nn[0, idx] ** 2 + cov_state_nn[0, 0, idx])
+        Energy_MC_sran[2, idx] = 0.5 * (mean_state_nn[1, idx] ** 2 + cov_state_nn[1, 1, idx])
+        Energy_MC_sran[3, idx] = 0.5 * (mean_state_nn[2, idx] ** 2 + cov_state_nn[2, 2, idx])
+
+        Energy_MC_vae[0, idx] = 0.5 * np.sum(mean_state_vae[:, idx] ** 2) + 0.5 * np.trace(cov_state_vae[:, :, idx])
+        Energy_MC_vae[1, idx] = 0.5 * (mean_state_vae[0, idx] ** 2 + cov_state_vae[0, 0, idx])
+        Energy_MC_vae[2, idx] = 0.5 * (mean_state_vae[1, idx] ** 2 + cov_state_vae[1, 1, idx])
+        Energy_MC_vae[3, idx] = 0.5 * (mean_state_vae[2, idx] ** 2 + cov_state_vae[2, 2, idx])
+
         current_pred_state_nn = next_pred_nn
         current_pred_state_tfdm = next_pred_tfdm
         current_pred_state_vae = next_pred_vae
@@ -1560,14 +1576,14 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
     print("\n" + "=" * 60)
     print(
         f"[INFO] t = {TIME_AMOUNT} (time index {idx_t20}): mean, var(u_i), "
-        "third moments — GT, FEX+NN, FEX+TFDM, FEX+VAE"
+        "third moments — GT, ASD-FEX-SRAN, ASD-FEX-TFDM, ASD-FEX-VAE"
     )
     print("=" * 60)
     _snap = [
         ("Ground truth", mean_state_record, cov_state_record, moment3_state_record),
-        ("FEX+NN", mean_state_nn, cov_state_nn, moment3_state_nn),
-        ("FEX+TFDM", mean_state_tfdm, cov_state_tfdm, moment3_state_tfdm),
-        ("FEX+VAE", mean_state_vae, cov_state_vae, moment3_state_vae),
+        ("ASD-FEX-SRAN", mean_state_nn, cov_state_nn, moment3_state_nn),
+        ("ASD-FEX-TFDM", mean_state_tfdm, cov_state_tfdm, moment3_state_tfdm),
+        ("ASD-FEX-VAE", mean_state_vae, cov_state_vae, moment3_state_vae),
     ]
     for label, ms, cs, m3 in _snap:
         md = ms[:, idx_t20]
@@ -1620,6 +1636,10 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
         "dt": dt,
         "params": params,
         "u_all_gt": u_all,
+        "mean_gt": mean_state_record,
+        "mean_pred_tfdm": mean_state_tfdm,
+        "mean_pred_sran": mean_state_nn,
+        "mean_pred_vae": mean_state_vae,
         "cov_gt": cov_state_record,
         "moment3_gt": moment3_state_record,
         # Discussion 4 grid: TFDM (Residual NN), SRAN (legacy z→residual NN), VAE
@@ -1634,6 +1654,11 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
         "moment3_pred_ind": moment3_state_pred,
         "cov_pred_dep": cov_state_pred_dependent,
         "moment3_pred_dep": moment3_state_pred_dependent,
+        # Energy: index 0 = total, 1–3 = per-dimension (same convention as energy_comparison.pdf)
+        "energy_gt": Energy_MC_all,
+        "energy_pred_tfdm": Energy_MC_pred,
+        "energy_pred_sran": Energy_MC_sran,
+        "energy_pred_vae": Energy_MC_vae,
     }
 
 
