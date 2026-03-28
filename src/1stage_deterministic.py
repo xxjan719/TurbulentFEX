@@ -64,14 +64,14 @@ np.random.seed(SEED)
 random.seed(SEED)
 
 m0, var0 = MC_triad_initial_value()
-params = params_init(args.params_name,sample=50000)  # Generate 50,000 samples
+params = params_init(args.params_name, sample=args.SIM_TRAJECTORIES)
 data_file = args.DATA_SAVE_PATH
 
 if os.path.exists(data_file):
     print("\n"+"="*60)
     print(f'[INFO] Data has already generated, just using for the first stage training:FEX'.center(60, '='))
     data = np.load(data_file)
-    dataset_full =  data['dataset']  # Full dataset (50000, 3, 1001)
+    dataset_full = data['dataset']  # Full dataset (N, 3, T+1)
     mean_MC = data['mean_MC']
     cov_MC = data['cov_MC']
     moment3_MC = data['moment3_MC']
@@ -82,14 +82,17 @@ if os.path.exists(data_file):
     
 else:
     print("\n"+"="*60)
-    print(f'[INFO] There is no dataset in this environment, it generates automatically'.center(60,'-'))
+    print(
+        f'[INFO] There is no dataset in this environment, it generates automatically '
+        f'({args.SIM_TRAJECTORIES} trajectories)'.center(60, '-')
+    )
     dataset_full, mean_MC, cov_MC, moment3_MC, moment3_MC_norm,Energy_MC, Energy_dyn = MC_triad_direct(params, m0, var0,
     method = 'Euler',noise_level = args.NOISE_LEVEL)
     
     # Save the full dataset
     np.savez(
     args.DATA_SAVE_PATH,
-    dataset=dataset_full,  # Save full dataset (50000, 3, 1001)
+    dataset=dataset_full,
     mean_MC=mean_MC,
     cov_MC=cov_MC,
     moment3_MC=moment3_MC,

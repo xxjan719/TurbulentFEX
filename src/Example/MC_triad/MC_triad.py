@@ -60,8 +60,8 @@ def params_init(case_name = None,
         params['L'] = np.array([[0, 0.03, 0.06], [-0.03,0,-0.09],[-0.06,0.09,0]])
         params['G'] = np.diag([1,2,2])
         params['B'] = np.array([2,-1,-1])
-        # Noise settings
-        params['SS'] = np.diag([np.sqrt(10**(-2)), np.sqrt(10**(-1)), np.sqrt(10**(-1))])
+        # Noise settings: same diagonal diffusion as forward cascade (σ₁²=10, σ₂²=σ₃²=10⁻²)
+        params['SS'] = np.diag([np.sqrt(10), np.sqrt(10**(-2)), np.sqrt(10**(-2))])
         params['SSt'] = np.zeros((3,3))
 
         # Time-dependent forcing and noise scaling (tmM and tmS)

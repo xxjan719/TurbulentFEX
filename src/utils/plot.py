@@ -3801,3 +3801,144 @@ def plot_state_projections_cases_3x9(
     finally:
         for k, v in _rc_old.items():
             mpl.rcParams[k] = v
+
+
+def plot_state_projections_cases_3x9_scatter(
+    case_data: dict,
+    dt: float,
+    times=(5, 10, 20),
+    save_path: str = None,
+    fs: int = 56,
+    max_points: int = 8000,
+    point_size: float = 1.25,
+    alpha: float = 0.4,
+    seed: int = 0,
+    color: str = "#2171B5",
+    equal_aspect: bool = False,
+):
+    """
+    Same panel layout as :func:`plot_state_projections_cases_3x9`, but draw **scatter**
+    samples (no 2D histogram / normalized contours). Works for any number of cases
+    (e.g. three regimes or two for periodic/random).
+
+    Projections use ``(x, y) = (u_a, u_b)`` with pairs (u1,u2), (u2,u3), (u1,u3) — so
+    the u2–u3 column is **x = u2**, **y = u3** (same as the contour version).
+
+    For each panel, if the path count exceeds ``max_points``, indices are subsampled
+    with a fixed RNG seed for reproducibility.
+
+    By default ``equal_aspect=False`` so axes follow the data range (typical for scatter
+    figures). Set ``equal_aspect=True`` for 1:1 scale on x and y (can compress clouds
+    when horizontal and vertical spreads differ a lot).
+    """
+    case_items = list(case_data.items())
+    n_cases = len(case_items)
+    if n_cases == 0:
+        raise ValueError("case_data is empty.")
+
+    tick_fs = max(int(fs) - 4, 24)
+    _rc_keys = (
+        "font.size",
+        "axes.labelsize",
+        "axes.titlesize",
+        "xtick.labelsize",
+        "ytick.labelsize",
+    )
+    _rc_old = {k: mpl.rcParams[k] for k in _rc_keys}
+    rng = np.random.default_rng(seed)
+
+    try:
+        mpl.rcParams.update(
+            {
+                "font.size": fs,
+                "axes.labelsize": fs,
+                "axes.titlesize": fs,
+                "xtick.labelsize": tick_fs,
+                "ytick.labelsize": tick_fs,
+            }
+        )
+
+        pairs = [(0, 1), (1, 2), (0, 2)]
+        pair_labels = [("u1", "u2"), ("u2", "u3"), ("u1", "u3")]
+        proj_titles = ["u1-u2", "u2-u3", "u1-u3"]
+
+        idxs = [int(round(float(t) / float(dt))) for t in times]
+        for ci, (_, u_all) in enumerate(case_items):
+            if u_all.ndim != 3 or u_all.shape[1] != 3:
+                raise ValueError(
+                    f"u_all for case index {ci} must have shape (N,3,T); got {u_all.shape}"
+                )
+            nt = u_all.shape[2]
+            if any(i < 0 or i >= nt for i in idxs):
+                raise ValueError(
+                    f"Times {list(times)} map outside available index range [0, {nt-1}]"
+                )
+
+        fig, axes = plt.subplots(len(times), n_cases * 3, figsize=(68, 22))
+
+        for r, t in enumerate(times):
+            idx = idxs[r]
+            for ci, (_, u_all) in enumerate(case_items):
+                state = u_all[:, :, idx]
+                n_paths = state.shape[0]
+                sub = (
+                    np.arange(n_paths)
+                    if n_paths <= max_points
+                    else rng.choice(n_paths, size=max_points, replace=False)
+                )
+                for pidx, (a, b) in enumerate(pairs):
+                    c = ci * 3 + pidx
+                    ax = axes[r, c]
+                    x = state[sub, a]
+                    y = state[sub, b]
+                    ax.scatter(
+                        x,
+                        y,
+                        c=color,
+                        s=point_size,
+                        alpha=alpha,
+                        linewidths=0,
+                        rasterized=True,
+                    )
+
+                    xname, yname = pair_labels[pidx][0], pair_labels[pidx][1]
+                    if r == len(times) - 1:
+                        ax.set_xlabel(xname, fontsize=fs, labelpad=16)
+                    else:
+                        ax.set_xlabel("")
+                        ax.set_xticklabels([])
+                    ax.set_ylabel(yname, fontsize=fs, labelpad=24)
+                    if ci >= 1:
+                        ax.yaxis.set_label_coords(-0.33, 0.5)
+                    else:
+                        ax.yaxis.set_label_coords(-0.23, 0.5)
+
+                    if r == 0:
+                        ax.set_title(proj_titles[pidx], fontsize=fs, pad=22)
+
+                    ax.grid(True, alpha=0.2)
+                    ax.tick_params(axis="both", labelsize=tick_fs, pad=8)
+                    if equal_aspect:
+                        ax.set_aspect("equal", adjustable="datalim")
+                    else:
+                        ax.set_aspect("auto")
+
+        fig.subplots_adjust(left=0.16, right=0.95, top=0.90, bottom=0.14, wspace=0.58, hspace=0.65)
+
+        row_y = [0.80, 0.50, 0.20]
+        for yy, t in zip(row_y, times):
+            fig.text(0.09, yy, f"t={t}", fontsize=fs, va="center", ha="left")
+
+        for ci, (case_name, _) in enumerate(case_items):
+            x_center = 0.10 + (ci * 3 + 1.5) * (0.78 / (n_cases * 3))
+            fig.text(x_center, 0.965, case_name, fontsize=fs, ha="center", va="center")
+
+        if save_path is not None:
+            os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+            fig.savefig(save_path, dpi=300, bbox_inches="tight", pad_inches=0.35)
+            plt.close(fig)
+            return save_path
+        return fig
+    finally:
+        for k, v in _rc_old.items():
+            mpl.rcParams[k] = v

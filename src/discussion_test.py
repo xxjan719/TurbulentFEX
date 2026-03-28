@@ -17,6 +17,7 @@ from utils.plot import (
     plot_third_order_moments_ind_dep_2x2,
     plot_state_projections_3x3,
     plot_state_projections_cases_3x9,
+    plot_state_projections_cases_3x9_scatter,
     plot_discussion_first_moments_5x6,
     plot_discussion_energy_modes_5x6,
     plot_triad_3d_time_grid_matplotlib_cloud_3x3_times,
@@ -69,7 +70,10 @@ print("3. Discussion 4: covariance diagonals + third moments (3×7 grid: equipar
 print("4. Discussion 5: off-diagonal covariances (3×3) time indep vs dep")
 print("5. Diffusion (random_cascade): cov(u_i,u_i) + all ⟨M⟩ (1×7), fontsize 28")
 print("6. Periodic + random deterministic forcing: same columns (2×7), fontsize 28")
-print("7. State projections 3×9: three cases × three projections at t=5,10,20")
+print(
+    "7. State projections 3×9: three cases × three projections at t=5,10,20 "
+    "(density PDF + scatter)"
+)
 print("8. State projections 3×6: periodic + random cascade deterministic at t=5,10,20")
 print(
     "9. First moments 5×6: ⟨u1⟩,⟨u2⟩,⟨u3⟩ + log10|pred−GT| per component, five regimes"
@@ -234,8 +238,11 @@ elif choice == "7":
     print("=" * 60)
     print("[INFO] State projections 3×9: Equipartition / Forward Cascade / Dual Cascade.")
     print("=" * 60)
-    out_png = os.path.join(
+    out_pdf = os.path.join(
         base_path, "discussion_state_projections_3x9_cases_t5_t10_t20.pdf"
+    )
+    out_scatter = os.path.join(
+        base_path, "discussion_state_projections_3x9_cases_t5_t10_t20_scatter.pdf"
     )
     case_specs = [
         ("Equipartition", "equipart"),
@@ -253,10 +260,18 @@ elif choice == "7":
         case_data=case_data,
         dt=rollout["dt"],
         times=(5, 10, 20),
-        save_path=out_png,
+        save_path=out_pdf,
         fs=56,
     )
     print(f"[SAVED] {saved}")
+    saved_s = plot_state_projections_cases_3x9_scatter(
+        case_data=case_data,
+        dt=rollout["dt"],
+        times=(5, 10, 20),
+        save_path=out_scatter,
+        fs=56,
+    )
+    print(f"[SAVED] {saved_s}")
 
 elif choice == "8":
     print("=" * 60)
@@ -265,6 +280,10 @@ elif choice == "8":
 
     out_pdf = os.path.join(
         base_path, "discussion_state_projections_3x6_periodic_random_det_cases_t5_t10_t20.pdf"
+    )
+    out_scatter = os.path.join(
+        base_path,
+        "discussion_state_projections_3x6_periodic_random_det_cases_t5_t10_t20_scatter.pdf",
     )
 
     case_specs = [
@@ -286,6 +305,14 @@ elif choice == "8":
         fs=56,
     )
     print(f"[SAVED] {saved}")
+    saved_s = plot_state_projections_cases_3x9_scatter(
+        case_data=case_data,
+        dt=rollout["dt"],
+        times=(5, 10, 20),
+        save_path=out_scatter,
+        fs=56,
+    )
+    print(f"[SAVED] {saved_s}")
 
 elif choice == "9":
     print("=" * 60)

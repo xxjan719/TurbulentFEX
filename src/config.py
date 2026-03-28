@@ -273,6 +273,12 @@ class Config:
                             default=200,
                             help='Number of trees in inner iteration')
         parser.add_argument('--TRAINING_DETER_SAMPLES',type=int, default=7000, help ='Number of experiment for testing fewer sample')
+        parser.add_argument(
+            '--SIM_TRAJECTORIES',
+            type=int,
+            default=10000,
+            help='Number of MC trajectories to generate and save in the npz (1stage_deterministic.py).',
+        )
         
         # FEX training integration
         parser.add_argument('--INTEGRATOR_METHOD', type=str, 
@@ -341,7 +347,7 @@ class Config:
                             default = None,
                             help='Path to save figure.')
         parser.add_argument('--TRAIN_THREE_DIMENSION_INTEGRATED',type=bool,
-                            default = True,
+                            default = False,
                             help='Whether to train the FEX with ground truth data.')
         return parser
     
