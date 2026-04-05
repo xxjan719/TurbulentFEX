@@ -291,11 +291,15 @@ def FEX_model_learned(x,
     """
     import os
     import re
-    
-    # Extract dimensions from input
+
+    # Extract dimensions from input (optional 4th column = time t for learned expressions)
     x1 = x[:, 0:1].squeeze(-1)
     x2 = x[:, 1:2].squeeze(-1)
     x3 = x[:, 2:3].squeeze(-1)
+    if x.shape[1] >= 4:
+        t = x[:, 3:4].squeeze(-1)
+    else:
+        t = torch.zeros_like(x1)
     
     # Construct path to final_expressions.txt
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -381,32 +385,36 @@ def FEX_model_learned(x,
             raise ValueError(f"Expression for {dim_key} not found in file")
         
         expr_str = expressions[dim_key]
-        
-        # Replace x1, x2, x3 with the actual tensor variables
-        # Note: We need to handle the expressions carefully to avoid tensor operations issues
-        expr_str = expr_str.replace('x1', 'x1_tensor')
-        expr_str = expr_str.replace('x2', 'x2_tensor') 
-        expr_str = expr_str.replace('x3', 'x3_tensor')
-        
-        # Create local variables for evaluation
-        x1_tensor = x1
-        x2_tensor = x2
-        x3_tensor = x3
-        
-        # Evaluate the expression
+
+        # Evaluate the expression (numpy), same safe pattern as FEX_with_force_model_learned
         try:
-            # Use numpy operations for compatibility
-            x1_np = x1.detach().cpu().numpy() if hasattr(x1, 'detach') else x1
-            x2_np = x2.detach().cpu().numpy() if hasattr(x2, 'detach') else x2
-            x3_np = x3.detach().cpu().numpy() if hasattr(x3, 'detach') else x3
-            
-            # Replace variables in expression
-            expr_np = expr_str.replace('x1_tensor', 'x1_np')
-            expr_np = expr_np.replace('x2_tensor', 'x2_np')
-            expr_np = expr_np.replace('x3_tensor', 'x3_np')
-            
-            # Evaluate the expression
-            result = eval(expr_np)
+            x1_np = x1.detach().cpu().numpy() if hasattr(x1, "detach") else x1
+            x2_np = x2.detach().cpu().numpy() if hasattr(x2, "detach") else x2
+            x3_np = x3.detach().cpu().numpy() if hasattr(x3, "detach") else x3
+            t_np = t.detach().cpu().numpy() if hasattr(t, "detach") else t
+
+            expr_np = re.sub(r"\bx1\b", "x1_np", expr_str)
+            expr_np = re.sub(r"\bx2\b", "x2_np", expr_np)
+            expr_np = re.sub(r"\bx3\b", "x3_np", expr_np)
+            expr_np = re.sub(r"\bt\b", "t_np", expr_np)
+
+            safe_dict = {
+                "x1_np": x1_np,
+                "x2_np": x2_np,
+                "x3_np": x3_np,
+                "t_np": t_np,
+                "sin": np.sin,
+                "cos": np.cos,
+                "tan": np.tan,
+                "exp": np.exp,
+                "log": np.log,
+                "sqrt": np.sqrt,
+                "abs": np.abs,
+                "pi": np.pi,
+                "e": np.e,
+                "np": np,
+            }
+            result = eval(expr_np, {"__builtins__": {}}, safe_dict)
             
             # Convert back to tensor if needed
             if hasattr(x1, 'detach'):

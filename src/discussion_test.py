@@ -66,13 +66,16 @@ print("SECOND STAGE: STOCHASTIC OPTIONS")
 print("="*60)
 print("1. Discussion 2: different noise levels test")
 print("2. Discussion 3: different sample sizes test")
-print("3. Discussion 4: covariance diagonals + third moments (3×7 grid: equipart / Forward Cascade / dual_cascade)")
-print("4. Discussion 5: off-diagonal covariances (3×3) time indep vs dep")
-print("5. Diffusion (random_cascade): cov(u_i,u_i) + all ⟨M⟩ (1×7), fontsize 28")
-print("6. Periodic + random deterministic forcing: same columns (2×7), fontsize 28")
 print(
-    "7. State projections 3×9: three cases × three projections at t=5,10,20 "
-    "(density PDF + scatter)"
+    "3. Discussion 4: ‖⟨u⟩‖₂ + covariance diagonals + third moments "
+    "(3×8 grid: equipart / Forward Cascade / dual_cascade)"
+)
+print("4. Discussion 5: off-diagonal covariances (3×3) time indep vs dep")
+print("5. Diffusion (random_cascade_deterministic): ‖⟨u⟩‖₂ + cov + ⟨M⟩ (1×8), fontsize 28")
+print("6. Periodic + random cascade (diffusion): same columns (2×8), fontsize 28")
+print(
+    "7. State projections 3×9 scatter: three cases × three projections at t=5,10,20 "
+    "(FEX and TFDM)"
 )
 print("8. State projections 3×6: periodic + random cascade deterministic at t=5,10,20")
 print(
@@ -164,7 +167,9 @@ elif choice == '2':
 
 elif choice == '3':
     print("=" * 60)
-    print("[INFO] Discussion 4: 3×7 grid — cov(u_i,u_i) and selected ⟨M⟩; three regimes.")
+    print(
+        "[INFO] Discussion 4: 3×8 grid — ‖⟨u⟩‖₂, cov(u_i,u_i), selected ⟨M⟩; three regimes."
+    )
     print("=" * 60)
     run_discussion_choice4_triad_grid(
         args,
@@ -193,8 +198,11 @@ elif choice == '4':
     )
 
 elif choice == "5":
+    # Same figure builder as option 3: plot_discussion_cov_moments_grid (row labels, ticks, margins).
     print("=" * 60)
-    print("[INFO] Diffusion (random_cascade): 1×7 cov diagonals + third moments, fs=28.")
+    print(
+        "[INFO] Diffusion (random_cascade_deterministic): 1×8 ‖⟨u⟩‖₂ + cov diagonals + ⟨M⟩, fs=28."
+    )
     print("=" * 60)
     run_discussion_cov_moments_grid(
         args,
@@ -204,18 +212,18 @@ elif choice == "5":
         rollout_worker=lambda plot_composite=False: discussion_choice5_rollout(
             args, device, plot_composite=plot_composite
         ),
-        regimes=("random_cascade",),
-        row_labels=("Random cascade",),
-        save_filename="discussion_diffusion_random_cascade_cov_moments_grid.pdf",
+        regimes=("random_cascade_deterministic",),
+        row_labels=("Random cascade (deterministic)",),
+        save_filename="discussion_diffusion_random_cascade_deterministic_cov_moments_grid.pdf",
         fs=28,
-        log_inset_row_index=None,
-        log_label="discussion diffusion 1×7 grid",
+        log_label="discussion diffusion 1×8 grid",
     )
 
 elif choice == "6":
+    # Same figure builder as option 3: plot_discussion_cov_moments_grid (row labels, ticks, margins).
     print("=" * 60)
     print(
-        "[INFO] Periodic cascade + random cascade (deterministic): 2×7 cov + ⟨M⟩, fs=28."
+        "[INFO] Periodic cascade + random cascade (diffusion): 2×8 ‖⟨u⟩‖₂ + cov + ⟨M⟩, fs=28."
     )
     print("=" * 60)
     run_discussion_cov_moments_grid(
@@ -226,52 +234,60 @@ elif choice == "6":
         rollout_worker=lambda plot_composite=False: discussion_choice5_rollout(
             args, device, plot_composite=plot_composite
         ),
-        regimes=("periodic_cascade", "random_cascade_deterministic"),
+        regimes=("periodic_cascade", "random_cascade"),
         row_labels=("Periodic cascade", "Random cascade"),
-        save_filename="discussion_periodic_random_det_cov_moments_grid.pdf",
+        save_filename="discussion_periodic_random_cascade_cov_moments_grid.pdf",
         fs=28,
-        log_inset_row_index=None,
-        log_label="discussion periodic + random det 2×7 grid",
+        log_label="discussion periodic + random cascade 2×8 grid",
     )
 
 elif choice == "7":
     print("=" * 60)
-    print("[INFO] State projections 3×9: Equipartition / Forward Cascade / Dual Cascade.")
+    print("[INFO] State projections 3×9 scatter: FEX and TFDM, three regimes.")
     print("=" * 60)
-    out_pdf = os.path.join(
-        base_path, "discussion_state_projections_3x9_cases_t5_t10_t20.pdf"
+    out_scatter_fex = os.path.join(
+        base_path, "discussion_state_projections_3x9_cases_t5_t10_t20_scatter_fex.pdf"
     )
-    out_scatter = os.path.join(
-        base_path, "discussion_state_projections_3x9_cases_t5_t10_t20_scatter.pdf"
+    out_scatter_tfdm = os.path.join(
+        base_path, "discussion_state_projections_3x9_cases_t5_t10_t20_scatter_tfdm.pdf"
     )
     case_specs = [
         ("Equipartition", "equipart"),
         ("Forward Cascade", "cascade"),
         ("Dual Cascade", "dual_cascade"),
     ]
-    case_data = {}
+    case_data_fex = {}
+    case_data_tfdm = {}
     for display_name, params_name in case_specs:
         args_case = argparse.Namespace(**vars(args))
         args_case.params_name = params_name
         rollout = discussion_choice5_rollout(args_case, device, plot_composite=False)
-        case_data[display_name] = rollout["u_all_gt"]
+        case_data_fex[display_name] = rollout["u_all_gt"]
+        case_data_tfdm[display_name] = rollout["u_pred_tfdm"]
 
-    saved = plot_state_projections_cases_3x9(
-        case_data=case_data,
+    _nplot = int(getattr(args, "RESIDUAL_SAMPLES", 10000))
+    _max_pts = max(_nplot, 12000)
+    saved_fex = plot_state_projections_cases_3x9_scatter(
+        case_data=case_data_fex,
         dt=rollout["dt"],
         times=(5, 10, 20),
-        save_path=out_pdf,
+        save_path=out_scatter_fex,
         fs=56,
+        max_points=_max_pts,
     )
-    print(f"[SAVED] {saved}")
-    saved_s = plot_state_projections_cases_3x9_scatter(
-        case_data=case_data,
+    print(f"[SAVED] {saved_fex}")
+    saved_tfdm = plot_state_projections_cases_3x9_scatter(
+        case_data=case_data_tfdm,
         dt=rollout["dt"],
         times=(5, 10, 20),
-        save_path=out_scatter,
+        save_path=out_scatter_tfdm,
         fs=56,
+        max_points=_max_pts,
+        point_size=2.0,
+        alpha=0.55,
+        case_title_x_shift=0.04,
     )
-    print(f"[SAVED] {saved_s}")
+    print(f"[SAVED] {saved_tfdm}")
 
 elif choice == "8":
     print("=" * 60)
@@ -311,6 +327,7 @@ elif choice == "8":
         times=(5, 10, 20),
         save_path=out_scatter,
         fs=56,
+        case_title_x_shift=0.04,
     )
     print(f"[SAVED] {saved_s}")
 

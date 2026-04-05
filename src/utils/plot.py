@@ -1995,19 +1995,16 @@ def plot_discussion_cov_moments_grid(
     save_path,
     row_labels,
     fs=28,
-    log_inset_row_index=None,
     log_label="discussion cov/moments grid",
 ):
     """
-    N×7 panels: rows = regimes, columns = cov(u_i,u_i), i=1,2,3 and four third moments.
+    N×8 panels: rows = regimes; column 0 = ‖⟨u⟩‖₂; columns 1–3 = cov(u_i,u_i);
+    columns 4–7 = selected third moments.
     Curves: ground truth (black), ASD-FEX-TFDM (orange), SRAN (pink), VAE (green).
 
     ``packs`` are dicts from ``discussion_choice5_rollout(..., plot_composite=False)``.
-    Optional ``log_inset_row_index``: row (0-based) that gets log-|error| insets on cols 0–5
-    (Discussion 4 dual-cascade row uses index 2 when N=3).
     """
     from matplotlib.lines import Line2D
-    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
     nrows = len(packs)
     assert nrows == len(row_labels)
@@ -2019,25 +2016,36 @@ def plot_discussion_cov_moments_grid(
         r"$\langle M_{223} \rangle$",
     ]
     col_labels = [
+        r"$\|\langle\mathbf{u}\rangle\|_2$",
         r"$\mathrm{cov}(u_1,u_1)$",
         r"$\mathrm{cov}(u_2,u_2)$",
         r"$\mathrm{cov}(u_3,u_3)$",
     ] + moment_latex
 
+    ncols = 8
     fig_h = max(6.5, 10.0 * nrows / 3.0)
-    fig, axes = plt.subplots(nrows, 7, figsize=(28, fig_h), sharex=False)
+    fig_w = 28.0 * ncols / 7.0
+    fig, axes = plt.subplots(nrows, ncols, figsize=(fig_w, fig_h), sharex=False)
     if nrows == 1:
         axes = np.asarray([axes])
+
+    # Row names (Equipartition, …) are long: slightly smaller than titles; ticks a bit below fs.
+    fs_row_label = max(12, int(fs) - 8)
+    tick_fs = max(13, int(fs) - 5)
+    title_fs = fs
 
     gt_color = "black"
     tfdm_color = "#ff7f0e"
     sran_color = "#e377c2"
     vae_color = "#2ca02c"
-    inset_title_fs = max(12, int(round(fs * 26 / 28)))
 
     last_row = nrows - 1
     for row, (axrow, pack, rlabel) in enumerate(zip(axes, packs, row_labels)):
         Time_ind = np.asarray(pack["Time_ind"], dtype=float).ravel()
+        mean_gt = pack["mean_gt"]
+        mean_tfdm = pack["mean_pred_tfdm"]
+        mean_sran = pack.get("mean_pred_sran", mean_tfdm)
+        mean_vae = pack.get("mean_pred_vae", mean_tfdm)
         cov_gt = pack["cov_gt"]
         cov_tfdm = pack.get("cov_pred_tfdm", pack["cov_pred_ind"])
         cov_sran = pack.get("cov_pred_sran", cov_tfdm)
@@ -2047,16 +2055,25 @@ def plot_discussion_cov_moments_grid(
         m_sran = pack.get("moment3_pred_sran", m_tfdm)
         m_vae = pack.get("moment3_pred_vae", m_tfdm)
 
-        for col in range(7):
+        for col in range(ncols):
             ax = axrow[col]
-            if col < 3:
-                i = col
+            if col == 0:
+                mg = np.asarray(mean_gt, dtype=float)
+                y_gt = np.sqrt(np.sum(mg * mg, axis=0))
+                mt = np.asarray(mean_tfdm, dtype=float)
+                y_tfdm = np.sqrt(np.sum(mt * mt, axis=0))
+                ms = np.asarray(mean_sran, dtype=float)
+                y_sran = np.sqrt(np.sum(ms * ms, axis=0))
+                mv = np.asarray(mean_vae, dtype=float)
+                y_vae = np.sqrt(np.sum(mv * mv, axis=0))
+            elif col < 4:
+                i = col - 1
                 y_gt = cov_gt[i, i, :]
                 y_tfdm = cov_tfdm[i, i, :]
                 y_sran = cov_sran[i, i, :]
                 y_vae = cov_vae[i, i, :]
             else:
-                mi, mj, mk = moment_idx[col - 3]
+                mi, mj, mk = moment_idx[col - 4]
                 y_gt = m_gt[mi, mj, mk, :]
                 y_tfdm = m_tfdm[mi, mj, mk, :]
                 y_sran = m_sran[mi, mj, mk, :]
@@ -2095,63 +2112,13 @@ def plot_discussion_cov_moments_grid(
                 label="ASD-FEX-VAE",
             )
 
-            if (
-                log_inset_row_index is not None
-                and row == log_inset_row_index
-                and col in (0, 1, 2, 3, 4, 5)
-            ):
-                eps = 1e-12
-                err_tfdm = np.abs(np.asarray(y_tfdm) - np.asarray(y_gt)) + eps
-                err_sran = np.abs(np.asarray(y_sran) - np.asarray(y_gt)) + eps
-                err_vae = np.abs(np.asarray(y_vae) - np.asarray(y_gt)) + eps
-                t_err = Time_ind[1:]
-                err_tfdm = err_tfdm[1:]
-                err_sran = err_sran[1:]
-                err_vae = err_vae[1:]
-                inset_loc = "upper right" if col in (0, 1, 2) else "lower right"
-                inset_borderpad = 1.1
-                if col in (0, 1, 2):
-                    axins = inset_axes(
-                        ax,
-                        width="40%",
-                        height="40%",
-                        loc=inset_loc,
-                        bbox_to_anchor=(0.0, -0.06, 0.86, 0.94),
-                        bbox_transform=ax.transAxes,
-                        borderpad=inset_borderpad,
-                    )
-                    inset_title_y = 1
-                else:
-                    axins = inset_axes(
-                        ax,
-                        width="40%",
-                        height="40%",
-                        loc=inset_loc,
-                        bbox_to_anchor=(0.0, 0.02, 0.86, 0.98),
-                        bbox_transform=ax.transAxes,
-                        borderpad=inset_borderpad,
-                    )
-                    inset_title_y = 0.99
-                axins.plot(t_err, err_tfdm, color=tfdm_color, linewidth=1.0)
-                axins.plot(t_err, err_sran, color=sran_color, linewidth=1.0)
-                axins.plot(t_err, err_vae, color=vae_color, linewidth=1.0)
-                axins.set_yscale("log")
-                axins.set_title(
-                    "log error", fontsize=inset_title_fs, y=inset_title_y, pad=0.0
-                )
-                axins.set_facecolor((1.0, 1.0, 1.0, 0.9))
-                axins.grid(False)
-                axins.tick_params(axis="both", labelsize=max(10, int(fs * 0.55)))
-                for spine in axins.spines.values():
-                    spine.set_alpha(0.8)
-
             if row == 0:
-                ax.set_title(col_labels[col], fontsize=fs)
+                ax.set_title(col_labels[col], fontsize=title_fs)
             if col == 0:
-                ax.set_ylabel(rlabel, fontsize=fs)
+                ax.set_ylabel(rlabel, fontsize=fs_row_label, labelpad=10)
             if row == last_row:
                 ax.set_xlabel("Time", fontsize=fs)
-            ax.tick_params(axis="both", labelsize=fs)
+            ax.tick_params(axis="both", labelsize=tick_fs)
             ax.grid(False)
 
     handles = [
@@ -2168,7 +2135,8 @@ def plot_discussion_cov_moments_grid(
         frameon=False,
         bbox_to_anchor=(0.5, 1.02),
     )
-    plt.tight_layout(rect=[0, 0.02, 1, 0.92])
+    # Extra left margin so regime names do not overlap the first column.
+    plt.tight_layout(rect=[0.032, 0.02, 1, 0.92])
     save_path = os.path.abspath(save_path)
     os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
     try:
@@ -2193,12 +2161,13 @@ def plot_discussion_choice4_triad_grid(
     fs=28,
 ):
     """
-    3×7 panel figure: rows = regimes, columns = cov(u_i,u_i) for i=1,2,3 and
+    3×8 panel figure: rows = regimes; columns = ‖⟨u⟩‖₂, cov(u_i,u_i) for i=1,2,3 and
     ⟨M123⟩, ⟨M122⟩, ⟨M133⟩, ⟨M223⟩. Each panel: ground truth (black), ASD-FEX-TFDM
     (orange), ASD-FEX-SRAN (pink), ASD-FEX-VAE (green), all over t∈[0,20].
 
     `packs` is a length-3 list of dicts from ``discussion_choice5_rollout(..., plot_composite=False)``:
-    Time_ind, cov_gt, moment3_gt, cov_pred_tfdm, moment3_pred_tfdm,
+    Time_ind, mean_gt, mean_pred_tfdm, mean_pred_sran, mean_pred_vae,
+    cov_gt, moment3_gt, cov_pred_tfdm, moment3_pred_tfdm,
     cov_pred_sran, moment3_pred_sran, cov_pred_vae, moment3_pred_vae.
     Falls back to ``cov_pred_ind`` / ``moment3_pred_ind`` if *_tfdm keys are absent.
     """
@@ -2208,7 +2177,6 @@ def plot_discussion_choice4_triad_grid(
         save_path,
         row_labels,
         fs=fs,
-        log_inset_row_index=2,
         log_label="discussion choice 4 grid",
     )
 
@@ -2260,7 +2228,6 @@ def run_discussion_cov_moments_grid(
     row_labels,
     save_filename: str,
     fs: int = 28,
-    log_inset_row_index=None,
     log_label=None,
 ):
     """
@@ -2289,7 +2256,6 @@ def run_discussion_cov_moments_grid(
         save_path=save_pdf,
         row_labels=row_labels,
         fs=fs,
-        log_inset_row_index=log_inset_row_index,
         log_label=tag,
     )
 
@@ -3815,6 +3781,7 @@ def plot_state_projections_cases_3x9_scatter(
     seed: int = 0,
     color: str = "#2171B5",
     equal_aspect: bool = False,
+    case_title_x_shift: float = 0.0,
 ):
     """
     Same panel layout as :func:`plot_state_projections_cases_3x9`, but draw **scatter**
@@ -3930,7 +3897,7 @@ def plot_state_projections_cases_3x9_scatter(
             fig.text(0.09, yy, f"t={t}", fontsize=fs, va="center", ha="left")
 
         for ci, (case_name, _) in enumerate(case_items):
-            x_center = 0.10 + (ci * 3 + 1.5) * (0.78 / (n_cases * 3))
+            x_center = 0.10 + (ci * 3 + 1.5) * (0.78 / (n_cases * 3)) + float(case_title_x_shift)
             fig.text(x_center, 0.965, case_name, fontsize=fs, ha="center", va="center")
 
         if save_path is not None:

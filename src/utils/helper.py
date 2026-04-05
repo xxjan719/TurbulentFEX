@@ -877,7 +877,8 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
     
     TIME_AMOUNT = 20
     dt = 0.01
-    NPATH = 5000
+    # Align MC path count with second-stage sample budget (default 10000 in config).
+    NPATH = int(getattr(args, "RESIDUAL_SAMPLES", 10000))
     initial_state = np.random.normal(loc=m0, scale=np.sqrt(var0), size=(NPATH, 3))    
     x_pred_initial = torch.ones(NPATH, 3).to(device,dtype=torch.float32) * torch.tensor(m0).to(device,dtype=torch.float32)
     scaler = args.DIFF_SCALE
@@ -1260,6 +1261,7 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
             state_tensor = torch.tensor(state_np, dtype=torch.float32).to(device)
             if args.params_name in [
                 "periodic_cascade",
+                "random_cascade",
                 "random_cascade_deterministic",
             ]:
                 current_time = idx * dt
@@ -1401,6 +1403,7 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
             ).to(device)
             if args.params_name in [
                 "periodic_cascade",
+                "random_cascade",
                 "random_cascade_deterministic",
             ]:
                 current_time = idx * dt
@@ -1636,6 +1639,7 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
         "dt": dt,
         "params": params,
         "u_all_gt": u_all,
+        "u_pred_tfdm": u_pred_all,
         "mean_gt": mean_state_record,
         "mean_pred_tfdm": mean_state_tfdm,
         "mean_pred_sran": mean_state_nn,
