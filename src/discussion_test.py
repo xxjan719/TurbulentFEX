@@ -17,7 +17,7 @@ from utils.plot import (
     plot_third_order_moments_ind_dep_2x2,
     plot_state_projections_3x3,
     plot_state_projections_cases_3x9,
-    plot_state_projections_cases_3x9_scatter,
+    plot_state_projections_cases_4x9_scatter_and_gt_density,
     plot_discussion_first_moments_5x6,
     plot_discussion_energy_modes_5x6,
     plot_triad_3d_time_grid_matplotlib_cloud_3x3_times,
@@ -72,12 +72,13 @@ print(
 )
 print("4. Discussion 5: off-diagonal covariances (3×3) time indep vs dep")
 print("5. Diffusion (random_cascade_deterministic): ‖⟨u⟩‖₂ + cov + ⟨M⟩ (1×8), fontsize 28")
-print("6. Periodic + random cascade (diffusion): same columns (2×8), fontsize 28")
+print("6. Periodic + random cascade deterministic: same columns (2×8), fontsize 28")
 print(
-    "7. State projections 3×9 scatter: three cases × three projections at t=5,10,20 "
-    "(FEX and TFDM)"
+    "7. State projections 4×9: TFDM / SRAN / VAE scatter + GT density at t=20 only"
 )
-print("8. State projections 3×6: periodic + random cascade deterministic at t=5,10,20")
+print(
+    "8. State projections 4×6: periodic + random cascade det. (same style as opt. 7, t=20)"
+)
 print(
     "9. First moments 5×6: ⟨u1⟩,⟨u2⟩,⟨u3⟩ + log10|pred−GT| per component, five regimes"
 )
@@ -213,17 +214,18 @@ elif choice == "5":
             args, device, plot_composite=plot_composite
         ),
         regimes=("random_cascade_deterministic",),
-        row_labels=("Random cascade (deterministic)",),
+        row_labels=("Random cascade",),
         save_filename="discussion_diffusion_random_cascade_deterministic_cov_moments_grid.pdf",
         fs=28,
         log_label="discussion diffusion 1×8 grid",
     )
 
 elif choice == "6":
-    # Same figure builder as option 3: plot_discussion_cov_moments_grid (row labels, ticks, margins).
+    # Row 2 rollout uses random_cascade_deterministic; y-axis label is short "Random cascade".
     print("=" * 60)
     print(
-        "[INFO] Periodic cascade + random cascade (diffusion): 2×8 ‖⟨u⟩‖₂ + cov + ⟨M⟩, fs=28."
+        "[INFO] Periodic cascade + random_cascade_deterministic: 2×8 ‖⟨u⟩‖₂ + cov + ⟨M⟩, fs=28 "
+        '(second row y-label: "Random cascade").'
     )
     print("=" * 60)
     run_discussion_cov_moments_grid(
@@ -234,72 +236,76 @@ elif choice == "6":
         rollout_worker=lambda plot_composite=False: discussion_choice5_rollout(
             args, device, plot_composite=plot_composite
         ),
-        regimes=("periodic_cascade", "random_cascade"),
+        regimes=("periodic_cascade", "random_cascade_deterministic"),
         row_labels=("Periodic cascade", "Random cascade"),
-        save_filename="discussion_periodic_random_cascade_cov_moments_grid.pdf",
+        save_filename="discussion_periodic_random_det_cov_moments_grid.pdf",
         fs=28,
         log_label="discussion periodic + random cascade 2×8 grid",
     )
 
 elif choice == "7":
     print("=" * 60)
-    print("[INFO] State projections 3×9 scatter: FEX and TFDM, three regimes.")
-    print("=" * 60)
-    out_scatter_fex = os.path.join(
-        base_path, "discussion_state_projections_3x9_cases_t5_t10_t20_scatter_fex.pdf"
+    print(
+        "[INFO] State projections 4×9 at t=20: fs=40; x-axis per column matches Ground truth row (3 ticks)."
     )
-    out_scatter_tfdm = os.path.join(
-        base_path, "discussion_state_projections_3x9_cases_t5_t10_t20_scatter_tfdm.pdf"
+    print("=" * 60)
+    out_pdf = os.path.join(
+        base_path,
+        "discussion_state_projections_4x9_t20_scatter_methods_gt_density.pdf",
     )
     case_specs = [
         ("Equipartition", "equipart"),
         ("Forward Cascade", "cascade"),
         ("Dual Cascade", "dual_cascade"),
     ]
-    case_data_fex = {}
-    case_data_tfdm = {}
+    case_data = {}
     for display_name, params_name in case_specs:
         args_case = argparse.Namespace(**vars(args))
         args_case.params_name = params_name
         rollout = discussion_choice5_rollout(args_case, device, plot_composite=False)
-        case_data_fex[display_name] = rollout["u_all_gt"]
-        case_data_tfdm[display_name] = rollout["u_pred_tfdm"]
+        case_data[display_name] = {
+            "gt": rollout["u_all_gt"],
+            "tfdm": rollout["u_pred_tfdm"],
+            "sran": rollout["u_pred_sran"],
+            "vae": rollout["u_pred_vae"],
+        }
 
     _nplot = int(getattr(args, "RESIDUAL_SAMPLES", 10000))
     _max_pts = max(_nplot, 12000)
-    saved_fex = plot_state_projections_cases_3x9_scatter(
-        case_data=case_data_fex,
+    saved = plot_state_projections_cases_4x9_scatter_and_gt_density(
+        case_data=case_data,
         dt=rollout["dt"],
-        times=(5, 10, 20),
-        save_path=out_scatter_fex,
-        fs=56,
+        time=20.0,
+        save_path=out_pdf,
+        fs=40,
         max_points=_max_pts,
-    )
-    print(f"[SAVED] {saved_fex}")
-    saved_tfdm = plot_state_projections_cases_3x9_scatter(
-        case_data=case_data_tfdm,
-        dt=rollout["dt"],
-        times=(5, 10, 20),
-        save_path=out_scatter_tfdm,
-        fs=56,
-        max_points=_max_pts,
-        point_size=2.0,
+        point_size=3.0,
         alpha=0.55,
         case_title_x_shift=0.04,
+        case_title_x_shift_forward_dual_extra=0.03,
+        cell_side_inches=5.0,
+        wspace=0.56,
+        hspace=0.50,
+        row_label_pad=0.0008,
+        xaxis_numticks=3,
     )
-    print(f"[SAVED] {saved_tfdm}")
+    print(f"[SAVED] {saved}")
 
 elif choice == "8":
     print("=" * 60)
-    print("[INFO] State projections 3×6: Periodic cascade + Random cascade (deterministic).")
+    print(
+        "[INFO] State projections 4×6: Periodic + random cascade (det.); "
+        "same layout as option 7 (4 rows × 6 cols), t=20; optional 3×6 contours t=5,10,20."
+    )
     print("=" * 60)
 
-    out_pdf = os.path.join(
-        base_path, "discussion_state_projections_3x6_periodic_random_det_cases_t5_t10_t20.pdf"
-    )
-    out_scatter = os.path.join(
+    out_contour = os.path.join(
         base_path,
-        "discussion_state_projections_3x6_periodic_random_det_cases_t5_t10_t20_scatter.pdf",
+        "discussion_state_projections_3x6_periodic_random_det_cases_t5_t10_t20.pdf",
+    )
+    out_scatter_4x6 = os.path.join(
+        base_path,
+        "discussion_state_projections_4x6_periodic_random_det_t20_scatter_methods_gt_density.pdf",
     )
 
     case_specs = [
@@ -311,23 +317,45 @@ elif choice == "8":
         args_case = argparse.Namespace(**vars(args))
         args_case.params_name = params_name
         rollout = discussion_choice5_rollout(args_case, device, plot_composite=False)
-        case_data[display_name] = rollout["u_all_gt"]
+        case_data[display_name] = {
+            "gt": rollout["u_all_gt"],
+            "tfdm": rollout["u_pred_tfdm"],
+            "sran": rollout["u_pred_sran"],
+            "vae": rollout["u_pred_vae"],
+        }
 
     saved = plot_state_projections_cases_3x9(
-        case_data=case_data,
+        case_data={k: v["gt"] for k, v in case_data.items()},
         dt=rollout["dt"],
         times=(5, 10, 20),
-        save_path=out_pdf,
+        save_path=out_contour,
         fs=56,
     )
     print(f"[SAVED] {saved}")
-    saved_s = plot_state_projections_cases_3x9_scatter(
+
+    _nplot = int(getattr(args, "RESIDUAL_SAMPLES", 10000))
+    _max_pts = max(_nplot, 12000)
+    saved_s = plot_state_projections_cases_4x9_scatter_and_gt_density(
         case_data=case_data,
         dt=rollout["dt"],
-        times=(5, 10, 20),
-        save_path=out_scatter,
-        fs=56,
+        time=20.0,
+        save_path=out_scatter_4x6,
+        fs=40,
+        max_points=_max_pts,
+        point_size=3.0,
+        alpha=0.55,
         case_title_x_shift=0.04,
+        case_title_x_shift_forward_dual_extra=0.03,
+        cell_side_inches=5.0,
+        wspace=0.56,
+        hspace=0.50,
+        row_label_pad=0.0008,
+        forward_cascade_yticks=None,
+        dual_cascade_yticks=None,
+        periodic_cascade_case_name="Periodic cascade",
+        periodic_cascade_yticks=(-5.0, 0.0, 5.0),
+        random_cascade_case_name="Random cascade",
+        random_cascade_yticks=(-0.3, 0.0, 0.3),
     )
     print(f"[SAVED] {saved_s}")
 

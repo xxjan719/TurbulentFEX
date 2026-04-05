@@ -1,10 +1,47 @@
 from ast import Dict
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from matplotlib.ticker import FuncFormatter, LinearLocator, MaxNLocator
 
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401, needed for 3D
 import os
+
+def _format_tick_zero_not_point_zero(x, pos):
+    """Show middle tick as ``0`` instead of ``0.0`` (e.g. ±0.3 scales)."""
+    xf = float(x)
+    if abs(xf) < 1e-14:
+        return "0"
+    return f"{xf:g}"
+
+
+def _expand_axis_limits_nice(lo: float, hi: float) -> tuple[float, float]:
+    """Widen ``[lo, hi]`` outward onto a 1–2–5 grid so tick endpoints align (e.g. −10, 8)."""
+    lo = float(lo)
+    hi = float(hi)
+    if not (np.isfinite(lo) and np.isfinite(hi)):
+        return lo, hi
+    if lo > hi:
+        lo, hi = hi, lo
+    if lo == hi:
+        return lo - 1.0, hi + 1.0
+    span = hi - lo
+    exp = int(np.floor(np.log10(span)))
+    base = 10.0**exp
+    scale = max(abs(hi), abs(lo), 1.0)
+    eps = scale * 1e-9
+    for mult in (1, 2, 5, 10, 20, 50, 100, 200, 500, 1000):
+        step = mult * base
+        if step <= 0 or not np.isfinite(step):
+            continue
+        nlo = np.floor(lo / step) * step
+        nhi = np.ceil(hi / step) * step
+        if nhi <= nlo:
+            continue
+        if nlo <= lo + eps and nhi >= hi - eps:
+            return float(nlo), float(nhi)
+    return float(lo), float(hi)
+
 
 def set_figure_position(x=100, y=100, width=800, height=600):
     """Set the position and size of the current figure window (only if supported)."""
@@ -3903,6 +3940,356 @@ def plot_state_projections_cases_3x9_scatter(
         if save_path is not None:
             os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
             fig.savefig(save_path, dpi=300, bbox_inches="tight", pad_inches=0.35)
+            plt.close(fig)
+            return save_path
+        return fig
+    finally:
+        for k, v in _rc_old.items():
+            mpl.rcParams[k] = v
+
+
+def plot_state_projections_cases_4x9_scatter_and_gt_density(
+    case_data: dict,
+    dt: float,
+    time: float = 20.0,
+    save_path: str = None,
+    fs: int = 40,
+    max_points: int = 8000,
+    point_size: float = 1.25,
+    alpha: float = 0.45,
+    seed: int = 0,
+    case_title_x_shift: float = 0.0,
+    panel_margin: float = 0.10,
+    save_pad_inches: float = 0.45,
+    row_label_pad: float = 0.0012,
+    cell_side_inches: float = 5.0,
+    wspace: float = 0.56,
+    hspace: float = 0.50,
+    gt_u23_xticks_forward_dual: tuple | None = (-2.0, 0.0, 2.0),
+    forward_cascade_yticks: tuple | None = (-2.0, 0.0, 2.0),
+    dual_cascade_yticks: tuple | None = (-2.0, 0.0, 2.0),
+    case_title_x_shift_forward_dual_extra: float = 0.028,
+    random_cascade_case_name: str = "Random cascade",
+    random_cascade_yticks: tuple | None = None,
+    periodic_cascade_case_name: str = "Periodic cascade",
+    periodic_cascade_yticks: tuple | None = None,
+    xaxis_maxn_bins: int | None = None,
+    xaxis_numticks: int | None = None,
+):
+    """
+    4×9 panel (three cases × three projection pairs):
+    row 0 — ASD-FEX-TFDM (orange scatter);
+    row 1 — ASD-FEX-SRAN (pink scatter);
+    row 2 — ASD-FEX-VAE (green scatter);
+    row 3 — ground truth (black scatter).
+
+    Each of the 4×9 **subplots is square** (``Axes.set_box_aspect(1)``). Figure size is
+    ``(cell_side_inches * 9, cell_side_inches * 4)`` so the grid matches 9 columns × 4 rows
+    with equal cell width/height before spacing. Row method labels sit just left of each
+    first-column axes (``row_label_pad``).
+
+    ``case_data`` maps case display name → dict with keys
+    ``"gt"``, ``"tfdm"``, ``"sran"``, ``"vae"`` → arrays ``(N, 3, T)``.
+
+    On the **Ground truth** row only, for **Forward Cascade** and **Dual Cascade**,
+    the **u2–u3** column (x = u2) gets x-axis ticks ``gt_u23_xticks_forward_dual``
+    (default ``-2, 0, 2``); all other panels keep matplotlib defaults unless below applies.
+
+    For **Forward Cascade** / **Dual Cascade**, every subplot in that block uses y-axis
+    ticks ``forward_cascade_yticks`` / ``dual_cascade_yticks`` (default ``-2, 0, 2`` each).
+    Set either to ``None`` for automatic y ticks in that block.
+
+    Column titles for Forward and Dual are shifted right by ``case_title_x_shift_forward_dual_extra``
+    (figure coordinates), in addition to ``case_title_x_shift``.
+
+    If ``random_cascade_yticks`` is set, every subplot in the ``random_cascade_case_name``
+    block gets those y-ticks. If ``periodic_cascade_yticks`` is set, every subplot in the
+    ``periodic_cascade_case_name`` block gets those y-ticks (e.g. ``-5``). Do **not** force
+    the same x-ticks on every panel; x positions use matplotlib defaults unless other
+    options above fix ticks. All subplots use a tick **formatter** so ``0.0`` displays as
+    ``0`` on both x and y (e.g. ``-2.5, 0, 2.5``).
+
+    If ``xaxis_numticks`` is set (e.g. ``3``), for each **column** the **Ground truth**
+    row (bottom row of scatter) alone defines **x**: its limits are read, widened with
+    ``_expand_axis_limits_nice``, then that ``xlim`` and a ``LinearLocator`` with
+    ``numticks`` are copied to **every** row in that column so all methods share the same
+    **x** scale as GT for that projection. If GT’s ``xlim`` is non-finite or degenerate,
+    **x** is autoscaled on that axis first. Overrides GT u2–u3
+    ``gt_u23_xticks_forward_dual`` when set.
+
+    If ``xaxis_maxn_bins`` is set (e.g. ``6``) and ``xaxis_numticks`` is ``None``, every
+    subplot gets ``MaxNLocator(nbins=...)`` on **x**, except panels where GT row +
+    Forward/Dual u2–u3 fixed ``gt_u23_xticks_forward_dual`` already set ticks.
+
+    Forward / Dual Cascade: large ``labelpad``, ``label_coords`` shifted left (more
+    negative x in axes coords), and ``ytick`` pad so rotated u2/u3 labels sit clear of
+    tick numbers; default ``wspace``/``hspace`` add subplot gutters.
+
+    ``wspace`` / ``hspace`` add gutter between subplots; ``set_box_aspect(1)`` still
+    forces square axes afterward.
+    """
+    case_items = list(case_data.items())
+    n_cases = len(case_items)
+    if n_cases == 0:
+        raise ValueError("case_data is empty.")
+    required = ("gt", "tfdm", "sran", "vae")
+    for name, bundle in case_items:
+        for k in required:
+            if k not in bundle:
+                raise KeyError(f"case {name!r} missing key {k!r}")
+
+    tick_fs = max(int(fs) - 2, 12)
+    _rc_keys = (
+        "font.size",
+        "axes.labelsize",
+        "axes.titlesize",
+        "xtick.labelsize",
+        "ytick.labelsize",
+    )
+    _rc_old = {k: mpl.rcParams[k] for k in _rc_keys}
+    rng = np.random.default_rng(seed)
+
+    color_tfdm = "#ff7f0e"
+    color_sran = "#e377c2"
+    color_vae = "#2ca02c"
+    color_gt = "black"
+    row_colors = (color_tfdm, color_sran, color_vae, color_gt)
+    row_method_labels = ("ASD-FEX-TFDM", "ASD-FEX-SRAN", "ASD-FEX-VAE", "Ground truth")
+
+    pairs = [(0, 1), (1, 2), (0, 2)]
+    pair_labels = [("u1", "u2"), ("u2", "u3"), ("u1", "u3")]
+    proj_titles = ["u1-u2", "u2-u3", "u1-u3"]
+
+    idx = int(round(float(time) / float(dt)))
+    for _, bundle in case_items:
+        for k in required:
+            u = bundle[k]
+            if u.ndim != 3 or u.shape[1] != 3:
+                raise ValueError(
+                    f"bundle[{k!r}] must have shape (N,3,T); got {u.shape}"
+                )
+            nt = u.shape[2]
+            if idx < 0 or idx >= nt:
+                raise ValueError(
+                    f"time={time} → index {idx} outside [0, {nt - 1}]"
+                )
+
+    n_rows = 4
+    try:
+        mpl.rcParams.update(
+            {
+                "font.size": fs,
+                "axes.labelsize": fs,
+                "axes.titlesize": fs,
+                "xtick.labelsize": tick_fs,
+                "ytick.labelsize": tick_fs,
+            }
+        )
+
+        ncols = n_cases * 3
+        cell = float(cell_side_inches)
+        fig_w = cell * float(ncols)
+        fig_h = cell * float(n_rows)
+        fig, axes = plt.subplots(n_rows, ncols, figsize=(fig_w, fig_h))
+        fig.patch.set_facecolor("white")
+
+        key_for_row = ("tfdm", "sran", "vae", "gt")
+        fmt_tick_zero_plain = FuncFormatter(_format_tick_zero_not_point_zero)
+        for r in range(n_rows):
+            for ci, (case_name, bundle) in enumerate(case_items):
+                u_src = bundle[key_for_row[r]]
+                state = u_src[:, :, idx]
+                n_paths = state.shape[0]
+                sub = (
+                    np.arange(n_paths)
+                    if n_paths <= max_points
+                    else rng.choice(n_paths, size=max_points, replace=False)
+                )
+
+                for pidx, (a, b) in enumerate(pairs):
+                    c = ci * 3 + pidx
+                    ax = axes[r, c]
+                    x = state[sub, a]
+                    y = state[sub, b]
+                    ax.scatter(
+                        x,
+                        y,
+                        c=row_colors[r],
+                        s=point_size,
+                        alpha=alpha,
+                        linewidths=0,
+                        rasterized=True,
+                    )
+
+                    xname, yname = pair_labels[pidx][0], pair_labels[pidx][1]
+                    ylab_pad = 14
+                    if case_name == "Forward Cascade":
+                        ylab_pad = 56 + 14 * pidx
+                    elif case_name == "Dual Cascade":
+                        ylab_pad = 54 + 13 * pidx
+                    if r == n_rows - 1:
+                        ax.set_xlabel(xname, fontsize=fs, labelpad=18)
+                    else:
+                        ax.set_xlabel("")
+                        ax.set_xticklabels([])
+                    ax.set_ylabel(yname, fontsize=fs, labelpad=ylab_pad)
+                    # Axes coords: more negative x = y-label further left (away from tick numbers).
+                    if ci == 0:
+                        ax.yaxis.set_label_coords(-0.14, 0.5)
+                    elif case_name == "Forward Cascade":
+                        ax.yaxis.set_label_coords(
+                            -0.22 - 0.065 * float(pidx), 0.5
+                        )
+                    elif case_name == "Dual Cascade":
+                        ax.yaxis.set_label_coords(
+                            -0.225 - 0.06 * float(pidx), 0.5
+                        )
+                    else:
+                        ax.yaxis.set_label_coords(-0.22, 0.5)
+
+                    if r == 0:
+                        ax.set_title(proj_titles[pidx], fontsize=fs, pad=20)
+
+                    ax.grid(True, alpha=0.2)
+                    if case_name in ("Forward Cascade", "Dual Cascade"):
+                        ax.tick_params(
+                            axis="x", labelsize=tick_fs, pad=7
+                        )
+                        ax.tick_params(
+                            axis="y",
+                            labelsize=tick_fs,
+                            pad=22,
+                            which="major",
+                        )
+                    else:
+                        ax.tick_params(
+                            axis="both", labelsize=tick_fs, pad=6
+                        )
+                    ax.margins(panel_margin, panel_margin)
+                    if (
+                        gt_u23_xticks_forward_dual is not None
+                        and r == n_rows - 1
+                        and pidx == 1
+                        and case_name in ("Forward Cascade", "Dual Cascade")
+                    ):
+                        ax.set_xticks(list(gt_u23_xticks_forward_dual))
+                    if (
+                        forward_cascade_yticks is not None
+                        and case_name == "Forward Cascade"
+                    ):
+                        ax.set_yticks(list(forward_cascade_yticks))
+                    if (
+                        dual_cascade_yticks is not None
+                        and case_name == "Dual Cascade"
+                    ):
+                        ax.set_yticks(list(dual_cascade_yticks))
+                    if (
+                        periodic_cascade_yticks is not None
+                        and case_name == periodic_cascade_case_name
+                    ):
+                        ax.set_yticks(list(periodic_cascade_yticks))
+                    if (
+                        random_cascade_yticks is not None
+                        and case_name == random_cascade_case_name
+                    ):
+                        ax.set_yticks(list(random_cascade_yticks))
+
+        fig.subplots_adjust(
+            left=0.175,
+            right=0.97,
+            top=0.91,
+            bottom=0.09,
+            wspace=float(wspace),
+            hspace=float(hspace),
+        )
+
+        # Each of the 4×9 subplot axes is a square in physical space (requires MPL ≥ 3.3).
+        for r in range(n_rows):
+            for c in range(ncols):
+                axes[r, c].set_box_aspect(1)
+
+        if xaxis_numticks is not None:
+            nt = int(xaxis_numticks)
+            if nt < 2:
+                raise ValueError("xaxis_numticks must be >= 2.")
+            r_gt = n_rows - 1
+            for c in range(ncols):
+                ax_gt = axes[r_gt, c]
+                lo, hi = ax_gt.get_xlim()
+                if (not (np.isfinite(lo) and np.isfinite(hi))) or lo == hi:
+                    ax_gt.relim()
+                    ax_gt.autoscale_view()
+                    lo, hi = ax_gt.get_xlim()
+                if not (np.isfinite(lo) and np.isfinite(hi)):
+                    ax_gt.autoscale(enable=True, axis="x", tight=False)
+                    lo, hi = ax_gt.get_xlim()
+                elif lo == hi:
+                    ax_gt.autoscale(enable=True, axis="x", tight=False)
+                    lo, hi = ax_gt.get_xlim()
+                nlo, nhi = _expand_axis_limits_nice(lo, hi)
+                for r in range(n_rows):
+                    ax = axes[r, c]
+                    ax.set_xlim(nlo, nhi)
+                    ax.xaxis.set_major_locator(LinearLocator(numticks=nt))
+        elif xaxis_maxn_bins is not None:
+            nb = int(xaxis_maxn_bins)
+            skip_gt_u23_xy: set[tuple[int, int]] = set()
+            if gt_u23_xticks_forward_dual is not None:
+                r_gt = n_rows - 1
+                for ci, (cn, _) in enumerate(case_items):
+                    if cn in ("Forward Cascade", "Dual Cascade"):
+                        skip_gt_u23_xy.add((r_gt, ci * 3 + 1))
+            for r in range(n_rows):
+                for c in range(ncols):
+                    if (r, c) in skip_gt_u23_xy:
+                        continue
+                    axes[r, c].xaxis.set_major_locator(
+                        MaxNLocator(nbins=nb, prune=None)
+                    )
+
+        for r in range(n_rows):
+            for c in range(ncols):
+                ax = axes[r, c]
+                ax.xaxis.set_major_formatter(fmt_tick_zero_plain)
+                ax.yaxis.set_major_formatter(fmt_tick_zero_plain)
+
+        # Row labels immediately left of each first-column subplot (tight bbox = labels+ticks+axes).
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        for r, lab in enumerate(row_method_labels):
+            bb = (
+                axes[r, 0]
+                .get_tightbbox(renderer)
+                .transformed(fig.transFigure.inverted())
+            )
+            x_text = bb.x0 - float(row_label_pad)
+            y_text = 0.5 * (bb.y0 + bb.y1)
+            fig.text(
+                x_text,
+                y_text,
+                lab,
+                fontsize=fs,
+                va="center",
+                ha="right",
+            )
+
+        for ci, (case_name, _) in enumerate(case_items):
+            x_center = (
+                0.10 + (ci * 3 + 1.5) * (0.78 / (n_cases * 3)) + float(case_title_x_shift)
+            )
+            if case_name in ("Forward Cascade", "Dual Cascade"):
+                x_center += float(case_title_x_shift_forward_dual_extra)
+            fig.text(x_center, 0.97, case_name, fontsize=fs, ha="center", va="center")
+
+        if save_path is not None:
+            os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+            fig.savefig(
+                save_path,
+                dpi=300,
+                bbox_inches="tight",
+                pad_inches=float(save_pad_inches),
+                facecolor="white",
+            )
             plt.close(fig)
             return save_path
         return fig

@@ -929,6 +929,8 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
     # Add separate arrays for single and ensemble predictions
     u_pred_single = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     u_pred_single[:,:,0] = initial_state
+    u_pred_vae = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+    u_pred_vae[:, :, 0] = initial_state
     u_pred_ensemble = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     u_pred_ensemble[:,:,0] = initial_state
 
@@ -1536,6 +1538,7 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
         # Independent curves in plots: orange = ASD-FEX-TFDM; u_pred_single holds SRAN ensemble for debugging.
         u_pred_all[:, :, idx] = next_pred_tfdm
         u_pred_single[:, :, idx] = next_pred_nn
+        u_pred_vae[:, :, idx] = next_pred_vae
 
         mean_state_nn[:, idx] = np.mean(next_pred_nn, axis=0)
         cov_state_nn[:, :, idx] = np.cov(next_pred_nn, rowvar=False)
@@ -1640,6 +1643,8 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
         "params": params,
         "u_all_gt": u_all,
         "u_pred_tfdm": u_pred_all,
+        "u_pred_sran": u_pred_single,
+        "u_pred_vae": u_pred_vae,
         "mean_gt": mean_state_record,
         "mean_pred_tfdm": mean_state_tfdm,
         "mean_pred_sran": mean_state_nn,
