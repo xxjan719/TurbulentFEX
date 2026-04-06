@@ -65,6 +65,7 @@ class Config:
             'scipy': '1.13.0',
             'numba': '0.59.0',
             'scikit-learn': '1.3.2',
+            'pysindy': '2.1.0',
         }
         
         # Built-in modules that don't need installation
