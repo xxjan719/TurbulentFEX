@@ -231,6 +231,209 @@ def triad_noise_params(params_name: str, n_tm_indices: int) -> Dict[str, np.ndar
     return {"SS": ss, "SSt": sst, "tmS": tm_s}
 
 
+def _stoch_clip_state(x: np.ndarray, lim: Optional[float]) -> np.ndarray:
+    """Clamp state before/after drift evals when ``lim`` is positive (prevents polynomial blow-up)."""
+    if lim is None or lim <= 0.0:
+        return x
+    return np.clip(x, -lim, lim)
+
+
+def _triad_buu(B: np.ndarray, u: np.ndarray) -> np.ndarray:
+    """Vectorized triad interaction matching ``utils.helper.Buu(B,u,u)`` for u.shape=(N,3)."""
+    B = np.asarray(B, dtype=float).reshape(3)
+    u = np.asarray(u, dtype=float)
+    return np.column_stack(
+        [
+            B[0] * u[:, 1] * u[:, 2],
+            B[1] * u[:, 2] * u[:, 0],
+            B[2] * u[:, 0] * u[:, 1],
+        ]
+    )
+
+
+def triad_truth_params(params_name: str, n_tm_indices: int, dt: float) -> Dict[str, Any]:
+    """
+    Ground-truth drift parameters matching ``MC_triad.params_init`` without importing it.
+
+    Returns L (3x3), G (3x3 diagonal), B (3,), and tmM (n_tm_indices,3).
+    """
+    n_tm_indices = int(max(n_tm_indices, 1))
+    if params_name == "equipart":
+        L = np.array([[0, 1, -2], [-1, 0, -3], [2, 3, 0]], dtype=float)
+        G = np.diag([0.2, 0.1, 0.1]).astype(float)
+        B = np.array([1.0, -0.6, -0.4], dtype=float)
+        tmM = np.zeros((n_tm_indices, 3), dtype=float)
+    elif params_name == "cascade":
+        L = np.zeros((3, 3), dtype=float)
+        G = np.diag([1.0, 2.0, 2.0]).astype(float)
+        B = np.array([2.0, -1.0, -1.0], dtype=float)
+        tmM = np.zeros((n_tm_indices, 3), dtype=float)
+    elif params_name == "dual_cascade":
+        L = np.array([[0, 0.03, 0.06], [-0.03, 0, -0.09], [-0.06, 0.09, 0]], dtype=float)
+        G = np.diag([1.0, 2.0, 2.0]).astype(float)
+        B = np.array([2.0, -1.0, -1.0], dtype=float)
+        tmM = np.tile(np.array([0.0, -1.0, 1.0], dtype=float), (n_tm_indices, 1))
+    elif params_name == "periodic_cascade":
+        L = np.zeros((3, 3), dtype=float)
+        G = np.diag([1.0, 2.0, 2.0]).astype(float)
+        B = np.array([2.0, -1.0, -1.0], dtype=float)
+        fr = 2 * np.pi / 8
+        tt = np.arange(n_tm_indices, dtype=float) * dt
+        sinv = np.sin(fr * tt)
+        tmM = np.column_stack([sinv, sinv, sinv]).astype(float)
+    elif params_name in ("random_cascade", "random_cascade_deterministic"):
+        # These cases have time-dependent forcing in the original generator; for paired rollouts,
+        # we default to zero forcing unless explicitly needed.
+        L = np.zeros((3, 3), dtype=float)
+        G = np.diag([1.0, 2.0, 2.0]).astype(float)
+        B = np.array([2.0, -1.0, -1.0], dtype=float)
+        tmM = np.zeros((n_tm_indices, 3), dtype=float)
+    else:
+        raise ValueError(f"Unknown params_name for truth params: {params_name}")
+    return {"L": L, "G": G, "B": B, "tmM": tmM}
+
+
+def _truth_drift_batch(u: np.ndarray, L: np.ndarray, G: np.ndarray, B: np.ndarray, forcing: np.ndarray) -> np.ndarray:
+    """Vectorized drift used in ``MC_triad_direct`` (without the noise term)."""
+    return (L @ u.T).T - (u @ G) + _triad_buu(B, u) + forcing
+
+
+def _shared_winc(rng: np.random.Generator, n_steps: int, n_paths: int) -> np.ndarray:
+    """Gaussian increments Winc used in both truth and WSINDy (shape: (n_steps,n_paths,3))."""
+    return rng.standard_normal((n_steps, n_paths, 3))
+
+
+def simulate_truth_with_shared_noise(
+    params_name: str,
+    u0: np.ndarray,
+    t_grid: np.ndarray,
+    noise_level: float,
+    noise_params: Dict[str, Any],
+    truth_params: Dict[str, Any],
+    winc: np.ndarray,
+) -> np.ndarray:
+    """Ground-truth MC_triad drift (RK4) + additive noise with shared ``winc``."""
+    t_grid = np.asarray(t_grid, dtype=float)
+    dt = float(t_grid[1] - t_grid[0])
+    n_t = int(t_grid.shape[0])
+    n_paths = int(u0.shape[0])
+    out = np.zeros((n_paths, n_t, 3), dtype=float)
+    u = np.asarray(u0, dtype=float).copy()
+    out[:, 0, :] = u
+
+    L = np.asarray(truth_params["L"], dtype=float)
+    G = np.asarray(truth_params["G"], dtype=float)
+    B = np.asarray(truth_params["B"], dtype=float)
+    tmM = np.asarray(truth_params["tmM"], dtype=float)
+    tm_s = np.asarray(noise_params["tmS"], dtype=float).reshape(-1)
+    sqrt_dt = np.sqrt(dt)
+
+    for k in range(n_t - 1):
+        forcing = tmM[min(k, tmM.shape[0] - 1)].reshape(1, 3)
+        forcing = np.repeat(forcing, n_paths, axis=0)
+        k1 = _truth_drift_batch(u, L, G, B, forcing)
+        u1 = u + 0.5 * dt * k1
+        k2 = _truth_drift_batch(u1, L, G, B, forcing)
+        u2 = u + 0.5 * dt * k2
+        k3 = _truth_drift_batch(u2, L, G, B, forcing)
+        u3 = u + dt * k3
+        k4 = _truth_drift_batch(u3, L, G, B, forcing)
+        u = u + dt * (k1 / 6.0 + k2 / 3.0 + k3 / 3.0 + k4 / 6.0)
+
+        idx = min(k, tm_s.size - 1) if tm_s.size else 0
+        s = float(tm_s[idx]) ** 2 if tm_s.size else 0.0
+        ss_eff = noise_params["SS"] + s * (noise_params["SSt"] - noise_params["SS"])
+        dW = sqrt_dt * noise_level * (winc[k] @ ss_eff)
+        u = u + dW
+        out[:, k + 1, :] = u
+    return out
+
+
+def heun_rk2_wsindy_shared_noise(
+    model: Any,
+    u0: np.ndarray,
+    t_grid: np.ndarray,
+    noise_level: float,
+    noise_params: Dict[str, Any],
+    winc: np.ndarray,
+    *,
+    state_clip: Optional[float] = None,
+) -> np.ndarray:
+    """WSINDy Heun (RK2) rollout using the same shared ``winc`` as ground truth."""
+    t_grid = np.asarray(t_grid, dtype=float)
+    dt = float(t_grid[1] - t_grid[0])
+    n_t = int(t_grid.shape[0])
+    n_paths = int(u0.shape[0])
+    out = np.zeros((n_paths, n_t, 3), dtype=float)
+    u = np.asarray(u0, dtype=float).copy()
+    u = _stoch_clip_state(u, state_clip)
+    out[:, 0, :] = u
+
+    tm_s = np.asarray(noise_params["tmS"], dtype=float).reshape(-1)
+    sqrt_dt = np.sqrt(dt)
+    for k in range(n_t - 1):
+        tk = float(t_grid[k])
+        tk1 = float(t_grid[k + 1])
+        idx = min(k, tm_s.size - 1) if tm_s.size else 0
+        s = float(tm_s[idx]) ** 2 if tm_s.size else 0.0
+        ss_eff = noise_params["SS"] + s * (noise_params["SSt"] - noise_params["SS"])
+        dW = sqrt_dt * noise_level * (winc[k] @ ss_eff)
+
+        u = _stoch_clip_state(u, state_clip)
+        f0 = np.stack([model.rhs(tk, u[i]) for i in range(n_paths)])
+        u_star = _stoch_clip_state(u + dt * f0 + dW, state_clip)
+        f1 = np.stack([model.rhs(tk1, u_star[i]) for i in range(n_paths)])
+        u = _stoch_clip_state(u + 0.5 * dt * (f0 + f1) + dW, state_clip)
+        out[:, k + 1, :] = u
+    return out
+
+
+def plot_paired_truth_vs_wsindy(
+    t_data: np.ndarray,
+    x_data: np.ndarray,
+    t_grid: np.ndarray,
+    truth_paths: np.ndarray,
+    wsindy_paths: np.ndarray,
+    x_det: np.ndarray,
+    *,
+    t_mark_end: Optional[float] = None,
+    save_path: Optional[str] = None,
+    title: str = "",
+) -> Optional[str]:
+    """Paired rollout: ground truth vs WSINDy with shared noise, plus deterministic WSINDy."""
+    if t_mark_end is None:
+        t_mark_end = float(np.max(t_data))
+    fig, axes = plt.subplots(3, 1, figsize=(10, 8.5), sharex=True, constrained_layout=True)
+    labels = ("x1", "x2", "x3")
+    n_paths = int(min(truth_paths.shape[0], wsindy_paths.shape[0]))
+    truth_mean = np.nanmean(truth_paths[:n_paths], axis=0)
+    ws_mean = np.nanmean(wsindy_paths[:n_paths], axis=0)
+
+    for i in range(3):
+        ax = axes[i]
+        ax.plot(t_data, x_data[:, i], label="ensemble mean (saved data)", color="C0", lw=1.8)
+        ax.plot(t_grid, truth_mean[:, i], label="truth mean (resim, shared noise)", color="C4", lw=1.4)
+        ax.plot(t_grid, ws_mean[:, i], label="WSINDy stoch mean (shared noise)", color="C2", lw=1.2)
+        ax.plot(t_grid, x_det[:, i], label="WSINDy det (IVP)", color="C1", lw=1.2, ls="--")
+        for p in range(min(n_paths, 18)):
+            ax.plot(t_grid, truth_paths[p, :, i], color="C4", alpha=0.08, lw=0.7)
+            ax.plot(t_grid, wsindy_paths[p, :, i], color="C2", alpha=0.08, lw=0.7)
+        ax.axvline(t_mark_end, color="0.4", ls=":", lw=1)
+        ax.set_ylabel(labels[i])
+        ax.grid(True, alpha=0.3)
+        if i == 0:
+            ax.legend(loc="best", fontsize=8, ncol=2)
+    axes[-1].set_xlabel("t")
+    if title:
+        fig.suptitle(title, fontsize=10)
+    if save_path is not None:
+        os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+        fig.savefig(save_path, dpi=150)
+        plt.close(fig)
+        return save_path
+    return None
+
+
 def heun_rk2_wsindy(
     model: Any,
     x0: np.ndarray,
@@ -239,17 +442,24 @@ def heun_rk2_wsindy(
     params: Dict[str, Any],
     rng: np.random.Generator,
     n_paths: int,
+    *,
+    state_clip: Optional[float] = None,
 ) -> np.ndarray:
     """
     Heun (RK2) for additive noise: same diffusion increment as ``MC_triad_direct`` /
     Euler–Maruyama, but drift uses trapezoid ``(f(t,x)+f(t+dt,x*))/2`` with
-    ``x* = x + f(t,x) dt + dW``. Improves drift accuracy vs plain EM; instability
-    can still occur for stiff learned models.
+    ``x* = x + f(t,x) dt + dW``. Improves drift accuracy vs plain EM.
+
+    If ``state_clip`` is a positive scalar, each component of ``x`` is clamped to
+    ``[-state_clip, state_clip]`` before each ``rhs`` evaluation and after each
+    step. This keeps learned polynomial drifts bounded and avoids float overflow
+    (recommended for ``plot_wsindy`` rollouts).
     """
     t_grid = np.asarray(t_grid, dtype=float)
     dt = float(t_grid[1] - t_grid[0])
     n_t = t_grid.shape[0]
     u = np.tile(np.asarray(x0, dtype=float), (n_paths, 1))
+    u = _stoch_clip_state(u, state_clip)
     out = np.zeros((n_paths, n_t, 3))
     out[:, 0, :] = u
     tm_s = np.asarray(params["tmS"]).reshape(-1)
@@ -263,12 +473,15 @@ def heun_rk2_wsindy(
             idx = min(k, tm_s.size - 1)
             s = float(tm_s[idx]) ** 2
         ss_eff = params["SS"] + s * (params["SSt"] - params["SS"])
+        u = _stoch_clip_state(u, state_clip)
         f0 = np.stack([model.rhs(tk, u[i]) for i in range(n_paths)])
         winc = rng.standard_normal((n_paths, 3))
         dW = sqrt_dt * noise_level * (winc @ ss_eff)
         u_star = u + dt * f0 + dW
+        u_star = _stoch_clip_state(u_star, state_clip)
         f1 = np.stack([model.rhs(tk1, u_star[i]) for i in range(n_paths)])
         u = u + 0.5 * dt * (f0 + f1) + dW
+        u = _stoch_clip_state(u, state_clip)
         out[:, k + 1, :] = u
     return out
 
@@ -342,14 +555,26 @@ def run_wsindy_prediction_plots(params_name: str, args: argparse.Namespace) -> N
         )
     x_det_long = simulate_wsindy(model, x0, t_long)
 
-    # Stochastic rollout: same MC diffusion as ``MC_triad_direct`` on the **data time grid**
-    # only (learned drift + noise is often unstable when extrapolated far beyond fit horizon).
+    # Stochastic rollout on the **same extended grid** as deterministic WSINDy (``t_long`` → ``prediction_t_max``).
+    # ``triad_noise_params`` pads ``tmS`` when the horizon is longer than the original MC_triad window.
     t_data_end = float(t[-1])
-    n_st = int(np.searchsorted(t_long, t_data_end, side="right"))
-    n_st = max(n_st, 2)
-    t_stoch = t_long[:n_st]
+    t_stoch = t_long
     params = triad_noise_params(params_name, max(len(t_stoch) - 1, 1))
     rng = np.random.default_rng(int(args.plot_seed))
+    ref_scale = float(
+        max(
+            np.nanmax(np.abs(x)),
+            np.nanmax(np.abs(x_det_long)),
+            1e-12,
+        )
+    )
+    margin = float(getattr(args, "stoch_clip_margin", 10.0))
+    state_clip: Optional[float] = None if margin <= 0.0 else margin * ref_scale
+    if state_clip is not None:
+        print(
+            f"[INFO] Stochastic Heun: |x_i| clipped to ±{state_clip:.6g} "
+            f"(ref_scale={ref_scale:.6g}, --stoch_clip_margin={margin}). Use --stoch_clip_margin 0 to disable."
+        )
     x_stoch = heun_rk2_wsindy(
         model,
         x0,
@@ -358,22 +583,17 @@ def run_wsindy_prediction_plots(params_name: str, args: argparse.Namespace) -> N
         params,
         rng,
         int(args.stoch_paths),
+        state_clip=state_clip,
     )
-    # Pad stochastic paths to ``t_long`` length with NaN past ``t_data_end`` for plotting overlay.
-    n_tl = len(t_long)
-    x_stoch_pad = np.full((x_stoch.shape[0], n_tl, 3), np.nan)
-    x_stoch_pad[:, : x_stoch.shape[1], :] = x_stoch
-
     i_end = int(np.argmin(np.abs(t_long - t_max)))
-    st_mean_end = np.nanmean(x_stoch_pad[:, i_end, :], axis=0)
+    st_mean_end = np.nanmean(x_stoch[:, i_end, :], axis=0)
     ann = (
         f"t_end={t_long[i_end]:.4g}  det={np.array2string(x_det_long[i_end], precision=4)}\n"
-        f"stoch_mean@{t_max:.3g} (NaN if no stoch past data)={np.array2string(st_mean_end, precision=4)}"
+        f"stoch_mean@{t_max:.3g}={np.array2string(st_mean_end, precision=4)}"
     )
     print(f"[INFO] WSINDy det at t≈{t_max}: {x_det_long[i_end]}")
     print(
-        f"[INFO] Stochastic paths: MC noise on t∈[0,{t_data_end:.4g}] only; "
-        f"past that, plot shows deterministic WSINDy only."
+        f"[INFO] Stochastic Heun paths on t∈[0,{t_max:.4g}] (ensemble data ends at t={t_data_end:.4g})."
     )
 
     plot_wsindy_prediction_extended(
@@ -381,12 +601,55 @@ def run_wsindy_prediction_plots(params_name: str, args: argparse.Namespace) -> N
         x,
         t_long,
         x_det_long,
-        x_stoch_pad,
+        x_stoch,
         t_mark_end=float(t[-1]),
         save_path=str(out_dir / "wsindy_prediction_extended.png"),
-        title=title_base + f" — det to t={t_max}; stoch+noise on t≤{t_data_end:.3g} only",
+        title=title_base + f" — det & stoch to t={t_max}; data to t={t_data_end:.3g}",
         annotation=ann,
     )
+    if getattr(args, "paired_truth", False):
+        # Fresh ground-truth resimulation to t_max with *shared* noise increments for truth and WSINDy.
+        n_steps = len(t_long) - 1
+        paired_seed = getattr(args, "paired_seed", None)
+        if paired_seed is None:
+            paired_seed = int(args.plot_seed)
+        rng_pair = np.random.default_rng(int(paired_seed))
+        m0 = np.array([-1.0, 0.5, -0.5], dtype=float)
+        var0 = np.array([0.52, 0.2, 0.12], dtype=float)
+        u0 = rng_pair.normal(loc=m0, scale=np.sqrt(var0), size=(int(args.stoch_paths), 3))
+        winc = _shared_winc(rng_pair, n_steps=n_steps, n_paths=u0.shape[0])
+        truth_p = triad_truth_params(params_name, n_tm_indices=n_steps, dt=dt)
+        noise_p = triad_noise_params(params_name, n_tm_indices=n_steps)
+        truth_paths = simulate_truth_with_shared_noise(
+            params_name,
+            u0,
+            t_long,
+            float(args.noise_level),
+            noise_p,
+            truth_p,
+            winc,
+        )
+        ws_paths = heun_rk2_wsindy_shared_noise(
+            model,
+            u0,
+            t_long,
+            float(args.noise_level),
+            noise_p,
+            winc,
+            state_clip=state_clip,
+        )
+        plot_paired_truth_vs_wsindy(
+            t,
+            x,
+            t_long,
+            truth_paths,
+            ws_paths,
+            x_det_long,
+            t_mark_end=float(t[-1]),
+            save_path=str(out_dir / "wsindy_truth_paired_tmax.png"),
+            title=title_base + f" — paired truth vs WSINDy to t={t_max} (shared noise)",
+        )
+        print(f"[INFO] Wrote {out_dir / 'wsindy_truth_paired_tmax.png'}")
     print(f"[INFO] Wrote {out_dir / 'wsindy_fit_comparison.png'}")
     print(f"[INFO] Wrote {out_dir / 'wsindy_prediction_extended.png'}")
 
@@ -1372,6 +1635,25 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="RNG seed for stochastic paths in plot_wsindy.",
+    )
+    p.add_argument(
+        "--stoch_clip_margin",
+        type=float,
+        default=10.0,
+        help="Stochastic Heun: clamp |x_i| to margin×max(|data|,|det| on stoch window). "
+        "0 disables (raw drift; may overflow). Default 10.",
+    )
+    p.add_argument(
+        "--paired_truth",
+        action="store_true",
+        help="Also resimulate ground-truth MC_triad to prediction_t_max and compare to WSINDy "
+        "using the *same* initial samples and Gaussian increments (writes wsindy_truth_paired_tmax.png).",
+    )
+    p.add_argument(
+        "--paired_seed",
+        type=int,
+        default=None,
+        help="Seed for paired truth-vs-WSINDy resimulation (defaults to --plot_seed).",
     )
     return p
 
