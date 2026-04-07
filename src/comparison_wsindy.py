@@ -1,16 +1,18 @@
 """
 WSINDy / SINDy workflows on MC triad simulation bundles (equipart, cascade, dual_cascade).
 
-Plotting helpers (``plot_wsindy_*``, ``run_wsindy_prediction_plots``, ``run_equipart_wsindy_fit_plots``)
+Plotting helpers (``plot_wsindy_*``, ``run_wsindy_prediction_plots``, ``run_wsindy_fit_plots``)
 live in this module.
 
 Non-interactive::
 
     python src/comparison_wsindy.py --batch --all
     python src/comparison_wsindy.py --batch --params_name equipart --noise_level 1.0 --wsindy_only
-    python src/comparison_wsindy.py --batch --params_name equipart --plot_wsindy --no_standardize
+    python src/comparison_wsindy.py --batch --cases equipart cascade --plot_wsindy --no_standardize
 
-Interactive (no ``--batch``): options 1–3 as before, plus **4** for the same plot diagnostics as ``--plot_wsindy``.
+Interactive (no ``--batch``): **1** RMSE comparison, **2** integrated WSINDy export, **3** uniform export
+(**triad-enforced** ``finite_expression_wsindy.txt`` + per-dimension files), **4** plot diagnostics
+(same as ``--plot_wsindy``).
 """
 from __future__ import annotations
 
@@ -489,8 +491,11 @@ def heun_rk2_wsindy(
 def run_wsindy_prediction_plots(params_name: str, args: argparse.Namespace) -> None:
     """
     Fit WSINDy on the **physical** ensemble mean, save:
-      - ``wsindy_fit_comparison.png`` (data vs full vs optional enforced)
+      - ``wsindy_fit_comparison.png`` (data vs full vs optional enforced triad reduction)
       - ``wsindy_prediction_extended.png`` (deterministic + stochastic to ``prediction_t_max``)
+
+    If ``--triad_interaction_only``: project to triad structure; **extended** det / stoch / paired
+    WSINDy paths use that **enforced** model. Otherwise those rollouts use the **full** fit.
 
     Stochastic noise matches ``MC_triad_direct`` (``SS`` / ``tmS``-modulated diffusion).
     """
@@ -524,7 +529,7 @@ def run_wsindy_prediction_plots(params_name: str, args: argparse.Namespace) -> N
         model.coef = coef_full.copy()
         enforce_triad_one_interaction_structure(
             model,
-            keep_constant=args.keep_constant_terms,
+            keep_constant=keep_constant_terms_from_args(args),
             keep_all_linear=True,
         )
         x_enf = simulate_wsindy(model, x0, t)
@@ -550,8 +555,11 @@ def run_wsindy_prediction_plots(params_name: str, args: argparse.Namespace) -> N
     if args.triad_interaction_only:
         enforce_triad_one_interaction_structure(
             model,
-            keep_constant=args.keep_constant_terms,
+            keep_constant=keep_constant_terms_from_args(args),
             keep_all_linear=True,
+        )
+        print(
+            "[INFO] Extended WSINDy (det / stoch / paired): using **triad-enforced** coefficients."
         )
     x_det_long = simulate_wsindy(model, x0, t_long)
 
@@ -662,6 +670,15 @@ TRIAD_CASES = (
     "random_cascade",
     "random_cascade_deterministic",
 )
+
+
+def keep_constant_terms_from_args(args: argparse.Namespace) -> bool:
+    """
+    Triad-enforced RHS should keep the constant (bias) row by default: many MC_triad cases have
+    affine forcing or nonzero mean drift on the ensemble average (e.g. ``dual_cascade`` ``tmM``).
+    Pass ``--no_keep_constant_terms`` to drop it.
+    """
+    return not getattr(args, "no_keep_constant_terms", False)
 
 
 def default_npz_path(
@@ -829,8 +846,16 @@ def format_wsindy_dimension_rhs(
     tags: np.ndarray,
     *,
     threshold: float = 1e-9,
+    state_labels: str = "u_subscript",
 ) -> str:
-    """Turn one column of ``model.coef`` and tag rows into a readable polynomial string."""
+    """
+    Turn one column of ``model.coef`` and tag rows into a readable polynomial string.
+
+    ``state_labels``:
+      - ``\"x\"`` — ``x1*x2*x3`` style (explicit ``*`` between factors and after the coefficient).
+      - ``\"u_subscript\"`` — legacy Windy-style ``u_1``, ``u_2``, ``u_3`` with juxtaposed
+        factors (e.g. ``8.5545u_2u_3`` with no ``*`` between state variables).
+    """
     term_strs: List[Tuple[float, str]] = []
     for k in range(coef_col.shape[0]):
         c = float(coef_col[k])
@@ -843,30 +868,50 @@ def format_wsindy_dimension_rhs(
         e_int = np.rint(e).astype(int)
         if np.max(np.abs(e - e_int)) > 1e-8:
             continue
-        factors: List[str] = []
+        state_parts: List[str] = []
         for j in range(min(3, e_int.shape[0])):
             if e_int[j] == 0:
                 continue
-            name = f"x{j+1}"
-            if e_int[j] == 1:
-                factors.append(name)
+            if state_labels == "x":
+                name = f"x{j+1}"
+                if e_int[j] == 1:
+                    state_parts.append(name)
+                else:
+                    state_parts.append(f"{name}^{int(e_int[j])}")
             else:
-                factors.append(f"{name}^{int(e_int[j])}")
+                name = f"u_{j+1}"
+                if e_int[j] == 1:
+                    state_parts.append(name)
+                else:
+                    state_parts.append(f"{name}^{int(e_int[j])}")
+        time_part = ""
         if e_int.shape[0] > 3 and e_int[3] != 0:
             if e_int[3] == 1:
-                factors.append("t")
+                time_part = "t"
             else:
-                factors.append(f"t^{int(e_int[3])}")
-        mono = "*".join(factors)
+                time_part = f"t^{int(e_int[3])}"
+        if state_labels == "x":
+            parts_m = [*state_parts, *([time_part] if time_part else [])]
+            mono = "*".join(parts_m)
+        else:
+            state_mono = "".join(state_parts)
+            if time_part:
+                mono = f"{state_mono}*{time_part}" if state_mono else time_part
+            else:
+                mono = state_mono
         term_strs.append((c, mono))
 
     if not term_strs:
         return "0"
 
     parts: List[str] = []
+    use_x = state_labels == "x"
     for i, (c, mono) in enumerate(term_strs):
         if mono:
-            tok = f"{abs(c):.14g}*{mono}"
+            if use_x:
+                tok = f"{abs(c):.14g}*{mono}"
+            else:
+                tok = f"{abs(c):.14g}{mono}"
         else:
             tok = f"{abs(c):.14g}"
         if i == 0:
@@ -880,13 +925,16 @@ def wsindy_model_to_dimension_lines(
     model: Any,
     *,
     threshold: float = 1e-9,
+    state_labels: str = "u_subscript",
 ) -> List[str]:
     """Three lines ``dimension_d: ...`` compatible with ``final_expressions.txt`` style."""
     coef = np.asarray(model.coef)
     tags = np.asarray(model.tags)
     lines = []
     for d in range(coef.shape[1]):
-        rhs = format_wsindy_dimension_rhs(coef[:, d], tags, threshold=threshold)
+        rhs = format_wsindy_dimension_rhs(
+            coef[:, d], tags, threshold=threshold, state_labels=state_labels
+        )
         lines.append(f"dimension_{d + 1}: {rhs}")
     return lines
 
@@ -904,7 +952,8 @@ def enforce_triad_one_interaction_structure(
       - dim1: x1, x2, x3, and x2*x3
       - dim2: x1, x2, x3, and x1*x3
       - dim3: x1, x2, x3, and x1*x2
-    Optionally keeps constant terms.
+    Optionally keeps constant terms (recommended for forced / affine mean dynamics such as
+    ``dual_cascade``).
     """
     coef = np.asarray(model.coef).copy()
     tags = np.asarray(model.tags)
@@ -940,21 +989,97 @@ def enforce_triad_one_interaction_structure(
     return model
 
 
+def prune_wsindy_to_max_nonzero_terms(
+    model: Any,
+    max_terms: int,
+    *,
+    eps: float = 1e-12,
+) -> Any:
+    """
+    Keep at most ``max_terms`` nonzero entries in ``model.coef`` (global over rows × dimensions),
+    retaining those with largest magnitude.
+
+    **Warning:** This is usually a bad idea for triad-structured exports: important couplings can be
+    small (e.g. skew ``L`` entries) while spurious terms are large; pruning also strips entire
+    dimensions when the global top-|c| set leaves them with almost no terms. Prefer leaving
+    ``max_terms <= 0`` (default) and rely on ``enforce_triad_one_interaction_structure`` only.
+    """
+    if max_terms <= 0:
+        return model
+    coef = np.asarray(model.coef)
+    if coef.ndim != 2:
+        return model
+    entries: List[Tuple[float, int, int]] = []
+    for d in range(coef.shape[1]):
+        for k in range(coef.shape[0]):
+            v = float(coef[k, d])
+            if np.isfinite(v) and abs(v) > eps:
+                entries.append((abs(v), k, d))
+    if len(entries) <= max_terms:
+        return model
+    entries.sort(key=lambda t: t[0], reverse=True)
+    keep = {(k, d) for _, k, d in entries[:max_terms]}
+    new = coef.copy()
+    for d in range(coef.shape[1]):
+        for k in range(coef.shape[0]):
+            if (k, d) not in keep:
+                new[k, d] = 0.0
+    model.coef = new
+    return model
+
+
+def _default_wsindy_expression_title(*, standardize: bool) -> str:
+    if standardize:
+        return "Final Expressions (WSINDy, ensemble-mean trajectory, z-scored x1, x2, x3):"
+    return "Final Expressions (WSINDy, ensemble-mean trajectory, physical x1, x2, x3):"
+
+
+def _integrated_wsindy_title(*, standardize: bool) -> str:
+    if standardize:
+        return (
+            "Final Expressions (WSINDy adaptive integrated, ensemble-mean, z-scored x1, x2, x3):"
+        )
+    return (
+        "Final Expressions (WSINDy adaptive integrated, ensemble-mean, physical x1, x2, x3):"
+    )
+
+
+def _u_subscript_notation_line(*, standardize: bool) -> str:
+    if standardize:
+        return (
+            "Notation: u_1, u_2, u_3 are per-dimension z-scores of the ensemble-mean components "
+            "x1, x2, x3 (same scaling as WSINDy RMSE in run_case / --batch when --no_standardize is off). "
+            "μ and σ are in the note below."
+        )
+    return (
+        "Notation: u_1, u_2, u_3 in the RHS below denote the same physical components as x1, x2, x3."
+    )
+
+
 def save_wsindy_expression_file(
     model: Any,
     out_path: Path,
     *,
     threshold: float = 1e-9,
     note: str = "",
-    title: str = "Final Expressions (WSINDy, ensemble-mean trajectory, physical x1, x2, x3):",
+    title: Optional[str] = None,
+    state_labels: str = "u_subscript",
+    standardize: bool = True,
 ) -> None:
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    lines = wsindy_model_to_dimension_lines(model, threshold=threshold)
+    if title is None:
+        title = _default_wsindy_expression_title(standardize=standardize)
+    lines = wsindy_model_to_dimension_lines(
+        model, threshold=threshold, state_labels=state_labels
+    )
     text = [
         title,
         "==================================================",
     ]
+    if state_labels == "u_subscript":
+        text.append(_u_subscript_notation_line(standardize=standardize))
+        text.append("==================================================")
     if note:
         text.append(note)
         text.append("==================================================")
@@ -964,6 +1089,14 @@ def save_wsindy_expression_file(
     out_path.write_text("\n".join(text), encoding="utf-8")
 
 
+def _per_dim_wsindy_header_line(state_labels: str, *, standardize: bool) -> str:
+    if state_labels == "x":
+        return "z-scored x1, x2, x3" if standardize else "physical x1, x2, x3"
+    if standardize:
+        return "z-scored x1, x2, x3 (RHS uses u_i as z-scores)"
+    return "physical x1, x2, x3 (RHS uses u_i ≡ x_i)"
+
+
 def save_wsindy_per_dimension_files(
     model: Any,
     out_dir: Path | str,
@@ -971,24 +1104,29 @@ def save_wsindy_per_dimension_files(
     threshold: float = 1e-9,
     meta_note: str = "",
     name_suffix: str = "",
+    state_labels: str = "u_subscript",
+    standardize: bool = True,
 ) -> List[Path]:
     """
     Write ``wsindy_expression_1.txt`` … ``wsindy_expression_3.txt`` (one RHS per file).
 
     Uses one joint WSINDy fit (same ``model`` as the full 3D vector field); each file holds
-    the discovered polynomial for ``dx_i/dt`` in x1,x2,x3 coordinates.
+    the discovered polynomial for ``dx_i/dt`` in the chosen state labels (x or u_1…u_3).
     ``name_suffix`` is inserted before ``.txt``, e.g. ``_integrated`` → ``wsindy_expression_1_integrated.txt``.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     coef = np.asarray(model.coef)
     tags = np.asarray(model.tags)
+    phys = _per_dim_wsindy_header_line(state_labels, standardize=standardize)
     paths: List[Path] = []
     for d in range(coef.shape[1]):
-        rhs = format_wsindy_dimension_rhs(coef[:, d], tags, threshold=threshold)
+        rhs = format_wsindy_dimension_rhs(
+            coef[:, d], tags, threshold=threshold, state_labels=state_labels
+        )
         p = out_dir / f"wsindy_expression_{d + 1}{name_suffix}.txt"
         body = [
-            f"WSINDy RHS for dimension {d + 1} (ensemble-mean data, physical x1, x2, x3):",
+            f"WSINDy RHS for dimension {d + 1} (ensemble-mean data, {phys}):",
             "==================================================",
         ]
         if meta_note:
@@ -1016,13 +1154,25 @@ def export_wsindy_per_dimension_from_npz(
     ws_use_gls: float = 1e-12,
     time_poly_max: int = 0,
     triad_interaction_only: bool = False,
-    keep_constant_terms: bool = False,
+    keep_constant_terms: bool = True,
+    max_wsindy_export_terms: int = 0,
+    wsindy_state_labels: str = "u_subscript",
+    standardize: bool = True,
 ) -> Tuple[Any, List[Path]]:
-    """Fit WSINDy on raw ensemble mean; save ``wsindy_expression_{1,2,3}.txt`` into ``out_dir``."""
+    """Fit WSINDy on ensemble mean; save ``wsindy_expression_{1,2,3}.txt`` into ``out_dir``."""
     t, x_raw, meta = mean_trajectory_from_npz(npz_path)
+    if standardize:
+        x_fit, mu, sig = _standardize(x_raw)
+        stat_note = (
+            f"\nfit input: per-dimension z-score of ensemble mean "
+            f"(μ={np.array2string(mu, precision=8)}, σ={np.array2string(sig, precision=8)})"
+        )
+    else:
+        x_fit = x_raw
+        stat_note = "\nfit input: raw ensemble mean (physical units)."
     model = fit_wsindy(
         t,
-        x_raw,
+        x_fit,
         polys=polys,
         L=L,
         overlap=overlap,
@@ -1036,13 +1186,23 @@ def export_wsindy_per_dimension_from_npz(
         model = enforce_triad_one_interaction_structure(
             model, keep_constant=keep_constant_terms, keep_all_linear=True
         )
+        if max_wsindy_export_terms > 0:
+            model = prune_wsindy_to_max_nonzero_terms(model, max_wsindy_export_terms)
     note = (
         f"npz: {meta['npz_path']}\n"
         f"trajectories: valid {meta['n_valid']} / total {meta['n_total']} "
         f"(dropped {meta['n_dropped']})"
+        f"{stat_note}"
     )
+    if triad_interaction_only and max_wsindy_export_terms > 0:
+        note += f"\npruned to max {max_wsindy_export_terms} nonzero |coefficient| entries (global)."
     paths = save_wsindy_per_dimension_files(
-        model, out_dir, threshold=threshold, meta_note=note
+        model,
+        out_dir,
+        threshold=threshold,
+        meta_note=note,
+        state_labels=wsindy_state_labels,
+        standardize=standardize,
     )
     return model, paths
 
@@ -1062,16 +1222,29 @@ def export_wsindy_expressions_from_npz(
     ws_use_gls: float = 1e-12,
     time_poly_max: int = 0,
     triad_interaction_only: bool = False,
-    keep_constant_terms: bool = False,
+    keep_constant_terms: bool = True,
+    max_wsindy_export_terms: int = 0,
+    wsindy_state_labels: str = "u_subscript",
+    standardize: bool = True,
 ) -> Any:
     """
-    Fit WSINDy on the **raw** (physical) ensemble mean so printed coefficients match x1,x2,x3
-    coordinates, comparable to ``final_expressions.txt`` from FEX.
+    Fit WSINDy on the ensemble mean. By default (``standardize=True``) uses the same per-dimension
+    z-score as ``run_case`` / RMSE comparison so coefficients are comparable in scale to legacy Windy
+    exports; use ``standardize=False`` for raw physical units (typically much larger quadratic terms).
     """
     t, x_raw, meta = mean_trajectory_from_npz(npz_path)
+    if standardize:
+        x_fit, mu, sig = _standardize(x_raw)
+        stat_note = (
+            f"\nfit input: per-dimension z-score of ensemble mean "
+            f"(μ={np.array2string(mu, precision=8)}, σ={np.array2string(sig, precision=8)})"
+        )
+    else:
+        x_fit = x_raw
+        stat_note = "\nfit input: raw ensemble mean (physical units)."
     model = fit_wsindy(
         t,
-        x_raw,
+        x_fit,
         polys=polys,
         L=L,
         overlap=overlap,
@@ -1085,13 +1258,25 @@ def export_wsindy_expressions_from_npz(
         model = enforce_triad_one_interaction_structure(
             model, keep_constant=keep_constant_terms, keep_all_linear=True
         )
+        if max_wsindy_export_terms > 0:
+            model = prune_wsindy_to_max_nonzero_terms(model, max_wsindy_export_terms)
     note_extra = (
         f"npz: {meta['npz_path']}\n"
         f"trajectories: valid {meta['n_valid']} / total {meta['n_total']} "
         f"(dropped {meta['n_dropped']})"
+        f"{stat_note}"
     )
+    if triad_interaction_only and max_wsindy_export_terms > 0:
+        note_extra += f"\npruned to max {max_wsindy_export_terms} nonzero |coefficient| entries (global)."
     full_note = note_extra if not note else f"{note_extra}\n{note}"
-    save_wsindy_expression_file(model, out_path, threshold=threshold, note=full_note)
+    save_wsindy_expression_file(
+        model,
+        out_path,
+        threshold=threshold,
+        note=full_note,
+        state_labels=wsindy_state_labels,
+        standardize=standardize,
+    )
     return model
 
 
@@ -1112,17 +1297,29 @@ def export_integrated_wsindy_finetune_from_npz(
     ws_use_gls: float = 1e-12,
     time_poly_max: int = 0,
     triad_interaction_only: bool = False,
-    keep_constant_terms: bool = False,
+    keep_constant_terms: bool = True,
+    max_wsindy_export_terms: int = 0,
+    wsindy_state_labels: str = "u_subscript",
+    standardize: bool = True,
 ) -> Tuple[Any, Path, List[Path]]:
     """
-    Integrated WSINDy-only refinement: adaptive weak form on the **raw** ensemble mean,
+    Integrated WSINDy-only refinement: adaptive weak form on the ensemble mean,
     joint (x1,x2,x3). Writes ``finite_expression_wsindy_integrated.txt`` and
     ``wsindy_expression_{1,2,3}_integrated.txt``.
     """
     t, x_raw, meta = mean_trajectory_from_npz(npz_path)
+    if standardize:
+        x_fit, mu, sig = _standardize(x_raw)
+        stat_note = (
+            f"\nfit input: per-dimension z-score of ensemble mean "
+            f"(μ={np.array2string(mu, precision=8)}, σ={np.array2string(sig, precision=8)})"
+        )
+    else:
+        x_fit = x_raw
+        stat_note = "\nfit input: raw ensemble mean (physical units)."
     model = fit_wsindy_adaptive(
         t,
-        x_raw,
+        x_fit,
         polys=polys,
         r_whm=r_whm,
         s=s,
@@ -1139,20 +1336,28 @@ def export_integrated_wsindy_finetune_from_npz(
         model = enforce_triad_one_interaction_structure(
             model, keep_constant=keep_constant_terms, keep_all_linear=True
         )
+        if max_wsindy_export_terms > 0:
+            model = prune_wsindy_to_max_nonzero_terms(model, max_wsindy_export_terms)
     note = (
         f"npz: {meta['npz_path']}\n"
         f"trajectories: valid {meta['n_valid']} / total {meta['n_total']} "
         f"(dropped {meta['n_dropped']})\n"
         f"method: getWsindyAdaptive (joint 3D)"
+        f"{stat_note}"
     )
+    if triad_interaction_only and max_wsindy_export_terms > 0:
+        note += f"\npruned to max {max_wsindy_export_terms} nonzero |coefficient| entries (global)."
     out_dir = Path(out_dir)
     combined = out_dir / "finite_expression_wsindy_integrated.txt"
+    int_title = _integrated_wsindy_title(standardize=standardize)
     save_wsindy_expression_file(
         model,
         combined,
         threshold=threshold,
         note=note,
-        title="Final Expressions (WSINDy adaptive integrated, ensemble-mean, physical x1, x2, x3):",
+        title=int_title,
+        state_labels=wsindy_state_labels,
+        standardize=standardize,
     )
     paths = save_wsindy_per_dimension_files(
         model,
@@ -1160,6 +1365,8 @@ def export_integrated_wsindy_finetune_from_npz(
         threshold=threshold,
         meta_note=note,
         name_suffix="_integrated",
+        state_labels=wsindy_state_labels,
+        standardize=standardize,
     )
     return model, combined, paths
 
@@ -1283,7 +1490,10 @@ def run_interactive_menu(args: argparse.Namespace) -> None:
         print("=" * 60)
         print("1. WSINDy vs PySINDy comparison (RMSE on ensemble mean)")
         print("2. Integrated WSINDy finetune: adaptive weak form, joint (x1,x2,x3) [getWsindyAdaptive]")
-        print("3. Uniform WSINDy export: finite_expression_wsindy.txt + wsindy_expression_1/2/3.txt")
+        print(
+            "3. Uniform WSINDy export (triad-enforced): finite_expression_wsindy.txt + "
+            "wsindy_expression_1/2/3.txt"
+        )
         print(
             "4. Plot diagnostics: wsindy_fit_comparison.png + wsindy_prediction_extended.png "
             "(fit vs data, det + stochastic rollout; flags: --prediction_t_max, --stoch_paths, …)"
@@ -1330,7 +1540,10 @@ def run_interactive_menu(args: argparse.Namespace) -> None:
                 ws_use_gls=args.ws_use_gls,
                 time_poly_max=args.time_poly_max,
                 triad_interaction_only=args.triad_interaction_only,
-                keep_constant_terms=args.keep_constant_terms,
+                keep_constant_terms=keep_constant_terms_from_args(args),
+                max_wsindy_export_terms=args.max_wsindy_export_terms,
+                wsindy_state_labels=args.wsindy_expression_state_labels,
+                standardize=not args.no_standardize,
             )
             print(f"[INFO] Wrote {combined}")
             for p in paths:
@@ -1339,6 +1552,7 @@ def run_interactive_menu(args: argparse.Namespace) -> None:
             if not npz.is_file():
                 print(f"[ERROR] Missing simulation bundle: {npz}")
                 continue
+            # Menu option 3 always applies triad structure (same as --triad_interaction_only in batch).
             _, paths = export_wsindy_per_dimension_from_npz(
                 npz,
                 npz.parent,
@@ -1351,8 +1565,11 @@ def run_interactive_menu(args: argparse.Namespace) -> None:
                 ws_scale_theta=args.ws_scale_theta,
                 ws_use_gls=args.ws_use_gls,
                 time_poly_max=args.time_poly_max,
-                triad_interaction_only=args.triad_interaction_only,
-                keep_constant_terms=args.keep_constant_terms,
+                triad_interaction_only=True,
+                keep_constant_terms=keep_constant_terms_from_args(args),
+                max_wsindy_export_terms=args.max_wsindy_export_terms,
+                wsindy_state_labels=args.wsindy_expression_state_labels,
+                standardize=not args.no_standardize,
             )
             for p in paths:
                 print(f"[INFO] Wrote {p}")
@@ -1371,10 +1588,13 @@ def run_interactive_menu(args: argparse.Namespace) -> None:
                 ws_scale_theta=args.ws_scale_theta,
                 ws_use_gls=args.ws_use_gls,
                 time_poly_max=args.time_poly_max,
-                triad_interaction_only=args.triad_interaction_only,
-                keep_constant_terms=args.keep_constant_terms,
+                triad_interaction_only=True,
+                keep_constant_terms=keep_constant_terms_from_args(args),
+                max_wsindy_export_terms=args.max_wsindy_export_terms,
+                wsindy_state_labels=args.wsindy_expression_state_labels,
+                standardize=not args.no_standardize,
             )
-            print(f"[INFO] Wrote {out_combined}")
+            print(f"[INFO] Wrote {out_combined} (triad-enforced)")
         elif choice == "4":
             if not npz.is_file():
                 print(f"[ERROR] Missing simulation bundle: {npz}")
@@ -1400,7 +1620,9 @@ def print_summary(result: Dict[str, Any]) -> None:
 
 def run_all_cli(args: argparse.Namespace) -> None:
     cases: List[str]
-    if args.all:
+    if getattr(args, "cases", None):
+        cases = list(args.cases)
+    elif args.all:
         cases = list(TRIAD_CASES)
     else:
         cases = [args.params_name]
@@ -1427,7 +1649,10 @@ def run_all_cli(args: argparse.Namespace) -> None:
                 ws_use_gls=args.ws_use_gls,
                 time_poly_max=args.time_poly_max,
                 triad_interaction_only=args.triad_interaction_only,
-                keep_constant_terms=args.keep_constant_terms,
+                keep_constant_terms=keep_constant_terms_from_args(args),
+                max_wsindy_export_terms=args.max_wsindy_export_terms,
+                wsindy_state_labels=args.wsindy_expression_state_labels,
+                standardize=not args.no_standardize,
             )
             print(f"[INFO] Wrote WSINDy expressions to {out}")
 
@@ -1446,7 +1671,10 @@ def run_all_cli(args: argparse.Namespace) -> None:
                 ws_use_gls=args.ws_use_gls,
                 time_poly_max=args.time_poly_max,
                 triad_interaction_only=args.triad_interaction_only,
-                keep_constant_terms=args.keep_constant_terms,
+                keep_constant_terms=keep_constant_terms_from_args(args),
+                max_wsindy_export_terms=args.max_wsindy_export_terms,
+                wsindy_state_labels=args.wsindy_expression_state_labels,
+                standardize=not args.no_standardize,
             )
             for p in paths:
                 print(f"[INFO] Wrote WSINDy per-dimension file {p}")
@@ -1482,9 +1710,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=str,
         choices=list(TRIAD_CASES),
         default=_cfg_args.params_name,
-        help="Single triad case (ignored if --all); default from config.create_main_parser().",
+        help="Single triad case (ignored if --all or --cases); default from config.create_main_parser().",
     )
     p.add_argument("--all", action="store_true", help="Run all supported triad cases.")
+    p.add_argument(
+        "--cases",
+        nargs="+",
+        choices=list(TRIAD_CASES),
+        default=None,
+        help="Run batch (RMSE comparison + optional --plot_wsindy) for these cases only. "
+        "Overrides --params_name and --all.",
+    )
     p.add_argument(
         "--noise_level",
         type=float,
@@ -1500,7 +1736,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--no_standardize",
         action="store_true",
-        help="Use raw ensemble mean (default: per-dimension z-score).",
+        help="Use raw ensemble mean for WSINDy/SINDy RMSE and for exported expressions (default: "
+        "per-dimension z-score, matching legacy Windy-scale coefficients in u).",
     )
     p.add_argument(
         "--poly_max",
@@ -1543,12 +1780,31 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--triad_interaction_only",
         action="store_true",
-        help="Keep only triad terms per dimension: x1,x2,x3 + one cross interaction.",
+        help="After fitting, project coefficients to triad structure. When set, extended "
+        "deterministic / stochastic / paired WSINDy rollouts use this enforced model; "
+        "wsindy_fit_comparison.png also shows the enforced curve on the data window.",
     )
     p.add_argument(
-        "--keep_constant_terms",
+        "--no_keep_constant_terms",
         action="store_true",
-        help="When --triad_interaction_only is used, also keep constant terms.",
+        help="Triad-enforced exports / plots: drop the constant (bias) term. "
+        "Default is to keep it (needed e.g. for dual_cascade affine forcing vs ensemble mean).",
+    )
+    p.add_argument(
+        "--max_wsindy_export_terms",
+        type=int,
+        default=0,
+        help="When triad structure is enforced, optionally keep at most this many nonzero "
+        "|coefficient| entries globally (largest magnitudes only). This can destroy small physical "
+        "terms and unbalance dimensions; default 0 disables pruning.",
+    )
+    p.add_argument(
+        "--wsindy_expression_state_labels",
+        type=str,
+        choices=("x", "u_subscript"),
+        default="u_subscript",
+        help="Printed state names in the RHS: x1*x2*… or legacy u_1 u_2 … (u_i ≡ x_i; juxtaposed "
+        "u factors, no * between them). Header always states physical x1, x2, x3.",
     )
     p.add_argument(
         "--wsindy_only",
@@ -1658,20 +1914,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return p
 
 
-def run_equipart_wsindy_fit_plots(
+def run_wsindy_fit_plots(
+    params_name: str = "equipart",
+    *,
     noise_level: float = 1.0,
     ws_ld: float = 0.03,
     ws_gamma: float = 0.001,
     triad_interaction_only: bool = True,
+    keep_constant_terms: bool = True,
     prediction_t_max: float = 20.0,
     stoch_paths: int = 32,
     plot_seed: int = 0,
+    paired_truth: bool = False,
 ) -> None:
-    """Equipart-only: same PNGs as ``--plot_wsindy`` (convenience for scripts)."""
+    """Same PNGs as ``--plot_wsindy`` for one triad case (convenience for scripts)."""
+    if params_name not in TRIAD_CASES:
+        raise ValueError(f"params_name must be one of {TRIAD_CASES}, got {params_name!r}")
     argv = [
         "--batch",
         "--params_name",
-        "equipart",
+        params_name,
         "--noise_level",
         str(noise_level),
         "--wsindy_only",
@@ -1684,6 +1946,10 @@ def run_equipart_wsindy_fit_plots(
     ]
     if triad_interaction_only:
         argv.append("--triad_interaction_only")
+    if not keep_constant_terms:
+        argv.append("--no_keep_constant_terms")
+    if paired_truth:
+        argv.append("--paired_truth")
     argv.extend(
         [
             "--prediction_t_max",
@@ -1695,7 +1961,31 @@ def run_equipart_wsindy_fit_plots(
         ]
     )
     args = build_arg_parser().parse_args(argv)
-    run_wsindy_prediction_plots("equipart", args)
+    run_wsindy_prediction_plots(params_name, args)
+
+
+def run_equipart_wsindy_fit_plots(
+    noise_level: float = 1.0,
+    ws_ld: float = 0.03,
+    ws_gamma: float = 0.001,
+    triad_interaction_only: bool = True,
+    keep_constant_terms: bool = True,
+    prediction_t_max: float = 20.0,
+    stoch_paths: int = 32,
+    plot_seed: int = 0,
+) -> None:
+    """Backward-compatible alias for ``run_wsindy_fit_plots('equipart', ...)``."""
+    run_wsindy_fit_plots(
+        "equipart",
+        noise_level=noise_level,
+        ws_ld=ws_ld,
+        ws_gamma=ws_gamma,
+        triad_interaction_only=triad_interaction_only,
+        keep_constant_terms=keep_constant_terms,
+        prediction_t_max=prediction_t_max,
+        stoch_paths=stoch_paths,
+        plot_seed=plot_seed,
+    )
 
 
 def main(argv: Optional[List[str]] = None) -> None:

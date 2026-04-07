@@ -2622,6 +2622,81 @@ def plot_third_order_moments_tfdm_vae_nn(moment3_state_record, moment3_state_nn,
     return fig
 
 
+def plot_high_order_moments_tfdm_vae_nn(
+    moment_state_record,
+    moment_state_single,
+    moment_state_tfdm,
+    moment_state_vae,
+    Time_record,
+    order: int,
+    index_tuples,
+    save_path=None,
+):
+    """
+    Plot four selected central moments of given ``order`` (each row is one multi-index), same layout as
+    ``plot_third_order_moments_tfdm_vae_nn``. ``moment_*`` arrays have shape (4, n_time).
+    """
+    fig, axs = plt.subplots(4, 1, figsize=(12, 20), sharex=True)
+    moment_labels = []
+    for tup in index_tuples:
+        sub = "".join(str(i) for i in tup)
+        moment_labels.append(rf"$M^{{({order})}}_{{{sub}}}$")
+
+    for idx in range(4):
+        axs[idx].plot(
+            Time_record,
+            moment_state_record[idx, :],
+            linestyle=":",
+            color="black",
+            linewidth=3,
+            label=f"Ground Truth {moment_labels[idx]}",
+        )
+        axs[idx].plot(
+            Time_record,
+            moment_state_single[idx, :],
+            linestyle="-",
+            color="pink",
+            linewidth=2.5,
+            label=f"FEX+NN {moment_labels[idx]}",
+        )
+        axs[idx].plot(
+            Time_record,
+            moment_state_tfdm[idx, :],
+            linestyle="-",
+            color="orange",
+            linewidth=2.5,
+            label=f"FEX+TFDM {moment_labels[idx]}",
+        )
+        axs[idx].plot(
+            Time_record,
+            moment_state_vae[idx, :],
+            linestyle="-",
+            color="green",
+            linewidth=2.5,
+            label=f"FEX+VAE {moment_labels[idx]}",
+        )
+        axs[idx].set_ylabel(f"{order}th moment", fontsize=15)
+        axs[idx].set_title(moment_labels[idx], fontsize=18)
+        axs[idx].legend(loc="upper right", frameon=False, fontsize=11)
+    axs[3].set_xlabel("Time", fontsize=15)
+    plt.tight_layout()
+    plt.suptitle(
+        f"{order}-Order Moments: FEX+NN / FEX+TFDM / FEX+VAE",
+        fontsize=20,
+        y=1.02,
+    )
+    plt.subplots_adjust(top=0.95)
+    if save_path:
+        fname = {
+            4: "fourth_order_moments_over_time.pdf",
+            5: "fifth_order_moments_over_time.pdf",
+            6: "sixth_order_moments_over_time.pdf",
+        }.get(order, f"order{order}_moments_over_time.pdf")
+        plt.savefig(os.path.join(save_path, fname), dpi=300, bbox_inches="tight")
+    plt.show()
+    return fig
+
+
 def plot_probability_distributions_tfdm_vae_nn(u_all, u_pred_nn, u_pred_tfdm, u_pred_vae, Time_record, save_path=None):
     fig, axs = plt.subplots(2, 3, figsize=(18, 12))
     time_idx = len(Time_record) // 2

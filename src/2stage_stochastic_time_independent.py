@@ -9,13 +9,21 @@ sys.path.append("../src/Example/MC_triad")
 import torch
 import torch.nn as nn
 from utils import *
-from utils.helper import ResidualVAE, build_tmM_eval
+from utils.helper import (
+    ResidualVAE,
+    build_tmM_eval,
+    compute_selected_nth_order_moments,
+    MOMENT_4_INDICES,
+    MOMENT_5_INDICES,
+    MOMENT_6_INDICES,
+)
 from utils.FEX_with_force import FEX_with_force_model_learned
 from utils.plot import (
     plot_mean_comparison_tfdm_vae_nn,
     plot_covariance_comparison_tfdm_vae_nn,
     plot_energy_comparison_tfdm_vae_nn,
     plot_third_order_moments_tfdm_vae_nn,
+    plot_high_order_moments_tfdm_vae_nn,
     plot_probability_distributions_tfdm_vae_nn,
 )
 
@@ -703,6 +711,50 @@ elif choice == '4':
     moment3_state_tfdm[:,:,:,0] = moment3_first
     moment3_state_vae[:,:,:,0] = moment3_first
 
+    _nt_m = int(TIME_AMOUNT / dt) + 1
+    moment4_state_record = np.zeros((4, _nt_m), dtype=np.float32)
+    moment4_state_pred = np.zeros((4, _nt_m), dtype=np.float32)
+    moment4_state_single = np.zeros((4, _nt_m), dtype=np.float32)
+    moment4_state_tfdm = np.zeros((4, _nt_m), dtype=np.float32)
+    moment4_state_vae = np.zeros((4, _nt_m), dtype=np.float32)
+    moment5_state_record = np.zeros((4, _nt_m), dtype=np.float32)
+    moment5_state_pred = np.zeros((4, _nt_m), dtype=np.float32)
+    moment5_state_single = np.zeros((4, _nt_m), dtype=np.float32)
+    moment5_state_tfdm = np.zeros((4, _nt_m), dtype=np.float32)
+    moment5_state_vae = np.zeros((4, _nt_m), dtype=np.float32)
+    moment6_state_record = np.zeros((4, _nt_m), dtype=np.float32)
+    moment6_state_pred = np.zeros((4, _nt_m), dtype=np.float32)
+    moment6_state_single = np.zeros((4, _nt_m), dtype=np.float32)
+    moment6_state_tfdm = np.zeros((4, _nt_m), dtype=np.float32)
+    moment6_state_vae = np.zeros((4, _nt_m), dtype=np.float32)
+    _m4_0 = compute_selected_nth_order_moments(initial_state, MOMENT_4_INDICES)
+    _m5_0 = compute_selected_nth_order_moments(initial_state, MOMENT_5_INDICES)
+    _m6_0 = compute_selected_nth_order_moments(initial_state, MOMENT_6_INDICES)
+    for _arr in (
+        moment4_state_record,
+        moment4_state_pred,
+        moment4_state_single,
+        moment4_state_tfdm,
+        moment4_state_vae,
+    ):
+        _arr[:, 0] = _m4_0
+    for _arr in (
+        moment5_state_record,
+        moment5_state_pred,
+        moment5_state_single,
+        moment5_state_tfdm,
+        moment5_state_vae,
+    ):
+        _arr[:, 0] = _m5_0
+    for _arr in (
+        moment6_state_record,
+        moment6_state_pred,
+        moment6_state_single,
+        moment6_state_tfdm,
+        moment6_state_vae,
+    ):
+        _arr[:, 0] = _m6_0
+
     Energy_MC_all = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     Energy_MC_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     Energy_MC_single = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
@@ -890,6 +942,15 @@ elif choice == '4':
         mean_state_record[:,idx] = np.mean(next_state, axis=0)
         cov_state_record[:,:,idx] = np.cov(next_state, rowvar=False)
         moment3_state_record[:,:,:,idx],_ = compute_third_order_moments(next_state)
+        moment4_state_record[:, idx] = compute_selected_nth_order_moments(
+            next_state, MOMENT_4_INDICES
+        )
+        moment5_state_record[:, idx] = compute_selected_nth_order_moments(
+            next_state, MOMENT_5_INDICES
+        )
+        moment6_state_record[:, idx] = compute_selected_nth_order_moments(
+            next_state, MOMENT_6_INDICES
+        )
         Energy_MC_all[0, idx] = 0.5 * np.sum(mean_state_record[:,idx] ** 2) + 0.5 * np.trace(cov_state_record[:,:,idx])
         Energy_MC_all[1, idx] = 0.5 * (mean_state_record[0,idx] ** 2 + cov_state_record[0,0,idx])
         Energy_MC_all[2, idx] = 0.5 * (mean_state_record[1,idx] ** 2 + cov_state_record[1,1,idx])
@@ -1146,7 +1207,44 @@ elif choice == '4':
         moment3_vae, _ = compute_third_order_moments(next_pred_vae)
         moment3_state_tfdm[:, :, :, idx] = moment3_tfdm
         moment3_state_vae[:, :, :, idx] = moment3_vae
-    
+
+        moment4_state_pred[:, idx] = compute_selected_nth_order_moments(
+            next_pred_state, MOMENT_4_INDICES
+        )
+        moment4_state_single[:, idx] = compute_selected_nth_order_moments(
+            next_pred_single, MOMENT_4_INDICES
+        )
+        moment4_state_tfdm[:, idx] = compute_selected_nth_order_moments(
+            next_pred_tfdm, MOMENT_4_INDICES
+        )
+        moment4_state_vae[:, idx] = compute_selected_nth_order_moments(
+            next_pred_vae, MOMENT_4_INDICES
+        )
+        moment5_state_pred[:, idx] = compute_selected_nth_order_moments(
+            next_pred_state, MOMENT_5_INDICES
+        )
+        moment5_state_single[:, idx] = compute_selected_nth_order_moments(
+            next_pred_single, MOMENT_5_INDICES
+        )
+        moment5_state_tfdm[:, idx] = compute_selected_nth_order_moments(
+            next_pred_tfdm, MOMENT_5_INDICES
+        )
+        moment5_state_vae[:, idx] = compute_selected_nth_order_moments(
+            next_pred_vae, MOMENT_5_INDICES
+        )
+        moment6_state_pred[:, idx] = compute_selected_nth_order_moments(
+            next_pred_state, MOMENT_6_INDICES
+        )
+        moment6_state_single[:, idx] = compute_selected_nth_order_moments(
+            next_pred_single, MOMENT_6_INDICES
+        )
+        moment6_state_tfdm[:, idx] = compute_selected_nth_order_moments(
+            next_pred_tfdm, MOMENT_6_INDICES
+        )
+        moment6_state_vae[:, idx] = compute_selected_nth_order_moments(
+            next_pred_vae, MOMENT_6_INDICES
+        )
+
         # Update current state
         current_pred_state = next_pred_state
         current_pred_state_nn = next_pred_nn
@@ -1192,6 +1290,37 @@ elif choice == '4':
         moment3_state_tfdm,
         moment3_state_vae,
         Time_record,
+        save_path=save_dir,
+    )
+
+    plot_high_order_moments_tfdm_vae_nn(
+        moment4_state_record,
+        moment4_state_single,
+        moment4_state_tfdm,
+        moment4_state_vae,
+        Time_record,
+        4,
+        MOMENT_4_INDICES,
+        save_path=save_dir,
+    )
+    plot_high_order_moments_tfdm_vae_nn(
+        moment5_state_record,
+        moment5_state_single,
+        moment5_state_tfdm,
+        moment5_state_vae,
+        Time_record,
+        5,
+        MOMENT_5_INDICES,
+        save_path=save_dir,
+    )
+    plot_high_order_moments_tfdm_vae_nn(
+        moment6_state_record,
+        moment6_state_single,
+        moment6_state_tfdm,
+        moment6_state_vae,
+        Time_record,
+        6,
+        MOMENT_6_INDICES,
         save_path=save_dir,
     )
 

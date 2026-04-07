@@ -15,6 +15,8 @@ from .constant import binary_ops, unary_ops, POOL_LIMIT,coefficents_history
 from .Sampler import Sampler
 from .Train_Integrator import Body4TrainIntegrationParams, Body4TrainIntegrationArgs, Body4TrainIntegrator
 from .helper import (Buu, compute_third_order_moments,
+                     compute_selected_nth_order_moments,
+                     MOMENT_4_INDICES, MOMENT_5_INDICES, MOMENT_6_INDICES,
                      double_check_energy, logprint,
                      adjust_learning_rate, weights_init,
                      get_coefficients, get_score_expression_from_file,
@@ -28,7 +30,9 @@ from .plot import (plot_NOISE_LEVEL_EFFECT,plot_training_progress_grid,
                    plot_probability_distributions)
 
 __all__ = [
-    "FEX", "Buu",'compute_third_order_moments',
+    "FEX", "Buu", "compute_third_order_moments",
+    "compute_selected_nth_order_moments",
+    "MOMENT_4_INDICES", "MOMENT_5_INDICES", "MOMENT_6_INDICES",
     "double_check_energy", "logprint",
     "adjust_learning_rate", "weights_init",
     "process_chunk_faiss_cpu", "ODE_solver", "FN_Net",

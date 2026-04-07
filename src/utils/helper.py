@@ -243,6 +243,43 @@ def compute_third_order_moments(u):
     return moment3_MC, moment3_MC_norm
 
 
+# Representative multi-indices for 4th–6th central moments (3D state), four traces per order
+# (same spirit as the four panels in ``plot_third_order_moments_tfdm_vae_nn``).
+MOMENT_4_INDICES = ((0, 1, 2, 0), (0, 1, 1, 1), (0, 2, 2, 2), (1, 1, 2, 2))
+MOMENT_5_INDICES = ((0, 1, 2, 0, 1), (0, 1, 1, 1, 2), (0, 2, 2, 2, 0), (1, 1, 2, 2, 1))
+MOMENT_6_INDICES = ((0, 1, 2, 0, 1, 2), (0, 1, 1, 1, 2, 2), (0, 2, 2, 2, 0, 1), (1, 1, 2, 2, 0, 0))
+
+
+def compute_selected_nth_order_moments(
+    u: np.ndarray,
+    index_tuples: tuple,
+) -> np.ndarray:
+    """
+    Central moments :math:`E[\\prod_k (u_{i_k} - \\mu_{i_k})]` for a batch ``u`` of shape (N, 3).
+
+    Parameters
+    ----------
+    u : ndarray
+        Sample paths at one time, shape (N, 3).
+    index_tuples : sequence of tuple of int
+        Each tuple has length ``order`` with entries in ``{0,1,2}``.
+
+    Returns
+    -------
+    ndarray, shape (len(index_tuples),)
+        Raw central moments (same convention as the leading output of ``compute_third_order_moments``).
+    """
+    u = np.asarray(u, dtype=np.float64)
+    mean_MC = np.mean(u, axis=0)
+    out = np.zeros(len(index_tuples), dtype=np.float64)
+    for t, idx in enumerate(index_tuples):
+        centered = np.ones(u.shape[0], dtype=np.float64)
+        for d in range(len(idx)):
+            centered *= u[:, idx[d]] - mean_MC[idx[d]]
+        out[t] = np.mean(centered)
+    return out.astype(np.float32)
+
+
 def double_check_energy(mean_MC, cov_MC):
     # Correct total energy computation
     Energy_MC = 0.5 * np.sum(mean_MC**2) + 0.5 * np.trace(cov_MC)
