@@ -243,11 +243,38 @@ def compute_third_order_moments(u):
     return moment3_MC, moment3_MC_norm
 
 
-# Representative multi-indices for 4th–6th central moments (3D state), four traces per order
+# Representative multi-indices for 4th–7th central moments (3D state), four traces per order
 # (same spirit as the four panels in ``plot_third_order_moments_tfdm_vae_nn``).
 MOMENT_4_INDICES = ((0, 1, 2, 0), (0, 1, 1, 1), (0, 2, 2, 2), (1, 1, 2, 2))
 MOMENT_5_INDICES = ((0, 1, 2, 0, 1), (0, 1, 1, 1, 2), (0, 2, 2, 2, 0), (1, 1, 2, 2, 1))
 MOMENT_6_INDICES = ((0, 1, 2, 0, 1, 2), (0, 1, 1, 1, 2, 2), (0, 2, 2, 2, 0, 1), (1, 1, 2, 2, 0, 0))
+MOMENT_7_INDICES = (
+    (0, 1, 2, 0, 1, 2, 0),
+    (0, 1, 1, 1, 2, 2, 0),
+    (0, 2, 2, 2, 0, 1, 2),
+    (1, 1, 2, 2, 0, 0, 1),
+)
+
+
+def compute_nth_order_moment_time_series(
+    u: np.ndarray,
+    index_tuples: tuple,
+) -> np.ndarray:
+    """
+    Central moments along a stored trajectory ``u`` of shape ``(N, 3, Nt)``.
+
+    Returns
+    -------
+    ndarray, shape ``(len(index_tuples), Nt)``
+    """
+    u = np.asarray(u, dtype=np.float64)
+    if u.ndim != 3 or u.shape[1] != 3:
+        raise ValueError("u must have shape (N, 3, Nt)")
+    nt = u.shape[2]
+    out = np.zeros((len(index_tuples), nt), dtype=np.float32)
+    for t in range(nt):
+        out[:, t] = compute_selected_nth_order_moments(u[:, :, t], index_tuples)
+    return out
 
 
 def compute_selected_nth_order_moments(
@@ -1572,7 +1599,7 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
             else current_pred_state_vae + det_update_vae + simple_noise
         )
 
-        # Independent curves in plots: orange = ASD-FEX-TFDM; u_pred_single holds SRAN ensemble for debugging.
+        # Independent curves in plots: orange = FEX-TFDM; u_pred_single holds SRAN ensemble for debugging.
         u_pred_all[:, :, idx] = next_pred_tfdm
         u_pred_single[:, :, idx] = next_pred_nn
         u_pred_vae[:, :, idx] = next_pred_vae
@@ -1619,14 +1646,14 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
     print("\n" + "=" * 60)
     print(
         f"[INFO] t = {TIME_AMOUNT} (time index {idx_t20}): mean, var(u_i), "
-        "third moments — GT, ASD-FEX-SRAN, ASD-FEX-TFDM, ASD-FEX-VAE"
+        "third moments — GT, FEX-SRAN, FEX-TFDM, FEX-VAE"
     )
     print("=" * 60)
     _snap = [
         ("Ground truth", mean_state_record, cov_state_record, moment3_state_record),
-        ("ASD-FEX-SRAN", mean_state_nn, cov_state_nn, moment3_state_nn),
-        ("ASD-FEX-TFDM", mean_state_tfdm, cov_state_tfdm, moment3_state_tfdm),
-        ("ASD-FEX-VAE", mean_state_vae, cov_state_vae, moment3_state_vae),
+        ("FEX-SRAN", mean_state_nn, cov_state_nn, moment3_state_nn),
+        ("FEX-TFDM", mean_state_tfdm, cov_state_tfdm, moment3_state_tfdm),
+        ("FEX-VAE", mean_state_vae, cov_state_vae, moment3_state_vae),
     ]
     for label, ms, cs, m3 in _snap:
         md = ms[:, idx_t20]

@@ -16,6 +16,7 @@ from utils.helper import (
     MOMENT_4_INDICES,
     MOMENT_5_INDICES,
     MOMENT_6_INDICES,
+    MOMENT_7_INDICES,
 )
 from utils.FEX_with_force import FEX_with_force_model_learned
 from utils.plot import (
@@ -727,9 +728,15 @@ elif choice == '4':
     moment6_state_single = np.zeros((4, _nt_m), dtype=np.float32)
     moment6_state_tfdm = np.zeros((4, _nt_m), dtype=np.float32)
     moment6_state_vae = np.zeros((4, _nt_m), dtype=np.float32)
+    moment7_state_record = np.zeros((4, _nt_m), dtype=np.float32)
+    moment7_state_pred = np.zeros((4, _nt_m), dtype=np.float32)
+    moment7_state_single = np.zeros((4, _nt_m), dtype=np.float32)
+    moment7_state_tfdm = np.zeros((4, _nt_m), dtype=np.float32)
+    moment7_state_vae = np.zeros((4, _nt_m), dtype=np.float32)
     _m4_0 = compute_selected_nth_order_moments(initial_state, MOMENT_4_INDICES)
     _m5_0 = compute_selected_nth_order_moments(initial_state, MOMENT_5_INDICES)
     _m6_0 = compute_selected_nth_order_moments(initial_state, MOMENT_6_INDICES)
+    _m7_0 = compute_selected_nth_order_moments(initial_state, MOMENT_7_INDICES)
     for _arr in (
         moment4_state_record,
         moment4_state_pred,
@@ -754,6 +761,14 @@ elif choice == '4':
         moment6_state_vae,
     ):
         _arr[:, 0] = _m6_0
+    for _arr in (
+        moment7_state_record,
+        moment7_state_pred,
+        moment7_state_single,
+        moment7_state_tfdm,
+        moment7_state_vae,
+    ):
+        _arr[:, 0] = _m7_0
 
     Energy_MC_all = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     Energy_MC_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
@@ -950,6 +965,9 @@ elif choice == '4':
         )
         moment6_state_record[:, idx] = compute_selected_nth_order_moments(
             next_state, MOMENT_6_INDICES
+        )
+        moment7_state_record[:, idx] = compute_selected_nth_order_moments(
+            next_state, MOMENT_7_INDICES
         )
         Energy_MC_all[0, idx] = 0.5 * np.sum(mean_state_record[:,idx] ** 2) + 0.5 * np.trace(cov_state_record[:,:,idx])
         Energy_MC_all[1, idx] = 0.5 * (mean_state_record[0,idx] ** 2 + cov_state_record[0,0,idx])
@@ -1245,6 +1263,19 @@ elif choice == '4':
             next_pred_vae, MOMENT_6_INDICES
         )
 
+        moment7_state_pred[:, idx] = compute_selected_nth_order_moments(
+            next_pred_state, MOMENT_7_INDICES
+        )
+        moment7_state_single[:, idx] = compute_selected_nth_order_moments(
+            next_pred_single, MOMENT_7_INDICES
+        )
+        moment7_state_tfdm[:, idx] = compute_selected_nth_order_moments(
+            next_pred_tfdm, MOMENT_7_INDICES
+        )
+        moment7_state_vae[:, idx] = compute_selected_nth_order_moments(
+            next_pred_vae, MOMENT_7_INDICES
+        )
+
         # Update current state
         current_pred_state = next_pred_state
         current_pred_state_nn = next_pred_nn
@@ -1321,6 +1352,16 @@ elif choice == '4':
         Time_record,
         6,
         MOMENT_6_INDICES,
+        save_path=save_dir,
+    )
+    plot_high_order_moments_tfdm_vae_nn(
+        moment7_state_record,
+        moment7_state_single,
+        moment7_state_tfdm,
+        moment7_state_vae,
+        Time_record,
+        7,
+        MOMENT_7_INDICES,
         save_path=save_dir,
     )
 

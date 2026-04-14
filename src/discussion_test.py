@@ -21,9 +21,9 @@ from utils.plot import (
     plot_discussion_first_moments_5x6,
     plot_discussion_energy_modes_5x6,
     plot_triad_3d_time_grid_matplotlib_cloud_3x3_times,
-    run_discussion_choice4_triad_grid,
     run_discussion_choice5_offdiagonal_cov_grid,
     run_discussion_cov_moments_grid,
+    run_discussion_choice5_high_order_moments_grid,
 )
 from utils.helper import (
     get_coefficients,
@@ -68,16 +68,20 @@ print("1. Discussion 2: different noise levels test")
 print("2. Discussion 3: different sample sizes test")
 print(
     "3. Discussion 4: ‖⟨u⟩‖₂ + covariance diagonals + third moments "
-    "(3×8 grid: equipart / Forward Cascade / dual_cascade)"
+    "(5×8 grid: equipart / Forward cascade / dual_cascade / periodic / random cascade)"
 )
 print("4. Discussion 5: off-diagonal covariances (3×3) time indep vs dep")
-print("5. Diffusion (random_cascade_deterministic): ‖⟨u⟩‖₂ + cov + ⟨M⟩ (1×8), fontsize 28")
-print("6. Periodic + random cascade deterministic: same columns (2×8), fontsize 28")
 print(
-    "7. State projections 4×9: TFDM / SRAN / VAE scatter + GT density at t=20 only"
+    "5. High-order moments (4th–7th): two 5×8 PDFs (orders 4–5 and 6–7), "
+    "same five regimes as Discussion 4; ⟨M⟩ titles + legend fs=38; Time / ticks / regime labels fs=28; grid on"
+)
+print("6. Diffusion (random_cascade_deterministic): ‖⟨u⟩‖₂ + cov + ⟨M⟩ (1×8), fontsize 28")
+print(
+    "7. State projections 4×15: FEX-TFDM / FEX-SRAN / FEX-VAE + GT scatter at t=20 "
+    "(five regimes: equipart / forward / dual / periodic / random cascade)"
 )
 print(
-    "8. State projections 4×6: periodic + random cascade det. (same style as opt. 7, t=20)"
+    "8. State projections 3×6 contours: periodic + random cascade (t=5,10,20)"
 )
 print(
     "9. First moments 5×6: ⟨u1⟩,⟨u2⟩,⟨u3⟩ + log10|pred−GT| per component, five regimes"
@@ -169,10 +173,11 @@ elif choice == '2':
 elif choice == '3':
     print("=" * 60)
     print(
-        "[INFO] Discussion 4: 3×8 grid — ‖⟨u⟩‖₂, cov(u_i,u_i), selected ⟨M⟩; three regimes."
+        "[INFO] Discussion 4: 5×8 grid — ‖⟨u⟩‖₂, cov(u_i,u_i), selected ⟨M⟩; "
+        "equipart, forward/dual cascade, periodic, random cascade."
     )
     print("=" * 60)
-    run_discussion_choice4_triad_grid(
+    run_discussion_cov_moments_grid(
         args,
         base_path=base_path,
         dir_example=DIR_EXAMPLE,
@@ -180,7 +185,23 @@ elif choice == '3':
         rollout_worker=lambda plot_composite=False: discussion_choice5_rollout(
             args, device, plot_composite=plot_composite
         ),
+        regimes=(
+            "equipart",
+            "cascade",
+            "dual_cascade",
+            "periodic_cascade",
+            "random_cascade_deterministic",
+        ),
+        row_labels=(
+            "Equipartition",
+            "Forward cascade",
+            "Dual cascade",
+            "Periodic cascade",
+            "Random cascade",
+        ),
+        save_filename="discussion_choice4_cov_moments_grid.pdf",
         fs=28,
+        log_label="discussion choice 4 grid (5×8)",
     )
 
 elif choice == '4':
@@ -199,6 +220,41 @@ elif choice == '4':
     )
 
 elif choice == "5":
+    print("=" * 60)
+    print(
+        "[INFO] High-order moments (4th–7th): two 5×8 PDFs — "
+        "discussion_choice5_high_order_moments_order45_5x8_grid.pdf and …_order67_…; "
+        "GT / FEX-SRAN / FEX-TFDM / FEX-VAE; ⟨M⟩ titles + legend fs=38; Time / ticks / regime labels fs=28; grid on."
+    )
+    print("=" * 60)
+    run_discussion_choice5_high_order_moments_grid(
+        args,
+        base_path=base_path,
+        dir_example=DIR_EXAMPLE,
+        model_name=args.Model,
+        rollout_worker=lambda plot_composite=False: discussion_choice5_rollout(
+            args, device, plot_composite=plot_composite
+        ),
+        regimes=(
+            "equipart",
+            "cascade",
+            "dual_cascade",
+            "periodic_cascade",
+            "random_cascade_deterministic",
+        ),
+        row_labels=(
+            "Equipartition",
+            "Forward cascade",
+            "Dual cascade",
+            "Periodic cascade",
+            "Random cascade",
+        ),
+        fs=38,
+        fs_xaxis=28,
+        fs_yaxis=28,
+    )
+
+elif choice == "6":
     # Same figure builder as option 3: plot_discussion_cov_moments_grid (row labels, ticks, margins).
     print("=" * 60)
     print(
@@ -220,43 +276,23 @@ elif choice == "5":
         log_label="discussion diffusion 1×8 grid",
     )
 
-elif choice == "6":
-    # Row 2 rollout uses random_cascade_deterministic; y-axis label is short "Random cascade".
-    print("=" * 60)
-    print(
-        "[INFO] Periodic cascade + random_cascade_deterministic: 2×8 ‖⟨u⟩‖₂ + cov + ⟨M⟩, fs=28 "
-        '(second row y-label: "Random cascade").'
-    )
-    print("=" * 60)
-    run_discussion_cov_moments_grid(
-        args,
-        base_path=base_path,
-        dir_example=DIR_EXAMPLE,
-        model_name=args.Model,
-        rollout_worker=lambda plot_composite=False: discussion_choice5_rollout(
-            args, device, plot_composite=plot_composite
-        ),
-        regimes=("periodic_cascade", "random_cascade_deterministic"),
-        row_labels=("Periodic cascade", "Random cascade"),
-        save_filename="discussion_periodic_random_det_cov_moments_grid.pdf",
-        fs=28,
-        log_label="discussion periodic + random cascade 2×8 grid",
-    )
-
 elif choice == "7":
     print("=" * 60)
     print(
-        "[INFO] State projections 4×9 at t=20: fs=40; x-axis per column matches Ground truth row (3 ticks)."
+        "[INFO] State projections 4×15 at t=20: five regimes × three projection pairs; "
+        "fs=40; FEX-TFDM / FEX-SRAN / FEX-VAE + GT; x-axis per column from GT row (3 ticks)."
     )
     print("=" * 60)
     out_pdf = os.path.join(
         base_path,
-        "discussion_state_projections_4x9_t20_scatter_methods_gt_density.pdf",
+        "discussion_state_projections_4x15_t20_scatter_methods_gt_density.pdf",
     )
     case_specs = [
         ("Equipartition", "equipart"),
         ("Forward Cascade", "cascade"),
         ("Dual Cascade", "dual_cascade"),
+        ("Periodic cascade", "periodic_cascade"),
+        ("Random cascade", "random_cascade_deterministic"),
     ]
     case_data = {}
     for display_name, params_name in case_specs:
@@ -288,24 +324,24 @@ elif choice == "7":
         hspace=0.50,
         row_label_pad=0.0008,
         xaxis_numticks=3,
+        periodic_cascade_case_name="Periodic cascade",
+        periodic_cascade_yticks=(-5.0, 0.0, 5.0),
+        random_cascade_case_name="Random cascade",
+        random_cascade_yticks=(-0.3, 0.0, 0.3),
     )
     print(f"[SAVED] {saved}")
 
 elif choice == "8":
     print("=" * 60)
     print(
-        "[INFO] State projections 4×6: Periodic + random cascade (det.); "
-        "same layout as option 7 (4 rows × 6 cols), t=20; optional 3×6 contours t=5,10,20."
+        "[INFO] State projections 3×6 contours: periodic + random cascade (ground truth only), "
+        "times t=5, 10, 20."
     )
     print("=" * 60)
 
     out_contour = os.path.join(
         base_path,
         "discussion_state_projections_3x6_periodic_random_det_cases_t5_t10_t20.pdf",
-    )
-    out_scatter_4x6 = os.path.join(
-        base_path,
-        "discussion_state_projections_4x6_periodic_random_det_t20_scatter_methods_gt_density.pdf",
     )
 
     case_specs = [
@@ -333,37 +369,11 @@ elif choice == "8":
     )
     print(f"[SAVED] {saved}")
 
-    _nplot = int(getattr(args, "RESIDUAL_SAMPLES", 10000))
-    _max_pts = max(_nplot, 12000)
-    saved_s = plot_state_projections_cases_4x9_scatter_and_gt_density(
-        case_data=case_data,
-        dt=rollout["dt"],
-        time=20.0,
-        save_path=out_scatter_4x6,
-        fs=40,
-        max_points=_max_pts,
-        point_size=3.0,
-        alpha=0.55,
-        case_title_x_shift=0.04,
-        case_title_x_shift_forward_dual_extra=0.03,
-        cell_side_inches=5.0,
-        wspace=0.56,
-        hspace=0.50,
-        row_label_pad=0.0008,
-        forward_cascade_yticks=None,
-        dual_cascade_yticks=None,
-        periodic_cascade_case_name="Periodic cascade",
-        periodic_cascade_yticks=(-5.0, 0.0, 5.0),
-        random_cascade_case_name="Random cascade",
-        random_cascade_yticks=(-0.3, 0.0, 0.3),
-    )
-    print(f"[SAVED] {saved_s}")
-
 elif choice == "9":
     print("=" * 60)
     print(
         "[INFO] First moments 5×6: means + log10|mean_pred−mean_GT| "
-        "(ASD-FEX-TFDM / SRAN / VAE; see rollout print block)."
+        "(FEX-TFDM / FEX-SRAN / FEX-VAE; see rollout print block)."
     )
     print("=" * 60)
     out_pdf = os.path.join(

@@ -1084,8 +1084,8 @@ def plot_mean_covariance_grid_ind_dep(Time_ind,
                                        t_dep_max: float = 10.0,
                                        save_path: str = None,
                                        legend_title: str = None,
-                                       independent_label: str = "ASD-FEX-TFDM-independent",
-                                       dependent_label: str = "ASD-FEX-TFDM-dependent",
+                                       independent_label: str = "FEX-TFDM-independent",
+                                       dependent_label: str = "FEX-TFDM-dependent",
                                        ground_truth_label: str = "Ground Truth",
                                        show_legend: bool = True,
                                        font_size: int = 18):
@@ -1216,8 +1216,8 @@ def plot_log10_error_mean_covariance_grid_ind_dep(
     t_ind_max: float = 20.0,
     t_dep_max: float = 10.0,
     save_path: str = None,
-    independent_label: str = "ASD-FEX-TFDM-independent (error)",
-    dependent_label: str = "ASD-FEX-TFDM-dependent (error)",
+    independent_label: str = "FEX-TFDM-independent (error)",
+    dependent_label: str = "FEX-TFDM-dependent (error)",
     legend_title: str = None,
     eps: float = 1e-16,
 ):
@@ -1918,8 +1918,8 @@ def plot_discussion_choice3_composite(
             save_path=mean_cov_png,
             legend_title=None,
             ground_truth_label="Ground Truth",
-            independent_label="ASD-FEX-TFDM-independent",
-            dependent_label="ASD-FEX-TFDM-dependent",
+            independent_label="FEX-TFDM-independent",
+            dependent_label="FEX-TFDM-dependent",
             show_legend=False,
             font_size=26,
         )
@@ -1936,8 +1936,8 @@ def plot_discussion_choice3_composite(
             title_suffix=params_name,
             legend_title=None,
             ground_truth_label="Ground Truth",
-            independent_label="ASD-FEX-TFDM-independent",
-            dependent_label="ASD-FEX-TFDM-dependent",
+            independent_label="FEX-TFDM-independent",
+            dependent_label="FEX-TFDM-dependent",
             show_legend=False,
         )
         plt.close("all")
@@ -1958,8 +1958,8 @@ def plot_discussion_choice3_composite(
     from matplotlib.lines import Line2D
     leg_handles = [
         Line2D([0], [0], color="black", lw=3, label="Ground Truth"),
-        Line2D([0], [0], color="#ff7f0e", lw=3, label="ASD-FEX-TFDM-independent"),
-        Line2D([0], [0], color="#1f77b4", lw=3, label="ASD-FEX-TFDM-dependent"),
+        Line2D([0], [0], color="#ff7f0e", lw=3, label="FEX-TFDM-independent"),
+        Line2D([0], [0], color="#1f77b4", lw=3, label="FEX-TFDM-dependent"),
     ]
     ax_legend.legend(
         handles=leg_handles,
@@ -2037,7 +2037,7 @@ def plot_discussion_cov_moments_grid(
     """
     N×8 panels: rows = regimes; column 0 = ‖⟨u⟩‖₂; columns 1–3 = cov(u_i,u_i);
     columns 4–7 = selected third moments.
-    Curves: ground truth (black), ASD-FEX-TFDM (orange), SRAN (pink), VAE (green).
+    Curves: ground truth (black), FEX-TFDM (orange), FEX-SRAN (pink), FEX-VAE (green).
 
     ``packs`` are dicts from ``discussion_choice5_rollout(..., plot_composite=False)``.
     """
@@ -2130,7 +2130,7 @@ def plot_discussion_cov_moments_grid(
                 "-",
                 color=tfdm_color,
                 linewidth=1.6,
-                label="ASD-FEX-TFDM",
+                label="FEX-TFDM",
             )
             ax.plot(
                 Time_ind,
@@ -2138,7 +2138,7 @@ def plot_discussion_cov_moments_grid(
                 "-",
                 color=sran_color,
                 linewidth=1.6,
-                label="ASD-FEX-SRAN",
+                label="FEX-SRAN",
             )
             ax.plot(
                 Time_ind,
@@ -2146,7 +2146,7 @@ def plot_discussion_cov_moments_grid(
                 "-",
                 color=vae_color,
                 linewidth=1.6,
-                label="ASD-FEX-VAE",
+                label="FEX-VAE",
             )
 
             if row == 0:
@@ -2160,9 +2160,9 @@ def plot_discussion_cov_moments_grid(
 
     handles = [
         Line2D([0], [0], color=gt_color, lw=2.5, linestyle="-", label="Ground Truth"),
-        Line2D([0], [0], color=tfdm_color, lw=2.5, linestyle="-", label="ASD-FEX-TFDM"),
-        Line2D([0], [0], color=sran_color, lw=2.5, linestyle="-", label="ASD-FEX-SRAN"),
-        Line2D([0], [0], color=vae_color, lw=2.5, linestyle="-", label="ASD-FEX-VAE"),
+        Line2D([0], [0], color=tfdm_color, lw=2.5, linestyle="-", label="FEX-TFDM"),
+        Line2D([0], [0], color=sran_color, lw=2.5, linestyle="-", label="FEX-SRAN"),
+        Line2D([0], [0], color=vae_color, lw=2.5, linestyle="-", label="FEX-VAE"),
     ]
     fig.legend(
         handles=handles,
@@ -2199,8 +2199,8 @@ def plot_discussion_choice4_triad_grid(
 ):
     """
     3×8 panel figure: rows = regimes; columns = ‖⟨u⟩‖₂, cov(u_i,u_i) for i=1,2,3 and
-    ⟨M123⟩, ⟨M122⟩, ⟨M133⟩, ⟨M223⟩. Each panel: ground truth (black), ASD-FEX-TFDM
-    (orange), ASD-FEX-SRAN (pink), ASD-FEX-VAE (green), all over t∈[0,20].
+    ⟨M123⟩, ⟨M122⟩, ⟨M133⟩, ⟨M223⟩. Each panel: ground truth (black), FEX-TFDM
+    (orange), FEX-SRAN (pink), FEX-VAE (green), all over t∈[0,20].
 
     `packs` is a length-3 list of dicts from ``discussion_choice5_rollout(..., plot_composite=False)``:
     Time_ind, mean_gt, mean_pred_tfdm, mean_pred_sran, mean_pred_vae,
@@ -2297,6 +2297,271 @@ def run_discussion_cov_moments_grid(
     )
 
 
+def _moment_label_u123(order: int, tup: tuple) -> str:
+    """Component indices 1,2,3 ≡ :math:`u_1,u_2,u_3` (internal 0,1,2)."""
+    sub = "".join(str(i + 1) for i in tup)
+    return rf"$\langle M^{{({order})}}\rangle_{{{sub}}}$"
+
+
+def plot_discussion_choice5_high_order_moments_grid(
+    packs,
+    save_path,
+    row_labels,
+    order_specs,
+    fs=28,
+    fs_xaxis=28,
+    fs_yaxis=28,
+    log_label="discussion choice 5 high-order moments grid",
+):
+    """
+    N×8 panels: rows = regimes; eight columns from two consecutive orders (four moments each).
+    Curves: ground truth (black), FEX-TFDM (orange), FEX-SRAN (pink), FEX-VAE (green).
+    No figure suptitle; compact legend above the first row of panels.
+    Subplots are **not** forced square: cell width and height (inches) differ slightly so panels
+    read as landscape. **Grid** is on inside each subplot (light alpha).
+
+    ``fs`` sizes **column titles** (⟨M⟩ notation) and the **figure legend** (typically 38).
+    ``fs_xaxis`` / ``fs_yaxis`` size ``Time``, tick numbers, and left **regime** labels
+    (Equipartition, Forward cascade, …) at 28.
+
+    Column titles use :math:`\\langle M^{(n)}\\rangle` with subscripts ``1,2,3`` for :math:`u_1,u_2,u_3`.
+
+    ``packs`` are dicts from ``discussion_choice5_rollout(..., plot_composite=False)`` and must
+    include ``u_all_gt``, ``u_pred_sran``, ``u_pred_tfdm``, ``u_pred_vae``, ``Time_ind``.
+    """
+    from matplotlib.lines import Line2D
+
+    from .helper import compute_nth_order_moment_time_series
+
+    nrows = len(packs)
+    assert nrows == len(row_labels)
+    ncols = sum(len(t[1]) for t in order_specs)
+    if ncols != 8:
+        raise ValueError(f"expected 8 columns (two orders × four traces), got {ncols}")
+
+    col_labels = []
+    for order, indices in order_specs:
+        for tup in indices:
+            col_labels.append(_moment_label_u123(order, tup))
+
+    # Wider than tall cells (not square): readable time-series panels.
+    cell_w_inches = 5.5
+    cell_h_inches = 4.25
+    fig_w = float(cell_w_inches) * float(ncols)
+    fig_h = float(cell_h_inches) * float(nrows)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(fig_w, fig_h), sharex=True)
+    if nrows == 1:
+        axes = np.asarray([axes])
+
+    title_fs = int(fs)
+    legend_fs = int(fs)
+
+    gt_color = "black"
+    tfdm_color = "#ff7f0e"
+    sran_color = "#e377c2"
+    vae_color = "#2ca02c"
+
+    last_row = nrows - 1
+    for row, (axrow, pack, rlabel) in enumerate(zip(axes, packs, row_labels)):
+        Time_ind = np.asarray(pack["Time_ind"], dtype=float).ravel()
+        u_gt = pack["u_all_gt"]
+        u_sran = pack["u_pred_sran"]
+        u_tfdm = pack["u_pred_tfdm"]
+        u_vae = pack["u_pred_vae"]
+
+        col = 0
+        for order, indices in order_specs:
+            m_gt = compute_nth_order_moment_time_series(u_gt, indices)
+            m_sran = compute_nth_order_moment_time_series(u_sran, indices)
+            m_tfdm = compute_nth_order_moment_time_series(u_tfdm, indices)
+            m_vae = compute_nth_order_moment_time_series(u_vae, indices)
+            for k in range(len(indices)):
+                ax = axrow[col]
+                y_gt = m_gt[k, :]
+                y_sran = m_sran[k, :]
+                y_tfdm = m_tfdm[k, :]
+                y_vae = m_vae[k, :]
+                ax.plot(
+                    Time_ind,
+                    y_gt,
+                    "-",
+                    color=gt_color,
+                    linewidth=2.0,
+                    label="Ground Truth",
+                )
+                ax.plot(
+                    Time_ind,
+                    y_tfdm,
+                    "-",
+                    color=tfdm_color,
+                    linewidth=1.6,
+                    label="FEX-TFDM",
+                )
+                ax.plot(
+                    Time_ind,
+                    y_sran,
+                    "-",
+                    color=sran_color,
+                    linewidth=1.6,
+                    label="FEX-SRAN",
+                )
+                ax.plot(
+                    Time_ind,
+                    y_vae,
+                    "-",
+                    color=vae_color,
+                    linewidth=1.6,
+                    label="FEX-VAE",
+                )
+                if row == 0:
+                    ax.set_title(col_labels[col], fontsize=title_fs)
+                if col == 0:
+                    ax.set_ylabel(
+                        rlabel,
+                        fontsize=fs_yaxis,
+                        labelpad=14,
+                    )
+                if row == last_row:
+                    ax.set_xlabel("Time", fontsize=fs_xaxis)
+                ax.tick_params(axis="y", labelsize=fs_yaxis)
+                ax.tick_params(axis="x", labelsize=fs_xaxis)
+                ax.grid(True, alpha=0.25, linestyle="-", linewidth=0.6)
+                col += 1
+
+    def _apply_xaxis_fontsize(ax_bottom_row):
+        """Re-apply after tight_layout, which can reset shared x tick label sizes."""
+        ax_bottom_row.set_xlabel("Time", fontsize=fs_xaxis)
+        ax_bottom_row.tick_params(axis="x", which="both", labelsize=fs_xaxis)
+        for t in ax_bottom_row.get_xticklabels():
+            t.set_fontsize(fs_xaxis)
+        ax_bottom_row.xaxis.label.set_fontsize(fs_xaxis)
+
+    def _apply_yaxis_fontsize(ax, has_ylabel: bool):
+        """Re-apply after tight_layout (y ticks / regime name on column 0)."""
+        ax.tick_params(axis="y", which="both", labelsize=fs_yaxis)
+        for t in ax.get_yticklabels():
+            t.set_fontsize(fs_yaxis)
+        if has_ylabel:
+            ax.yaxis.label.set_fontsize(fs_yaxis)
+
+    handles = [
+        Line2D([0], [0], color=gt_color, lw=2.5, linestyle="-", label="Ground Truth"),
+        Line2D([0], [0], color=tfdm_color, lw=2.5, linestyle="-", label="FEX-TFDM"),
+        Line2D([0], [0], color=sran_color, lw=2.5, linestyle="-", label="FEX-SRAN"),
+        Line2D([0], [0], color=vae_color, lw=2.5, linestyle="-", label="FEX-VAE"),
+    ]
+    fig.legend(
+        handles=handles,
+        loc="upper center",
+        ncol=4,
+        fontsize=legend_fs,
+        frameon=False,
+        bbox_to_anchor=(0.5, 1.01),
+        borderaxespad=0.0,
+    )
+    # Extra left room for regime names (Equipartition, Forward cascade, …) at fs_yaxis.
+    plt.tight_layout(rect=[0.07, 0.02, 1, 0.95])
+    for col in range(ncols):
+        _apply_xaxis_fontsize(axes[last_row, col])
+    for row in range(nrows):
+        for col in range(ncols):
+            _apply_yaxis_fontsize(axes[row, col], col == 0)
+    for col in range(ncols):
+        axes[0, col].set_title(col_labels[col], fontsize=title_fs)
+    save_path = os.path.abspath(save_path)
+    os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+    try:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        root, ext = os.path.splitext(save_path)
+        png_path = root + ".png"
+        if ext.lower() != ".png":
+            plt.savefig(png_path, dpi=300, bbox_inches="tight")
+            print(f"[INFO] Saved {log_label} PNG to: {png_path}")
+    except Exception as e:
+        print(f"[ERROR] Failed to save {log_label} to: {save_path}")
+        print(f"[ERROR] savefig exception: {e}")
+        raise
+    plt.close(fig)
+    print(f"[INFO] Saved {log_label} to: {save_path}")
+
+
+def run_discussion_choice5_high_order_moments_grid(
+    args,
+    base_path: str,
+    dir_example: str,
+    model_name: str,
+    rollout_worker,
+    regimes,
+    row_labels,
+    fs: int = 28,
+    fs_xaxis: int = 28,
+    fs_yaxis: int = 28,
+):
+    """
+    Run ``rollout_worker`` per regime, then two 5×8 figures: orders 4–5 and 6–7.
+
+    Writes ``discussion_choice5_high_order_moments_order45_5x8_grid.pdf`` and
+    ``discussion_choice5_high_order_moments_order67_5x8_grid.pdf`` under
+    ``dir_example / model_name / Results``.
+
+    Pass ``fs_xaxis`` / ``fs_yaxis`` smaller than ``fs`` if time / y tick labels should stay
+    more compact (e.g. 28 vs 38 for titles and legend).
+    """
+    from .helper import (
+        MOMENT_4_INDICES,
+        MOMENT_5_INDICES,
+        MOMENT_6_INDICES,
+        MOMENT_7_INDICES,
+    )
+
+    _saved_pn = args.params_name
+    _saved_log = args.LOG_SAVE_PATH
+    packs = []
+    try:
+        for regime in regimes:
+            args.params_name = regime
+            args.LOG_SAVE_PATH = f"{base_path}/{regime}"
+            packs.append(rollout_worker(plot_composite=False))
+    finally:
+        args.params_name = _saved_pn
+        args.LOG_SAVE_PATH = _saved_log
+    out_dir = os.path.join(dir_example, model_name, "Results")
+    os.makedirs(out_dir, exist_ok=True)
+
+    halves = (
+        (
+            ((4, MOMENT_4_INDICES), (5, MOMENT_5_INDICES)),
+            "discussion_choice5_high_order_moments_order45_5x8_grid.pdf",
+            "discussion choice 5 high-order moments 5×8 orders 4–5",
+        ),
+        (
+            ((6, MOMENT_6_INDICES), (7, MOMENT_7_INDICES)),
+            "discussion_choice5_high_order_moments_order67_5x8_grid.pdf",
+            "discussion choice 5 high-order moments 5×8 orders 6–7",
+        ),
+    )
+
+    saved_paths = []
+    for order_specs, fname, log_label in halves:
+        save_pdf = os.path.abspath(os.path.join(out_dir, fname))
+        print(f"[INFO] Writing PDF: {save_pdf}")
+        plot_discussion_choice5_high_order_moments_grid(
+            packs,
+            save_path=save_pdf,
+            row_labels=row_labels,
+            order_specs=order_specs,
+            fs=fs,
+            fs_xaxis=fs_xaxis,
+            fs_yaxis=fs_yaxis,
+            log_label=log_label,
+        )
+        saved_paths.append(save_pdf)
+
+    print("[INFO] Finished: saved 2 PDFs (discussion choice 5, high-order moments):")
+    for p in saved_paths:
+        print(f"       {p}")
+
+
 def plot_discussion5_offdiagonal_cov_grid(
     packs,
     save_path,
@@ -2305,7 +2570,7 @@ def plot_discussion5_offdiagonal_cov_grid(
 ):
     """
     3×3 grid: rows = regimes, columns = cov(u1,u2), cov(u1,u3), cov(u2,u3).
-    Curves: Ground truth, ASD-FEX-TFDM time-independent, ASD-FEX-TFDM time-dependent
+    Curves: Ground truth, FEX-TFDM time-independent, FEX-TFDM time-dependent
     (dependent only up to ``Time_dep``).
 
     ``packs`` are dicts from ``discussion_choice5_rollout(..., plot_composite=False)``:
@@ -2349,7 +2614,7 @@ def plot_discussion5_offdiagonal_cov_grid(
                 "-",
                 color=ind_color,
                 linewidth=1.8,
-                label="ASD-FEX-TFDM-time independent",
+                label="FEX-TFDM-time independent",
             )
             ax.plot(
                 t_dep,
@@ -2357,7 +2622,7 @@ def plot_discussion5_offdiagonal_cov_grid(
                 "-",
                 color=dep_color,
                 linewidth=1.8,
-                label="ASD-FEX-TFDM-time-dependent",
+                label="FEX-TFDM-time-dependent",
             )
 
             if row == 0:
@@ -2377,7 +2642,7 @@ def plot_discussion5_offdiagonal_cov_grid(
             color=ind_color,
             lw=2.5,
             linestyle="-",
-            label="ASD-FEX-TFDM-time independent",
+            label="FEX-TFDM-time independent",
         ),
         Line2D(
             [0],
@@ -2385,7 +2650,7 @@ def plot_discussion5_offdiagonal_cov_grid(
             color=dep_color,
             lw=2.5,
             linestyle="-",
-            label="ASD-FEX-TFDM-time-dependent",
+            label="FEX-TFDM-time-dependent",
         ),
     ]
     fig.legend(
@@ -2430,7 +2695,7 @@ def run_discussion_choice5_offdiagonal_cov_grid(
     out_dir = os.path.join(dir_example, model_name, "Results")
     os.makedirs(out_dir, exist_ok=True)
     save_pdf = os.path.abspath(
-        os.path.join(out_dir, "discussion_choice5_offdiag_cov_grid.pdf")
+        os.path.join(out_dir, "discussion_offdiag_cov_grid.pdf")
     )
     print(f"[INFO] Discussion choice 5 off-diagonal cov output path: {save_pdf}")
     plot_discussion5_offdiagonal_cov_grid(packs, save_path=save_pdf, fs=fs)
@@ -2631,10 +2896,18 @@ def plot_high_order_moments_tfdm_vae_nn(
     order: int,
     index_tuples,
     save_path=None,
+    *,
+    single_method_label: str = "FEX+NN",
+    show_figure: bool = True,
+    figure_filename: str | None = None,
 ):
     """
     Plot four selected central moments of given ``order`` (each row is one multi-index), same layout as
     ``plot_third_order_moments_tfdm_vae_nn``. ``moment_*`` arrays have shape (4, n_time).
+
+    ``single_method_label`` names the pink curve (FEX+NN in training scripts, FEX-SRAN in ``discussion_test``).
+    If ``figure_filename`` is set, it is used as the PDF name under ``save_path`` instead of the default
+    ``fourth_order_moments_over_time.pdf``, etc. When ``show_figure`` is False, the figure is closed after save.
     """
     fig, axs = plt.subplots(4, 1, figsize=(12, 20), sharex=True)
     moment_labels = []
@@ -2657,7 +2930,7 @@ def plot_high_order_moments_tfdm_vae_nn(
             linestyle="-",
             color="pink",
             linewidth=2.5,
-            label=f"FEX+NN {moment_labels[idx]}",
+            label=f"{single_method_label} {moment_labels[idx]}",
         )
         axs[idx].plot(
             Time_record,
@@ -2665,7 +2938,7 @@ def plot_high_order_moments_tfdm_vae_nn(
             linestyle="-",
             color="orange",
             linewidth=2.5,
-            label=f"FEX+TFDM {moment_labels[idx]}",
+            label=f"FEX-TFDM {moment_labels[idx]}",
         )
         axs[idx].plot(
             Time_record,
@@ -2673,7 +2946,7 @@ def plot_high_order_moments_tfdm_vae_nn(
             linestyle="-",
             color="green",
             linewidth=2.5,
-            label=f"FEX+VAE {moment_labels[idx]}",
+            label=f"FEX-VAE {moment_labels[idx]}",
         )
         axs[idx].set_ylabel(f"{order}th moment", fontsize=15)
         axs[idx].set_title(moment_labels[idx], fontsize=18)
@@ -2681,7 +2954,7 @@ def plot_high_order_moments_tfdm_vae_nn(
     axs[3].set_xlabel("Time", fontsize=15)
     plt.tight_layout()
     plt.suptitle(
-        f"{order}-Order Moments: FEX+NN / FEX+TFDM / FEX+VAE",
+        f"{order}-Order Moments: {single_method_label} / FEX-TFDM / FEX-VAE",
         fontsize=20,
         y=1.02,
     )
@@ -2691,9 +2964,13 @@ def plot_high_order_moments_tfdm_vae_nn(
             4: "fourth_order_moments_over_time.pdf",
             5: "fifth_order_moments_over_time.pdf",
             6: "sixth_order_moments_over_time.pdf",
+            7: "seventh_order_moments_over_time.pdf",
         }.get(order, f"order{order}_moments_over_time.pdf")
         plt.savefig(os.path.join(save_path, fname), dpi=300, bbox_inches="tight")
-    plt.show()
+    if show_figure:
+        plt.show()
+    else:
+        plt.close(fig)
     return fig
 
 
@@ -3386,7 +3663,7 @@ def plot_discussion_first_moments_5x6(
     """
     N×6 grid: rows = regimes; cols 0–2 = ⟨u1⟩,⟨u2⟩,⟨u3⟩; cols 3–5 =
     :math:`\\log_{10}(|\\langle u_i\\rangle_{\\mathrm{pred}}-\\langle u_i\\rangle_{\\mathrm{GT}}|)`
-    for ASD-FEX-TFDM / SRAN / VAE (dashed, same colors as means).
+    for FEX-TFDM / FEX-SRAN / FEX-VAE (dashed, same colors as means).
 
     Legend uses phantom :class:`~matplotlib.lines.Line2D` handles (same pattern as
     :func:`plot_discussion_cov_moments_grid`) so entries render inside a framed box.
@@ -3513,7 +3790,7 @@ def plot_discussion_first_moments_5x6(
             color=tfdm_color,
             lw=2.5,
             linestyle="--",
-            label="ASD-FEX-TFDM",
+            label="FEX-TFDM",
         ),
         Line2D(
             [0],
@@ -3521,7 +3798,7 @@ def plot_discussion_first_moments_5x6(
             color=sran_color,
             lw=2.5,
             linestyle="--",
-            label="ASD-FEX-SRAN",
+            label="FEX-SRAN",
         ),
         Line2D(
             [0],
@@ -3529,7 +3806,7 @@ def plot_discussion_first_moments_5x6(
             color=vae_color,
             lw=2.5,
             linestyle="--",
-            label="ASD-FEX-VAE",
+            label="FEX-VAE",
         ),
     ]
     fig.legend(
@@ -3566,7 +3843,7 @@ def plot_discussion_energy_modes_5x6(
     """
     N×6 grid: per-regime row; columns 0–2 = per-dimension stochastic energy (modes 1–3,
     not total); columns 3–5 = :math:`\\log_{10}(|E^{\\mathrm{pred}}-E^{\\mathrm{GT}}|)` for
-    each mode (ASD-FEX-TFDM / SRAN / VAE dashed).
+    each mode (FEX-TFDM / FEX-SRAN / FEX-VAE dashed).
 
     Row / log y-axis titles are vertical (default rotation) with a smaller font than ``fs``
     to reduce overlap. Log panels omit :math:`t=0` (error starts from the first evolved step).
@@ -3703,7 +3980,7 @@ def plot_discussion_energy_modes_5x6(
             color=tfdm_color,
             lw=2.5,
             linestyle="--",
-            label="ASD-FEX-TFDM",
+            label="FEX-TFDM",
         ),
         Line2D(
             [0],
@@ -3711,7 +3988,7 @@ def plot_discussion_energy_modes_5x6(
             color=sran_color,
             lw=2.5,
             linestyle="--",
-            label="ASD-FEX-SRAN",
+            label="FEX-SRAN",
         ),
         Line2D(
             [0],
@@ -3719,7 +3996,7 @@ def plot_discussion_energy_modes_5x6(
             color=vae_color,
             lw=2.5,
             linestyle="--",
-            label="ASD-FEX-VAE",
+            label="FEX-VAE",
         ),
     ]
     fig.legend(
@@ -4050,18 +4327,18 @@ def plot_state_projections_cases_4x9_scatter_and_gt_density(
     periodic_cascade_yticks: tuple | None = None,
     xaxis_maxn_bins: int | None = None,
     xaxis_numticks: int | None = None,
+    regime_column_panels: bool = True,
 ):
     """
-    4×9 panel (three cases × three projection pairs):
-    row 0 — ASD-FEX-TFDM (orange scatter);
-    row 1 — ASD-FEX-SRAN (pink scatter);
-    row 2 — ASD-FEX-VAE (green scatter);
+    4×(3·N) panels: **N** cases × three projection pairs (u1–u2, u2–u3, u1–u3):
+    row 0 — FEX-TFDM (orange scatter);
+    row 1 — FEX-SRAN (pink scatter);
+    row 2 — FEX-VAE (green scatter);
     row 3 — ground truth (black scatter).
 
-    Each of the 4×9 **subplots is square** (``Axes.set_box_aspect(1)``). Figure size is
-    ``(cell_side_inches * 9, cell_side_inches * 4)`` so the grid matches 9 columns × 4 rows
-    with equal cell width/height before spacing. Row method labels sit just left of each
-    first-column axes (``row_label_pad``).
+    Each subplot is square (``Axes.set_box_aspect(1)``). Figure size is
+    ``(cell_side_inches * (3·N), cell_side_inches * 4)`` (e.g. N=3 → 4×9, N=5 → 4×15).
+    Row method labels sit just left of each first-column axes (``row_label_pad``).
 
     ``case_data`` maps case display name → dict with keys
     ``"gt"``, ``"tfdm"``, ``"sran"``, ``"vae"`` → arrays ``(N, 3, T)``.
@@ -4102,6 +4379,10 @@ def plot_state_projections_cases_4x9_scatter_and_gt_density(
 
     ``wspace`` / ``hspace`` add gutter between subplots; ``set_box_aspect(1)`` still
     forces square axes afterward.
+
+    If ``regime_column_panels`` is True and ``N > 1``, each regime’s **4×3** block gets a
+    rounded rectangle behind the axes: very light fill plus a small drop shadow so adjacent
+    regimes are easier to tell apart (single figure stays **4×(3N)** e.g. 4×15).
     """
     case_items = list(case_data.items())
     n_cases = len(case_items)
@@ -4129,7 +4410,7 @@ def plot_state_projections_cases_4x9_scatter_and_gt_density(
     color_vae = "#2ca02c"
     color_gt = "black"
     row_colors = (color_tfdm, color_sran, color_vae, color_gt)
-    row_method_labels = ("ASD-FEX-TFDM", "ASD-FEX-SRAN", "ASD-FEX-VAE", "Ground truth")
+    row_method_labels = ("FEX-TFDM", "FEX-SRAN", "FEX-VAE", "Ground truth")
 
     pairs = [(0, 1), (1, 2), (0, 2)]
     pair_labels = [("u1", "u2"), ("u2", "u3"), ("u1", "u3")]
@@ -4278,7 +4559,7 @@ def plot_state_projections_cases_4x9_scatter_and_gt_density(
             hspace=float(hspace),
         )
 
-        # Each of the 4×9 subplot axes is a square in physical space (requires MPL ≥ 3.3).
+        # Each subplot axis is a square in physical space (requires MPL ≥ 3.3).
         for r in range(n_rows):
             for c in range(ncols):
                 axes[r, c].set_box_aspect(1)
@@ -4327,6 +4608,53 @@ def plot_state_projections_cases_4x9_scatter_and_gt_density(
                 ax = axes[r, c]
                 ax.xaxis.set_major_formatter(fmt_tick_zero_plain)
                 ax.yaxis.set_major_formatter(fmt_tick_zero_plain)
+
+        fig.canvas.draw()
+
+        # Rounded panel + drop shadow per regime (each 4×3 column group), behind subplots.
+        if regime_column_panels and n_cases > 1:
+            from matplotlib.patches import FancyBboxPatch
+
+            _pad = 0.006
+            _dx_sh, _dy_sh = 0.008, -0.010
+            _boxstyle = "round,pad=0.01"
+            for ci in range(n_cases):
+                x0s, x1s, y0s, y1s = [], [], [], []
+                for r in range(n_rows):
+                    for k in range(3):
+                        pos = axes[r, ci * 3 + k].get_position()
+                        x0s.append(pos.x0)
+                        x1s.append(pos.x1)
+                        y0s.append(pos.y0)
+                        y1s.append(pos.y1)
+                x0, x1 = min(x0s) - _pad, max(x1s) + _pad
+                y0, y1 = min(y0s) - _pad, max(y1s) + _pad
+                w, h = x1 - x0, y1 - y0
+                shadow = FancyBboxPatch(
+                    (x0 + _dx_sh, y0 + _dy_sh),
+                    w,
+                    h,
+                    boxstyle=_boxstyle,
+                    transform=fig.transFigure,
+                    facecolor=(0.0, 0.0, 0.0, 0.14),
+                    edgecolor="none",
+                    zorder=-8,
+                    clip_on=False,
+                )
+                panel = FancyBboxPatch(
+                    (x0, y0),
+                    w,
+                    h,
+                    boxstyle=_boxstyle,
+                    transform=fig.transFigure,
+                    facecolor=(0.96, 0.97, 0.99, 0.72),
+                    edgecolor=(0.62, 0.64, 0.70, 0.85),
+                    linewidth=0.85,
+                    zorder=-7,
+                    clip_on=False,
+                )
+                fig.add_artist(shadow)
+                fig.add_artist(panel)
 
         # Row labels immediately left of each first-column subplot (tight bbox = labels+ticks+axes).
         fig.canvas.draw()
