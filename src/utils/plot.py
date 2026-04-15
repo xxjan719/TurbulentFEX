@@ -4327,7 +4327,6 @@ def plot_state_projections_cases_4x9_scatter_and_gt_density(
     periodic_cascade_yticks: tuple | None = None,
     xaxis_maxn_bins: int | None = None,
     xaxis_numticks: int | None = None,
-    regime_column_panels: bool = True,
 ):
     """
     4×(3·N) panels: **N** cases × three projection pairs (u1–u2, u2–u3, u1–u3):
@@ -4379,10 +4378,6 @@ def plot_state_projections_cases_4x9_scatter_and_gt_density(
 
     ``wspace`` / ``hspace`` add gutter between subplots; ``set_box_aspect(1)`` still
     forces square axes afterward.
-
-    If ``regime_column_panels`` is True and ``N > 1``, each regime’s **4×3** block gets a
-    rounded rectangle behind the axes: very light fill plus a small drop shadow so adjacent
-    regimes are easier to tell apart (single figure stays **4×(3N)** e.g. 4×15).
     """
     case_items = list(case_data.items())
     n_cases = len(case_items)
@@ -4608,53 +4603,6 @@ def plot_state_projections_cases_4x9_scatter_and_gt_density(
                 ax = axes[r, c]
                 ax.xaxis.set_major_formatter(fmt_tick_zero_plain)
                 ax.yaxis.set_major_formatter(fmt_tick_zero_plain)
-
-        fig.canvas.draw()
-
-        # Rounded panel + drop shadow per regime (each 4×3 column group), behind subplots.
-        if regime_column_panels and n_cases > 1:
-            from matplotlib.patches import FancyBboxPatch
-
-            _pad = 0.006
-            _dx_sh, _dy_sh = 0.008, -0.010
-            _boxstyle = "round,pad=0.01"
-            for ci in range(n_cases):
-                x0s, x1s, y0s, y1s = [], [], [], []
-                for r in range(n_rows):
-                    for k in range(3):
-                        pos = axes[r, ci * 3 + k].get_position()
-                        x0s.append(pos.x0)
-                        x1s.append(pos.x1)
-                        y0s.append(pos.y0)
-                        y1s.append(pos.y1)
-                x0, x1 = min(x0s) - _pad, max(x1s) + _pad
-                y0, y1 = min(y0s) - _pad, max(y1s) + _pad
-                w, h = x1 - x0, y1 - y0
-                shadow = FancyBboxPatch(
-                    (x0 + _dx_sh, y0 + _dy_sh),
-                    w,
-                    h,
-                    boxstyle=_boxstyle,
-                    transform=fig.transFigure,
-                    facecolor=(0.0, 0.0, 0.0, 0.14),
-                    edgecolor="none",
-                    zorder=-8,
-                    clip_on=False,
-                )
-                panel = FancyBboxPatch(
-                    (x0, y0),
-                    w,
-                    h,
-                    boxstyle=_boxstyle,
-                    transform=fig.transFigure,
-                    facecolor=(0.96, 0.97, 0.99, 0.72),
-                    edgecolor=(0.62, 0.64, 0.70, 0.85),
-                    linewidth=0.85,
-                    zorder=-7,
-                    clip_on=False,
-                )
-                fig.add_artist(shadow)
-                fig.add_artist(panel)
 
         # Row labels immediately left of each first-column subplot (tight bbox = labels+ticks+axes).
         fig.canvas.draw()
