@@ -941,8 +941,18 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
     
     TIME_AMOUNT = 20
     dt = 0.01
-    # Align MC path count with second-stage sample budget (default 10000 in config).
-    NPATH = int(getattr(args, "RESIDUAL_SAMPLES", 10000))
+    # Allow discussion plots to override the Monte Carlo path count without
+    # changing which saved second-stage model folders are loaded from disk.
+    NPATH = int(
+        getattr(
+            args,
+            "DISCUSSION_TRAJECTORIES",
+            getattr(args, "RESIDUAL_SAMPLES", 10000),
+        )
+    )
+    store_trajectories = bool(
+        getattr(args, "DISCUSSION_STORE_TRAJECTORIES", True) or plot_composite
+    )
     initial_state = np.random.normal(loc=m0, scale=np.sqrt(var0), size=(NPATH, 3))    
     x_pred_initial = torch.ones(NPATH, 3).to(device,dtype=torch.float32) * torch.tensor(m0).to(device,dtype=torch.float32)
     scaler = args.DIFF_SCALE
@@ -985,22 +995,30 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
     cov_state_ensemble = np.zeros((3, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     cov_state_ensemble[:, :, 0] = np.cov(initial_state, rowvar=False)
 
-    u_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-    u_all[:,:,0] = initial_state
-    u_pred_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-    u_pred_all[:,:,0] = initial_state
+    if store_trajectories:
+        u_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+        u_all[:,:,0] = initial_state
+        u_pred_all = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+        u_pred_all[:,:,0] = initial_state
 
-    # Add separate arrays for single and ensemble predictions
-    u_pred_single = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-    u_pred_single[:,:,0] = initial_state
-    u_pred_vae = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-    u_pred_vae[:, :, 0] = initial_state
-    u_pred_ensemble = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-    u_pred_ensemble[:,:,0] = initial_state
+        # Add separate arrays for single and ensemble predictions
+        u_pred_single = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+        u_pred_single[:,:,0] = initial_state
+        u_pred_vae = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+        u_pred_vae[:, :, 0] = initial_state
+        u_pred_ensemble = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+        u_pred_ensemble[:,:,0] = initial_state
 
-    # Dependent (time-dependent) prediction trajectory samples for t<=10.
-    u_pred_dependent = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
-    u_pred_dependent[:, :, 0] = initial_state
+        # Dependent (time-dependent) prediction trajectory samples for t<=10.
+        u_pred_dependent = np.zeros((NPATH, 3, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
+        u_pred_dependent[:, :, 0] = initial_state
+    else:
+        u_all = None
+        u_pred_all = None
+        u_pred_single = None
+        u_pred_vae = None
+        u_pred_ensemble = None
+        u_pred_dependent = None
 
     moment3_state_record = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     moment3_state_pred = np.zeros((3, 3, 3,int(TIME_AMOUNT/dt)+1), dtype=np.float32)
@@ -1026,6 +1044,38 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
     )
     c0 = np.cov(initial_state, rowvar=False)
     cov_state_nn[:, :, 0] = cov_state_tfdm[:, :, 0] = cov_state_vae[:, :, 0] = c0
+
+    # Optional: precompute 4th–7th central moment time series without storing full
+    # (NPATH, 3, Nt) trajectories (used by discussion high-order PDFs).
+    _discuss_ho = bool(getattr(args, "DISCUSSION_PRECOMPUTE_HIGH_ORDER_MOMENTS", False))
+    if (not store_trajectories) and _discuss_ho:
+        _Nt_ho = int(TIME_AMOUNT / dt) + 1
+
+        def _empty_ho_series():
+            return {
+                4: np.zeros((len(MOMENT_4_INDICES), _Nt_ho), dtype=np.float32),
+                5: np.zeros((len(MOMENT_5_INDICES), _Nt_ho), dtype=np.float32),
+                6: np.zeros((len(MOMENT_6_INDICES), _Nt_ho), dtype=np.float32),
+                7: np.zeros((len(MOMENT_7_INDICES), _Nt_ho), dtype=np.float32),
+            }
+
+        ho_gt = _empty_ho_series()
+        ho_tfdm = _empty_ho_series()
+        ho_sran = _empty_ho_series()
+        ho_vae = _empty_ho_series()
+        for _ord, _inds in (
+            (4, MOMENT_4_INDICES),
+            (5, MOMENT_5_INDICES),
+            (6, MOMENT_6_INDICES),
+            (7, MOMENT_7_INDICES),
+        ):
+            _m0 = compute_selected_nth_order_moments(initial_state, _inds)
+            ho_gt[_ord][:, 0] = _m0
+            ho_tfdm[_ord][:, 0] = _m0
+            ho_sran[_ord][:, 0] = _m0
+            ho_vae[_ord][:, 0] = _m0
+    else:
+        ho_gt = ho_tfdm = ho_sran = ho_vae = None
 
     Energy_MC_all = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
     Energy_MC_pred = np.zeros((4, int(TIME_AMOUNT/dt)+1), dtype=np.float32)
@@ -1139,7 +1189,17 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
         model_PATH = os.path.join(config.DIR_TRIAD, "Results", args.params_name)
         dep_root = model_PATH
 
-    residual_samples = int(getattr(args, "RESIDUAL_SAMPLES", 10000))
+    # Allow discussion scripts to override which RESIDUAL_SAMPLES value is
+    # used for locating trained checkpoints on disk (folders are named
+    # second_stage_<N>_*). This keeps the Monte Carlo path count
+    # (DISCUSSION_TRAJECTORIES) decoupled from the training sample budget.
+    residual_samples = int(
+        getattr(
+            args,
+            "DISCUSSION_CHECKPOINT_SAMPLES",
+            getattr(args, "RESIDUAL_SAMPLES", 10000),
+        )
+    )
     noise_str = f"noise_{args.NOISE_LEVEL}"
     save_dir = os.path.join(
         model_PATH, noise_str, f"second_stage_{residual_samples}_constant"
@@ -1293,7 +1353,8 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
             mean_state_record_dependent[:, idx] = np.mean(next_state_dependent, axis=0)
             cov_state_record_dependent[:, :, idx] = np.cov(next_state_dependent, rowvar=False)
             current_state_dependent = next_state_dependent
-        u_all[:, :, idx] = next_state
+        if store_trajectories:
+            u_all[:, :, idx] = next_state
 
     
         mean_state_record[:,idx] = np.mean(next_state, axis=0)
@@ -1538,7 +1599,8 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
                 current_pred_state_dependent + det_update_dep + stoch_update_dependent
             )
             # Store dependent prediction samples for 3D phase-space clouds (t <= 10).
-            u_pred_dependent[:, :, idx] = next_pred_state_dependent
+            if store_trajectories:
+                u_pred_dependent[:, :, idx] = next_pred_state_dependent
             current_pred_state_dependent = next_pred_state_dependent
             mean_state_pred_dependent[:, idx] = np.mean(next_pred_state_dependent, axis=0)
             cov_state_pred_dependent[:, :, idx] = np.cov(next_pred_state_dependent, rowvar=False)
@@ -1600,9 +1662,10 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
         )
 
         # Independent curves in plots: orange = FEX-TFDM; u_pred_single holds SRAN ensemble for debugging.
-        u_pred_all[:, :, idx] = next_pred_tfdm
-        u_pred_single[:, :, idx] = next_pred_nn
-        u_pred_vae[:, :, idx] = next_pred_vae
+        if store_trajectories:
+            u_pred_all[:, :, idx] = next_pred_tfdm
+            u_pred_single[:, :, idx] = next_pred_nn
+            u_pred_vae[:, :, idx] = next_pred_vae
 
         mean_state_nn[:, idx] = np.mean(next_pred_nn, axis=0)
         cov_state_nn[:, :, idx] = np.cov(next_pred_nn, rowvar=False)
@@ -1615,6 +1678,24 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
         mean_state_vae[:, idx] = np.mean(next_pred_vae, axis=0)
         cov_state_vae[:, :, idx] = np.cov(next_pred_vae, rowvar=False)
         moment3_state_vae[:, :, :, idx], _ = compute_third_order_moments(next_pred_vae)
+
+        if ho_gt is not None:
+            for _ord, _inds in (
+                (4, MOMENT_4_INDICES),
+                (5, MOMENT_5_INDICES),
+                (6, MOMENT_6_INDICES),
+                (7, MOMENT_7_INDICES),
+            ):
+                ho_gt[_ord][:, idx] = compute_selected_nth_order_moments(next_state, _inds)
+                ho_tfdm[_ord][:, idx] = compute_selected_nth_order_moments(
+                    next_pred_tfdm, _inds
+                )
+                ho_sran[_ord][:, idx] = compute_selected_nth_order_moments(
+                    next_pred_nn, _inds
+                )
+                ho_vae[_ord][:, idx] = compute_selected_nth_order_moments(
+                    next_pred_vae, _inds
+                )
 
         mean_state_pred[:, idx] = mean_state_tfdm[:, idx]
         cov_state_pred[:, :, idx] = cov_state_tfdm[:, :, idx]
@@ -1700,15 +1781,11 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
             params_name=regime_display_title,
             font_size=20,
         )
-    return {
+    out = {
         "Time_ind": Time_record,
         "Time_dep": Time_dep,
         "dt": dt,
         "params": params,
-        "u_all_gt": u_all,
-        "u_pred_tfdm": u_pred_all,
-        "u_pred_sran": u_pred_single,
-        "u_pred_vae": u_pred_vae,
         "mean_gt": mean_state_record,
         "mean_pred_tfdm": mean_state_tfdm,
         "mean_pred_sran": mean_state_nn,
@@ -1733,6 +1810,23 @@ def discussion_choice5_rollout(args, device, plot_composite=True):
         "energy_pred_sran": Energy_MC_sran,
         "energy_pred_vae": Energy_MC_vae,
     }
+    if ho_gt is not None:
+        out["high_order_moment_series"] = {
+            "gt": ho_gt,
+            "tfdm": ho_tfdm,
+            "sran": ho_sran,
+            "vae": ho_vae,
+        }
+    if store_trajectories:
+        out.update(
+            {
+                "u_all_gt": u_all,
+                "u_pred_tfdm": u_pred_all,
+                "u_pred_sran": u_pred_single,
+                "u_pred_vae": u_pred_vae,
+            }
+        )
+    return out
 
 
 

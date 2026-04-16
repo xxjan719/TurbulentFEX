@@ -2327,7 +2327,11 @@ def plot_discussion_choice5_high_order_moments_grid(
     Column titles use :math:`\\langle M^{(n)}\\rangle` with subscripts ``1,2,3`` for :math:`u_1,u_2,u_3`.
 
     ``packs`` are dicts from ``discussion_choice5_rollout(..., plot_composite=False)`` and must
-    include ``u_all_gt``, ``u_pred_sran``, ``u_pred_tfdm``, ``u_pred_vae``, ``Time_ind``.
+    include ``Time_ind``, plus either:
+
+    - full trajectories ``u_all_gt``, ``u_pred_sran``, ``u_pred_tfdm``, ``u_pred_vae``, or
+    - ``high_order_moment_series`` (precomputed 4th–7th central moments per timestep), when
+      rollouts omit trajectory storage for memory reasons.
     """
     from matplotlib.lines import Line2D
 
@@ -2364,17 +2368,27 @@ def plot_discussion_choice5_high_order_moments_grid(
     last_row = nrows - 1
     for row, (axrow, pack, rlabel) in enumerate(zip(axes, packs, row_labels)):
         Time_ind = np.asarray(pack["Time_ind"], dtype=float).ravel()
-        u_gt = pack["u_all_gt"]
-        u_sran = pack["u_pred_sran"]
-        u_tfdm = pack["u_pred_tfdm"]
-        u_vae = pack["u_pred_vae"]
+        ho = pack.get("high_order_moment_series")
+        if ho is None:
+            u_gt = pack["u_all_gt"]
+            u_sran = pack["u_pred_sran"]
+            u_tfdm = pack["u_pred_tfdm"]
+            u_vae = pack["u_pred_vae"]
+        else:
+            u_gt = u_sran = u_tfdm = u_vae = None
 
         col = 0
         for order, indices in order_specs:
-            m_gt = compute_nth_order_moment_time_series(u_gt, indices)
-            m_sran = compute_nth_order_moment_time_series(u_sran, indices)
-            m_tfdm = compute_nth_order_moment_time_series(u_tfdm, indices)
-            m_vae = compute_nth_order_moment_time_series(u_vae, indices)
+            if ho is None:
+                m_gt = compute_nth_order_moment_time_series(u_gt, indices)
+                m_sran = compute_nth_order_moment_time_series(u_sran, indices)
+                m_tfdm = compute_nth_order_moment_time_series(u_tfdm, indices)
+                m_vae = compute_nth_order_moment_time_series(u_vae, indices)
+            else:
+                m_gt = ho["gt"][order]
+                m_sran = ho["sran"][order]
+                m_tfdm = ho["tfdm"][order]
+                m_vae = ho["vae"][order]
             for k in range(len(indices)):
                 ax = axrow[col]
                 y_gt = m_gt[k, :]

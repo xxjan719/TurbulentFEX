@@ -177,32 +177,48 @@ elif choice == '3':
         "equipart, forward/dual cascade, periodic, random cascade."
     )
     print("=" * 60)
-    run_discussion_cov_moments_grid(
-        args,
-        base_path=base_path,
-        dir_example=DIR_EXAMPLE,
-        model_name=args.Model,
-        rollout_worker=lambda plot_composite=False: discussion_choice5_rollout(
-            args, device, plot_composite=plot_composite
-        ),
-        regimes=(
-            "equipart",
-            "cascade",
-            "dual_cascade",
-            "periodic_cascade",
-            "random_cascade_deterministic",
-        ),
-        row_labels=(
-            "Equipartition",
-            "Forward cascade",
-            "Dual cascade",
-            "Periodic cascade",
-            "Random cascade",
-        ),
-        save_filename="discussion_choice4_cov_moments_grid.pdf",
-        fs=28,
-        log_label="discussion choice 4 grid (5×8)",
+    # Use the 10000-sample checkpoints on disk, but run many more Monte Carlo
+    # paths for the discussion figures.
+    args.DISCUSSION_CHECKPOINT_SAMPLES = 10000
+    args.DISCUSSION_TRAJECTORIES = int(getattr(args, "RESIDUAL_SAMPLES", 10000)) * 50
+    args.DISCUSSION_STORE_TRAJECTORIES = False
+    print(
+        f"[INFO] Discussion 4 Monte Carlo trajectories per regime: "
+        f"{args.DISCUSSION_TRAJECTORIES}"
     )
+    try:
+        run_discussion_cov_moments_grid(
+            args,
+            base_path=base_path,
+            dir_example=DIR_EXAMPLE,
+            model_name=args.Model,
+            rollout_worker=lambda plot_composite=False: discussion_choice5_rollout(
+                args, device, plot_composite=plot_composite
+            ),
+            regimes=(
+                "equipart",
+                "cascade",
+                "dual_cascade",
+                "periodic_cascade",
+                "random_cascade_deterministic",
+            ),
+            row_labels=(
+                "Equipartition",
+                "Forward cascade",
+                "Dual cascade",
+                "Periodic cascade",
+                "Random cascade",
+            ),
+            save_filename="discussion_choice4_cov_moments_grid.pdf",
+            fs=28,
+            log_label="discussion choice 4 grid (5×8)",
+        )
+    finally:
+        for _name in ("DISCUSSION_CHECKPOINT_SAMPLES",
+                      "DISCUSSION_TRAJECTORIES",
+                      "DISCUSSION_STORE_TRAJECTORIES"):
+            if hasattr(args, _name):
+                delattr(args, _name)
 
 elif choice == '4':
     print("=" * 60)
@@ -227,32 +243,52 @@ elif choice == "5":
         "GT / FEX-SRAN / FEX-TFDM / FEX-VAE; ⟨M⟩ titles + legend fs=38; Time / ticks / regime labels fs=28; grid on."
     )
     print("=" * 60)
-    run_discussion_choice5_high_order_moments_grid(
-        args,
-        base_path=base_path,
-        dir_example=DIR_EXAMPLE,
-        model_name=args.Model,
-        rollout_worker=lambda plot_composite=False: discussion_choice5_rollout(
-            args, device, plot_composite=plot_composite
-        ),
-        regimes=(
-            "equipart",
-            "cascade",
-            "dual_cascade",
-            "periodic_cascade",
-            "random_cascade_deterministic",
-        ),
-        row_labels=(
-            "Equipartition",
-            "Forward cascade",
-            "Dual cascade",
-            "Periodic cascade",
-            "Random cascade",
-        ),
-        fs=38,
-        fs_xaxis=28,
-        fs_yaxis=28,
+    # Same checkpoint / Monte Carlo scaling as Discussion 4; moments 4–7 are accumulated
+    # per timestep so we do not store full (NPATH, 3, Nt) tensors.
+    args.DISCUSSION_CHECKPOINT_SAMPLES = 10000
+    args.DISCUSSION_TRAJECTORIES = int(getattr(args, "RESIDUAL_SAMPLES", 10000)) * 50
+    args.DISCUSSION_STORE_TRAJECTORIES = False
+    args.DISCUSSION_PRECOMPUTE_HIGH_ORDER_MOMENTS = True
+    print(
+        f"[INFO] High-order discussion: MC trajectories per regime = "
+        f"{args.DISCUSSION_TRAJECTORIES} (checkpoints from second_stage_10000_*)."
     )
+    try:
+        run_discussion_choice5_high_order_moments_grid(
+            args,
+            base_path=base_path,
+            dir_example=DIR_EXAMPLE,
+            model_name=args.Model,
+            rollout_worker=lambda plot_composite=False: discussion_choice5_rollout(
+                args, device, plot_composite=plot_composite
+            ),
+            regimes=(
+                "equipart",
+                "cascade",
+                "dual_cascade",
+                "periodic_cascade",
+                "random_cascade_deterministic",
+            ),
+            row_labels=(
+                "Equipartition",
+                "Forward cascade",
+                "Dual cascade",
+                "Periodic cascade",
+                "Random cascade",
+            ),
+            fs=38,
+            fs_xaxis=28,
+            fs_yaxis=28,
+        )
+    finally:
+        for _name in (
+            "DISCUSSION_CHECKPOINT_SAMPLES",
+            "DISCUSSION_TRAJECTORIES",
+            "DISCUSSION_STORE_TRAJECTORIES",
+            "DISCUSSION_PRECOMPUTE_HIGH_ORDER_MOMENTS",
+        ):
+            if hasattr(args, _name):
+                delattr(args, _name)
 
 elif choice == "6":
     # Same figure builder as option 3: plot_discussion_cov_moments_grid (row labels, ticks, margins).
