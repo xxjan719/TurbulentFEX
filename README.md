@@ -124,3 +124,7 @@ If you have questions, please email:
 - `xingjianxu@ufl.edu`
 - `qidi@purdue.edu`
 - `chunmei.wang@ufl.edu`
+
+## License
+
+MIT — see [LICENSE](LICENSE).
